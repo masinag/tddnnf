@@ -9,7 +9,7 @@ requires-python = ">=3.12"
 dependencies = ["pysmt>=0.9.7.dev431", "pysdd", "dd"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "ruff>=0.1", "mypy>=1.0", "pre-commit>=3.0"]
+dev = ["pytest>=7", "ruff>=0.1", "basedpyright", "pre-commit>=3.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["tddnnf"]
@@ -21,14 +21,10 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 
-[tool.mypy]
-python_version = "3.12"
-strict = true
-disable_error_code = ["import-untyped"]
-
-[[tool.mypy.overrides]]
-module = "pysmt.*"
-follow_imports = "normal"
+[tool.pyright]
+typeCheckingMode = "standard"
+pythonVersion = "3.12"
+include = ["tddnnf"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

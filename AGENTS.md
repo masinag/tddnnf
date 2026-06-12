@@ -11,8 +11,8 @@ SMT formula → tractable representation (d-DNNF/SDD/OBDD). See ARCHITECTURE.md.
 - [uv](https://docs.astral.sh/uv/) for deps
 - [pytest](https://docs.pytest.org/) for tests
 - [ruff](https://docs.astral.sh/ruff/) for lint + format
-- [mypy](https://mypy-lang.org/) for type checking
-- pre-commit hooks (ruff + mypy)
+- [basedpyright](https://github.com/DetachHead/basedpyright) for type checking
+- pre-commit hooks (ruff + basedpyright)
 - Google-style docstrings
 - Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, etc.)
 
@@ -24,7 +24,7 @@ SMT formula → tractable representation (d-DNNF/SDD/OBDD). See ARCHITECTURE.md.
 | Lint             | `uv run ruff check .`               |
 | Format check     | `uv run ruff format . --check`      |
 | Format           | `uv run ruff format .`              |
-| Type check       | `uv run mypy tddnnf/`               |
+| Type check       | `uv run basedpyright tddnnf/`       |
 | Pre-commit hooks | `uv run pre-commit run --all-files` |
 
 ## AI Behavior
