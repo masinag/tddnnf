@@ -5,7 +5,7 @@ from io import StringIO
 import pysmt.operators as op
 from pysmt.environment import Environment, get_env
 from pysmt.fnode import FNode
-from pysmt.smtlib.parser import get_formula
+from pysmt.smtlib.parser import SmtLibParser
 from pysmt.smtlib.script import smtlibscript_from_formula
 from pysmt.typing import BOOL
 from pysmt.walkers import DagWalker, handles
@@ -44,7 +44,7 @@ class AbstractionContext:
     """Bidirectional map between SMT theory atoms and propositional Boolean variables."""
 
     def __init__(self, abstraction: dict[int, FNode] | None, env: Environment | None) -> None:
-        self._env = env if env is not None else get_env()
+        self._env = env or get_env()
         self._bool_to_smt: dict[int, FNode] = abstraction if abstraction is not None else {}
         self._smt_to_bool: dict[FNode, int] = {atom: idx for idx, atom in self._bool_to_smt.items()}
         self._walker = _AbstractionWalker(self, self._env)
@@ -77,11 +77,13 @@ class AbstractionContext:
 
     @classmethod
     def from_dict(cls, data: dict[str, int], env: Environment | None = None) -> AbstractionContext:
-        if env is None:
-            env = get_env()
+        env = env or get_env()
+        mgr = env.formula_manager
         bool_to_smt = {}
+        parser = SmtLibParser(env)
         for smtlib_str, idx in data.items():
-            atom = get_formula(StringIO(smtlib_str), env)
+            script = parser.get_script(StringIO(smtlib_str))
+            atom = script.get_last_formula(mgr)
             assert atom is not None
             bool_to_smt[idx] = atom
         return cls(bool_to_smt, env)
