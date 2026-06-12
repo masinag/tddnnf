@@ -1,17 +1,36 @@
-from typing import Protocol, TypeVar, runtime_checkable
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Protocol, Self, TypeVar, runtime_checkable
 
 from pysmt.fnode import FNode
 
-T_Artifact = TypeVar("T_Artifact", covariant=True)
+
+@runtime_checkable
+class PropCompiledTarget(Protocol):
+    """A propositionally compiled target (d-DNNF, SDD, OBDD, ...)."""
+
+    def save(self, directory: Path) -> None: ...
+
+    @classmethod
+    def load(cls, directory: Path) -> Self: ...
+
+
+T_Target = TypeVar("T_Target", bound=PropCompiledTarget)
+T_Target_co = TypeVar("T_Target_co", bound=PropCompiledTarget, covariant=True)
 
 
 @runtime_checkable
-class PropCompiler(Protocol[T_Artifact]):
-    def compile(self, propositional_formula: FNode) -> T_Artifact: ...
+class PropCompiler(Protocol[T_Target_co]):
+    """Compiles a propositional formula into a PropCompiledTarget."""
+
+    def compile(self, propositional_formula: FNode) -> T_Target_co: ...
 
 
 @runtime_checkable
-class QueryEngine(Protocol[T_Artifact]):
+class QueryEngine(Protocol[T_Target_co]):
+    """Polynomial-time queries over a compiled target."""
+
     def is_satisfiable(self) -> bool: ...
 
     def model_count(self) -> int: ...

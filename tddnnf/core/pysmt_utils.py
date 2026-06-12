@@ -8,6 +8,8 @@ from pysmt.typing import BOOL
 
 
 class SuspendTypeChecking:
+    """Context manager that disables pysmt type checking for formula construction."""
+
     def __init__(self, env: Environment | None = None) -> None:
         self.env = env or get_env()
         self.mgr = self.env.formula_manager

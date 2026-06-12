@@ -14,6 +14,8 @@ from tddnnf.core.pysmt_utils import SuspendTypeChecking, is_atom
 
 
 class _AbstractionWalker(DagWalker):
+    """Walks an SMT DAG, replacing theory atoms with fresh Boolean variables."""
+
     def __init__(self, ctx: AbstractionContext, env: Environment | None = None) -> None:
         DagWalker.__init__(self, env)
         self._ctx = ctx
@@ -39,6 +41,8 @@ class _AbstractionWalker(DagWalker):
 
 
 class AbstractionContext:
+    """Bidirectional map between SMT theory atoms and propositional Boolean variables."""
+
     def __init__(self, abstraction: dict[int, FNode] | None, env: Environment | None) -> None:
         self._env = env if env is not None else get_env()
         self._bool_to_smt: dict[int, FNode] = abstraction if abstraction is not None else {}

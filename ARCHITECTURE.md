@@ -60,7 +60,7 @@ A compiled propositional graph (e.g., a `.nnf` file or an SDD node pointer)
 is uninterpretable without its exact mapping context.
 
 - The unit of disk serialization is never a raw circuit; it is a unified
-  container (`TheoryCompilation`) that packages the structural artifact
+  container (`TheoryCompiledTarget`) that packages the compiled target
   alongside its unique `AbstractionContext`.
 
 ---
@@ -77,7 +77,7 @@ tddnnf/
 ├── core/
 │   ├── __init__.py
 │   ├── abstraction.py       # Tracks SMT Atom <-> Bool Var mappings
-│   ├── containers.py        # TheoryCompilation unified file wrapper
+│   ├── containers.py        # TheoryCompiledTarget unified wrapper
 │   └── interfaces.py        # Python Protocols (PropCompiler, QueryEngine)
 │
 ├── normalization/
@@ -105,19 +105,22 @@ tddnnf/
 ## 4. Key Interfaces & Types
 
 To ensure type-safety and backend agnosticism across fundamentally different
-compilers, we leverage Python typing generics (`Generic[T_Artifact]`) and structural
+compilers, we leverage Python typing generics and structural
 subtyping (`Protocol`).
 
 ```python
-from typing import Protocol, TypeVar, Generic
+from typing import Protocol, TypeVar
 from pathlib import Path
 from pysmt.fnode import FNode
 
-# Generic type representing the underlying compiled representation
+# Protocol all compiled targets must implement
+class PropCompiledTarget(Protocol):
+    def save(self, directory: Path) -> None: ...
+    @classmethod
+    def load(cls, directory: Path) -> PropCompiledTarget: ...
 
-# (e.g., D4Artifact, SddNode, or an OBDD pointer)
-
-T_Artifact = TypeVar("T_Artifact")
+T_Target = TypeVar("T_Target", bound=PropCompiledTarget)
+T_Target_co = TypeVar("T_Target_co", bound=PropCompiledTarget, covariant=True)
 ```
 
 ### 4.1. Core Abstraction Mappings (core/abstraction.py)
@@ -157,23 +160,24 @@ class AbstractionContext:
 
 ### 4.2. Unified Storage Container (core/containers.py)
 
-Binds the compiler output and the abstraction context into an atomic, serialize-
+Binds the compiled target and the abstraction context into an atomic, serialize-
 safe object.
 
 ```python
-class TheoryCompilation(Generic[T_Artifact]):
-    def __init__(self, artifact: T_Artifact, context: AbstractionContext):
-        self.artifact: T_Artifact = artifact
+class TheoryCompiledTarget(Generic[T_Target]):
+    def __init__(self, target: T_Target, context: AbstractionContext):
+        self.target: T_Target = target
         self.context: AbstractionContext = context
 
     def save(self, directory: Path) -> None:
-        """Saves the context map and delegates artifact persistence to the
-        backend wrapper."""
+        """Saves the context map and delegates target persistence to the
+        backend via PropCompiledTarget.save()."""
         ...
 
     @classmethod
-    def load(cls, directory: Path, artifact_loader: Any) -> "TheoryCompilation[T_Artifact]":
-        """Reconstructs a context instance and loads the target backend artifact."""
+    def load(cls, directory: Path, target_type: type[T_Target]) -> "TheoryCompiledTarget[T_Target]":
+        """Reconstructs a context instance and loads the target via
+        PropCompiledTarget.load()."""
         ...
 ```
 
@@ -182,13 +186,13 @@ class TheoryCompilation(Generic[T_Artifact]):
 Defines the strict interfaces that third-party concrete classes must implement.
 
 ```python
-class PropCompiler(Protocol[T_Artifact]):
-    def compile(self, propositional_formula: Any) -> T_Artifact:
+class PropCompiler(Protocol[T_Target_co]):
+    def compile(self, propositional_formula: Any) -> T_Target_co:  # covariant
         """Compiles a propositional structure into its target internal representation."""
         ...
 
-class QueryEngine(Protocol[T_Artifact]):
-    def __init__(self, compilation: TheoryCompilation[T_Artifact], normalizer: Any):
+class QueryEngine(Protocol[T_Target_co]):
+    def __init__(self, compilation: "TheoryCompiledTarget[T_Target_co]", normalizer: Any):
       ...
     def is_satisfiable(self) -> bool: ...
     def model_count(self) -> int: ...
@@ -204,19 +208,19 @@ backend compiler works underneath.
 - T-extended strategy: $\phi\vee\bigvee_{lemma\in Lemmas^\prime}{\neg lemma}$
 
 ```python
-class TReducedBuilder(Generic[T_Artifact]):
-    def __init__(self, compiler: PropCompiler[T_Artifact]):
+class TReducedBuilder(Generic[T_Target]):
+    def __init__(self, compiler: PropCompiler[T_Target]):
         self.compiler = compiler
 
     def build(self, phi: FNode, lemmas: List[FNode], context: AbstractionContext)
-      -> TheoryCompilation[T_Artifact]:
+      -> TheoryCompiledTarget[T_Target]:
         # 1. Structural conjoin
         combined_smt = self._conjoin(phi, lemmas)
         # 2. Boolean map generation
         bool_formula = context.abstract(combined_smt)
         # 3. Prop compilation
-        artifact = self.compiler.compile(bool_formula)
-        return TheoryCompilation(artifact, context)
+        target = self.compiler.compile(bool_formula)
+        return TheoryCompiledTarget(target, context)
 ```
 
 ## 5. Incremental Implementation Workflow (AI Instructions)

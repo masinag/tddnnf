@@ -41,7 +41,7 @@ SMT formula → tractable representation (d-DNNF/SDD/OBDD). See ARCHITECTURE.md.
 tddnnf/
 ├── core/
 │   ├── abstraction.py       # SMT Atom ↔ Bool Var mappings
-│   ├── containers.py         # TheoryCompilation unified wrapper
+│   ├── containers.py         # TheoryCompiledTarget wrapper
 │   └── interfaces.py         # Python Protocols
 ├── normalization/
 │   └── normalizer.py         # SMT canonicalization
