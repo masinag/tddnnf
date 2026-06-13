@@ -6,9 +6,7 @@ from typing import Self
 
 import pysmt.operators as op
 from pysdd.sdd import SddManager, SddNode
-from pysmt.environment import Environment
 from pysmt.fnode import FNode
-from pysmt.shortcuts import get_env
 from pysmt.typing import BOOL
 from pysmt.walkers import DagWalker, handles
 
@@ -56,13 +54,8 @@ class SddWalker(DagWalker):
     (theory operators, non-Bool symbols, numeric constants) are ignored.
     """
 
-    def __init__(
-        self,
-        manager: SddManager,
-        abstractor: Abstractor,
-        env: Environment | None = None,
-    ) -> None:
-        DagWalker.__init__(self, env)
+    def __init__(self, manager: SddManager, abstractor: Abstractor) -> None:
+        DagWalker.__init__(self)
         self._mgr = manager
         self._abs = abstractor
 
@@ -130,11 +123,9 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
     def __init__(
         self,
         abstractor: Abstractor,
-        env: Environment | None = None,
         vtree_type: str = "balanced",
     ) -> None:
         self._abstractor: Abstractor = abstractor
-        self._env: Environment = env or get_env()
         self._vtree_type: str = vtree_type
 
     def compile(self, formula: FNode) -> SddCompiledTarget:
@@ -143,6 +134,6 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
         var_count = max(self._abstractor.max_var, 1)
         mgr = SddManager(var_count, self._vtree_type)
         mgr.auto_gc_and_minimize_on()
-        walker = SddWalker(mgr, self._abstractor, self._env)
+        walker = SddWalker(mgr, self._abstractor)
         root = walker.translate(formula)
         return SddCompiledTarget(root, mgr)

@@ -18,8 +18,8 @@ def mgr(env) -> FormulaManager:
 
 
 @pytest.fixture
-def ctx(env) -> Abstractor:
-    return Abstractor(env=env)
+def abstr() -> Abstractor:
+    return Abstractor()
 
 
 @pytest.fixture

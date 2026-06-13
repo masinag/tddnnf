@@ -13,8 +13,8 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
 
     def __init__(self, container: TheoryCompiledTarget[SddCompiledTarget]) -> None:
         self._target = container.target
-        self._context = container.context
-        self._walker = SddWalker(self._target.manager, self._context)
+        self._abstr = container.abstr
+        self._walker = SddWalker(self._target.manager, self._abstr)
 
     def is_satisfiable(self) -> bool:
         return not self._target.root.is_false()

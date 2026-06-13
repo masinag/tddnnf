@@ -2,7 +2,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 from pysmt.typing import INT
@@ -13,8 +12,8 @@ from tddnnf.core.abstraction import Abstractor
 
 class TestSddCompiler:
     @pytest.fixture
-    def compiler(self, ctx: Abstractor, env: Environment) -> SddCompiler:
-        return SddCompiler(ctx, env=env)
+    def compiler(self, abstr: Abstractor) -> SddCompiler:
+        return SddCompiler(abstr)
 
     def test_and(self, mgr: FormulaManager, compiler: SddCompiler, a: FNode, b: FNode) -> None:
         target = compiler.compile(mgr.And(a, b))

@@ -13,8 +13,7 @@ from tddnnf.core.pysmt_utils import is_atom
 class Abstractor:
     """Bidirectional map between SMT atoms (Bool or theory) and integer IDs."""
 
-    def __init__(self, abstraction: dict[int, FNode] | None = None, env: Environment | None = None) -> None:
-        self._env = env or get_env()
+    def __init__(self, abstraction: dict[int, FNode] | None = None) -> None:
         self._id_to_atom: dict[int, FNode] = abstraction if abstraction is not None else {}
         self._atom_to_id: dict[FNode, int] = {atom: idx for idx, atom in self._id_to_atom.items()}
 
@@ -63,4 +62,4 @@ class Abstractor:
             atom = script.get_last_formula(mgr)
             assert atom is not None
             id_to_atom[idx] = atom
-        return cls(id_to_atom, env)
+        return cls(id_to_atom)
