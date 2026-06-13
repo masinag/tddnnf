@@ -24,7 +24,7 @@ class NormalizerWalker(DagWalker):
     def mgr(self) -> FormulaManager:
         return self.env.formula_manager
 
-    @handles(*op.RELATIONS, op.FUNCTION)
+    @handles(*op.RELATIONS)
     def walk_theory(self, formula: FNode, args: tuple[FNode, ...], **kwargs: object) -> FNode:
         msat_term = self._converter.convert(formula)
         return self._converter.back(msat_term)
