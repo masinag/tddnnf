@@ -6,7 +6,7 @@ from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.shortcuts import get_env
 
-from tddnnf.core.abstraction import AbstractionContext
+from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import PropCompiler, T_Target
 
@@ -22,7 +22,7 @@ class TExtendedBuilder(Generic[T_Target]):
         self,
         phi: FNode,
         lemmas: list[FNode],
-        context: AbstractionContext,
+        abstractor: Abstractor,
     ) -> TheoryCompiledTarget[T_Target]:
         r"""Compile a T-Extended Target form of phi as
             sel.compiler($\phi \vee \bigvee \neg\ell$).
@@ -31,14 +31,13 @@ class TExtendedBuilder(Generic[T_Target]):
             phi: SMT formula to compile.
             lemmas: Theory lemmas ruling out T-consistent truth assignments propositionally
                 satisfying $\neg\phi$.
-            context: Maps SMT atoms to Boolean variables.
+            abstractor: Maps SMT atoms to integer IDs.
 
         Returns:
-            Compiled target bundled with the abstraction context.
+            Compiled target bundled with the abstractor.
         """
         mgr = self._env.formula_manager
         negated = [mgr.Not(lem) for lem in lemmas]
         combined = mgr.Or(phi, *negated)
-        bool_formula = context.abstract(combined)
-        artifact = self._compiler.compile(bool_formula)
-        return TheoryCompiledTarget(artifact, context)
+        artifact = self._compiler.compile(combined)
+        return TheoryCompiledTarget(artifact, abstractor)
