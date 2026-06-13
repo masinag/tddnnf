@@ -1,8 +1,11 @@
+from typing import cast
+
 import pysmt.operators as op
 from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 from pysmt.shortcuts import get_env
+from pysmt.solvers.msat import MathSAT5Solver, MSatConverter
 from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.pysmt_utils import SuspendTypeChecking
@@ -14,8 +17,8 @@ class NormalizerWalker(DagWalker):
     def __init__(self, env: Environment | None = None) -> None:
         self._env = env if env is not None else get_env()
         DagWalker.__init__(self, self._env)
-        self._solver = self._env.factory.Solver("msat")
-        self._converter = self._solver.converter
+        self._solver: MathSAT5Solver = self._env.factory.Solver("msat")
+        self._converter = cast(MSatConverter, self._solver.converter)
 
     def __del__(self) -> None:
         self._solver.exit()
