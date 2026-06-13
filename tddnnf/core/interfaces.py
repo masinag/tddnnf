@@ -40,15 +40,19 @@ class QueryEngine(Protocol[T_Target_co]):
 
     def __init__(self, target: TheoryCompiledTarget[T_Target_co]) -> None: ...
 
-    def is_satisfiable(self) -> bool:
-        """True iff the compiled formula has at least one satisfying assignment."""
+    def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
+        """True iff the compiled formula has a satisfying assignment.
+
+        If *assumptions* is given, each literal is fixed to True before
+        checking satisfiability.
+        """
         ...
 
-    def count_truth_assignments(self, cube: FNode | None = None) -> int:
-        """Number of total truth assignments that satisfy the compiled formula.
+    def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
+        """Number of total truth assignments satisfying the compiled formula.
 
-        If *cube* is provided, count only those assignments that also satisfy
-        the cube (i.e. count under the assumption that the cube holds).
+        If *assumptions* is given, count only assignments that also satisfy
+        every literal in the list.
         """
         ...
 
@@ -56,7 +60,7 @@ class QueryEngine(Protocol[T_Target_co]):
         """True iff the compiled formula is valid (true under all assignments)."""
         ...
 
-    def clause_entails(self, query_clause: FNode) -> bool:
+    def entails_clause(self, query_clause: FNode) -> bool:
         """True iff the compiled formula entails the given clause."""
         ...
 
