@@ -36,6 +36,22 @@ def is_literal(literal: FNode) -> bool:
     return is_atom(literal) or (literal.is_not() and is_atom(literal.arg(0)))
 
 
+def normalize_assumptions(assumptions: list[FNode]) -> list[FNode] | None:
+    """Returns deduplicated assumptions, or None if contradictory."""
+    polarity: dict[FNode, bool] = {}
+    unique: list[FNode] = []
+    for lit in assumptions:
+        atom = lit.arg(0) if lit.is_not() else lit
+        is_neg = lit.is_not()
+        if atom in polarity:
+            if polarity[atom] != is_neg:
+                return None
+        else:
+            polarity[atom] = is_neg
+            unique.append(lit)
+    return unique
+
+
 def is_clause(phi: FNode) -> bool:
     return is_literal(phi) or (phi.is_or() and all(is_clause(a) for a in phi.args()))
 
@@ -45,6 +61,7 @@ def is_cube(phi: FNode) -> bool:
 
 
 def clause_lits(clause: FNode) -> list[FNode] | None:
+    """Returns deduplicated literals of a clause, or None if clause is tautological (true)."""
     stack = [clause]
     res: list[FNode] = []
     polarity: dict[FNode, bool] = {}
@@ -71,6 +88,7 @@ def clause_lits(clause: FNode) -> list[FNode] | None:
 
 
 def cube_lits(cube: FNode) -> list[FNode] | None:
+    """Returns deduplicated literals of a cube, or None if cube is contradictory (false)."""
     stack = [cube]
     res: list[FNode] = []
     polarity: dict[FNode, bool] = {}
