@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Protocol, Self, TypeVar, runtime_checkable
 
@@ -31,8 +32,29 @@ class PropCompiler(Protocol[T_Target_co]):
 class QueryEngine(Protocol[T_Target_co]):
     """Polynomial-time queries over a compiled target."""
 
-    def is_satisfiable(self) -> bool: ...
+    def is_satisfiable(self) -> bool:
+        """True iff the compiled formula has at least one satisfying assignment."""
+        ...
 
-    def model_count(self) -> int: ...
+    def count_truth_assignments(self) -> int:
+        """Number of total truth assignments that satisfy the compiled formula."""
+        ...
 
-    def clause_entails(self, query_clause: FNode) -> bool: ...
+    def is_valid(self) -> bool:
+        """True iff the compiled formula is valid (true under all assignments)."""
+        ...
+
+    def clause_entails(self, query_clause: FNode) -> bool:
+        """True iff the compiled formula entails the given clause."""
+        ...
+
+    def is_implicant(self, query_cube: FNode) -> bool:
+        """True iff the given cube is an implicant of the compiled formula."""
+        ...
+
+    def enumerate_truth_assignments(self) -> Iterator[dict[FNode, bool]]:
+        """Enumerate all total truth assignments satisfying the compiled formula.
+
+        Each assignment maps every atom known to the compiled target to True or False.
+        """
+        ...

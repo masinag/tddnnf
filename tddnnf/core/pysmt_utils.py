@@ -38,3 +38,7 @@ def is_literal(literal: FNode) -> bool:
 
 def is_clause(phi: FNode) -> bool:
     return is_literal(phi) or (phi.is_or() and all(is_clause(a) for a in phi.args()))
+
+
+def is_cube(phi: FNode) -> bool:
+    return is_literal(phi) or (phi.is_and() and all(is_cube(a) for a in phi.args()))
