@@ -34,3 +34,7 @@ def is_atom(atom: FNode) -> bool:
 
 def is_literal(literal: FNode) -> bool:
     return is_atom(literal) or (literal.is_not() and is_atom(literal.arg(0)))
+
+
+def is_clause(phi: FNode) -> bool:
+    return is_literal(phi) or (phi.is_or() and all(is_clause(a) for a in phi.args()))
