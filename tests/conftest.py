@@ -4,7 +4,7 @@ from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 from pysmt.typing import BOOL, INT, REAL
 
-from tddnnf.core.abstraction import AbstractionContext
+from tddnnf.core.abstraction import Abstractor
 
 
 @pytest.fixture
@@ -18,8 +18,8 @@ def mgr(env) -> FormulaManager:
 
 
 @pytest.fixture
-def ctx(env) -> AbstractionContext:
-    return AbstractionContext({}, env)
+def ctx(env) -> Abstractor:
+    return Abstractor(env=env)
 
 
 @pytest.fixture
@@ -40,3 +40,18 @@ def y_real(mgr) -> FNode:
 @pytest.fixture
 def p(mgr) -> FNode:
     return mgr.Symbol("p", BOOL)
+
+
+@pytest.fixture
+def a(mgr) -> FNode:
+    return mgr.Symbol("a", BOOL)
+
+
+@pytest.fixture
+def b(mgr) -> FNode:
+    return mgr.Symbol("b", BOOL)
+
+
+@pytest.fixture
+def c(mgr) -> FNode:
+    return mgr.Symbol("c", BOOL)

@@ -4,14 +4,14 @@ import json
 from pathlib import Path
 from typing import Generic
 
-from tddnnf.core.abstraction import AbstractionContext
+from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import T_Target
 
 
 class TheoryCompiledTarget(Generic[T_Target]):
     """A compiled target paired with its SMT-to-Boolean abstraction context."""
 
-    def __init__(self, target: T_Target, context: AbstractionContext) -> None:
+    def __init__(self, target: T_Target, context: Abstractor) -> None:
         self.target = target
         self.context = context
 
@@ -29,6 +29,6 @@ class TheoryCompiledTarget(Generic[T_Target]):
     ) -> TheoryCompiledTarget[T_Target]:
         """Reconstruct a container from a directory and the target's load classmethod."""
         context_data = json.loads((directory / "context.json").read_text())
-        context = AbstractionContext.from_dict(context_data)
+        context = Abstractor.from_dict(context_data)
         target = target_type.load(directory)
         return cls(target, context)
