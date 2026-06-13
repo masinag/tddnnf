@@ -48,7 +48,7 @@ class SddCompiledTarget(PropCompiledTarget):
         return cls(root, mgr)
 
 
-class _SddWalker(DagWalker):
+class SddWalker(DagWalker):
     """Walks an SMT formula, building an SDD via recursive apply.
 
     Atom nodes (Bool symbols, theory relations) are mapped to
@@ -113,6 +113,11 @@ class _SddWalker(DagWalker):
     def walk_ite(self, formula: FNode, args: tuple, **kwargs: object) -> SddNode:
         return (args[0] & args[1]) | (~args[0] & args[2])
 
+    def translate(self, formula: FNode) -> SddNode:
+        result = self.walk(formula)
+        assert result is not None, f"walk returned None for {formula}"
+        return result
+
 
 class SddCompiler(PropCompiler[SddCompiledTarget]):
     """PropCompiler that compiles an SMT formula into an SDD via PySDD.
@@ -138,6 +143,6 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
         var_count = max(self._abstractor.max_var, 1)
         mgr = SddManager(var_count, self._vtree_type)
         mgr.auto_gc_and_minimize_on()
-        walker = _SddWalker(mgr, self._abstractor, self._env)
-        root = walker.walk(formula)
+        walker = SddWalker(mgr, self._abstractor, self._env)
+        root = walker.translate(formula)
         return SddCompiledTarget(root, mgr)
