@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Protocol, Self, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Self, TypeVar, runtime_checkable
 
 from pysmt.fnode import FNode
+
+if TYPE_CHECKING:
+    from tddnnf.core.abstraction import Abstractor
+    from tddnnf.core.containers import TheoryCompiledTarget
 
 
 @runtime_checkable
@@ -25,6 +29,8 @@ T_Target_co = TypeVar("T_Target_co", bound=PropCompiledTarget, covariant=True)
 class PropCompiler(Protocol[T_Target_co]):
     """Compiles a propositional formula into a PropCompiledTarget."""
 
+    def __init__(self, abstractor: Abstractor) -> None: ...
+
     def compile(self, formula: FNode) -> T_Target_co: ...
 
 
@@ -32,12 +38,18 @@ class PropCompiler(Protocol[T_Target_co]):
 class QueryEngine(Protocol[T_Target_co]):
     """Polynomial-time queries over a compiled target."""
 
+    def __init__(self, target: TheoryCompiledTarget[T_Target_co]) -> None: ...
+
     def is_satisfiable(self) -> bool:
         """True iff the compiled formula has at least one satisfying assignment."""
         ...
 
-    def count_truth_assignments(self) -> int:
-        """Number of total truth assignments that satisfy the compiled formula."""
+    def count_truth_assignments(self, cube: FNode | None = None) -> int:
+        """Number of total truth assignments that satisfy the compiled formula.
+
+        If *cube* is provided, count only those assignments that also satisfy
+        the cube (i.e. count under the assumption that the cube holds).
+        """
         ...
 
     def is_valid(self) -> bool:

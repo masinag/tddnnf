@@ -42,3 +42,55 @@ def is_clause(phi: FNode) -> bool:
 
 def is_cube(phi: FNode) -> bool:
     return is_literal(phi) or (phi.is_and() and all(is_cube(a) for a in phi.args()))
+
+
+def clause_lits(clause: FNode) -> list[FNode] | None:
+    stack = [clause]
+    res: list[FNode] = []
+    polarity: dict[FNode, bool] = {}
+    while stack:
+        lit = stack.pop()
+        if lit.is_true():
+            return None
+        elif lit.is_false():
+            continue
+        elif is_literal(lit):
+            atom = lit.arg(0) if lit.is_not() else lit
+            is_neg = lit.is_not()
+            if atom in polarity:
+                if polarity[atom] != is_neg:
+                    return None
+            else:
+                polarity[atom] = is_neg
+                res.append(lit)
+        elif lit.is_or():
+            stack += lit.args()
+        else:
+            raise ValueError(f"Expected a clause, got: {clause}")
+    return res
+
+
+def cube_lits(cube: FNode) -> list[FNode] | None:
+    stack = [cube]
+    res: list[FNode] = []
+    polarity: dict[FNode, bool] = {}
+    while stack:
+        lit = stack.pop()
+        if lit.is_true():
+            continue
+        elif lit.is_false():
+            return None
+        elif is_literal(lit):
+            atom = lit.arg(0) if lit.is_not() else lit
+            is_neg = lit.is_not()
+            if atom in polarity:
+                if polarity[atom] != is_neg:
+                    return None
+            else:
+                polarity[atom] = is_neg
+                res.append(lit)
+        elif lit.is_and():
+            stack += lit.args()
+        else:
+            raise ValueError(f"Expected a cube, got: {cube}")
+    return res
