@@ -415,7 +415,7 @@ requires-dist = [
     { name = "basedpyright", marker = "extra == 'dev'" },
     { name = "dd" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0" },
-    { name = "pysdd" },
+    { name = "pysdd", specifier = ">=1.0.6" },
     { name = "pysmt", specifier = ">=0.9.7.dev431" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1" },
