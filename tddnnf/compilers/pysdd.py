@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from array import array
 from pathlib import Path
 from typing import Self
 
@@ -128,7 +129,7 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
         self._abstractor: Abstractor = abstractor
         self._vtree_type: str = vtree_type
 
-    def compile(self, formula: FNode) -> SddCompiledTarget:
+    def compile(self, formula: FNode, project_on: list[FNode] | None = None) -> SddCompiledTarget:
         for atom in formula.get_atoms():
             self._abstractor.get_id(atom)
         var_count = max(self._abstractor.max_var, 1)
@@ -136,4 +137,12 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
         mgr.auto_gc_and_minimize_on()
         walker = SddWalker(mgr, self._abstractor)
         root = walker.translate(formula)
+        if project_on is not None:
+            project_set = set(project_on)
+            exists_map = array("i", [0]) * (mgr.var_count() + 1)
+            for atom in formula.get_atoms():
+                if atom not in project_set:
+                    vid = self._abstractor.get_id(atom)
+                    exists_map[vid] = 1
+            root = mgr.exists_multiple(exists_map, root)
         return SddCompiledTarget(root, mgr)

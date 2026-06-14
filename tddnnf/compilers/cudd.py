@@ -125,7 +125,7 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
     def __init__(self, abstractor: Abstractor) -> None:
         self._abstractor: Abstractor = abstractor
 
-    def compile(self, formula: FNode) -> BddCompiledTarget:
+    def compile(self, formula: FNode, project_on: list[FNode] | None = None) -> BddCompiledTarget:
         for atom in formula.get_atoms():
             self._abstractor.get_id(atom)
         max_var = max(self._abstractor.max_var, 1)
@@ -134,4 +134,9 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
             mgr.declare(f"b{i}")
         walker = BddWalker(mgr, self._abstractor)
         root = walker.translate(formula)
+        if project_on is not None:
+            project_set = set(project_on)
+            forgotten = [f"b{self._abstractor.get_id(atom)}" for atom in formula.get_atoms() if atom not in project_set]
+            if forgotten:
+                root = root.exist(*forgotten)
         return BddCompiledTarget(root, mgr)

@@ -17,13 +17,15 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
     def __init__(self, container: TheoryCompiledTarget[BddCompiledTarget]) -> None:
         self._target = container.target
         self._abstr = container.abstr
+        self._care_vars: list[FNode] = container.care_vars
+        self._care_set: set[FNode] = set(container.care_vars)
 
     def _restrict_chain(self, lits: list[FNode], negate: bool = False, root=None):
         assign: dict[str, bool] = {}
         for lit in lits:
             atom = lit.arg(0) if lit.is_not() else lit
-            if atom not in self._abstr:
-                raise ValueError(f"Atom {atom} is not known to the compiled target")
+            if atom not in self._care_set:
+                raise ValueError(f"Atom {atom} is not a care variable")
             val = (not lit.is_not()) if not negate else lit.is_not()
             name = f"b{self._abstr.get_id(atom)}"
             if name in assign and assign[name] != val:
@@ -41,16 +43,21 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         mgr = self._target.manager
         return self._restrict_chain(assumptions, negate=False) != mgr.false
 
+    def _forgotten_var_count(self) -> int:
+        return len(self._target.manager.vars) - len(self._care_vars)
+
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
+        n = len(self._target.manager.vars)
+        forgotten = self._forgotten_var_count()
         if not assumptions:
-            n = self._abstr.var_count
-            return int(self._target.root.count(n))
+            total = self._target.root.count(n)
+            return int(total) >> forgotten
         unique = normalize_assumptions(assumptions)
         if unique is None:
             return 0
         restricted = self._restrict_chain(unique, negate=False)
-        remaining = self._abstr.var_count - len(unique)
-        return int(restricted.count(remaining))
+        total = restricted.count(n)
+        return int(total) >> (forgotten + len(unique))
 
     def is_valid(self) -> bool:
         return self._target.root == self._target.manager.true
@@ -76,10 +83,10 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         if root == self._target.manager.false:
             return
         mgr = self._target.manager
-        all_vars = [f"b{i}" for i in range(1, self._abstr.max_var + 1)]
+        care_names = [f"b{self._abstr.get_id(a)}" for a in self._care_vars]
         for partial in mgr.pick_iter(root):
             support = set(partial)
-            unused = [v for v in all_vars if v not in support]
+            unused = [v for v in care_names if v not in support]
             if not unused:
                 yield {self._abstr.get_atom(int(k[1:])): v for k, v in partial.items()}
             else:

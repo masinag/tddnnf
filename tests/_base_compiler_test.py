@@ -90,3 +90,19 @@ class BaseTestCompiler:
 
         target = compiler.compile(formula)
         assert self._count(target) == 3
+
+    def test_projected_no_atoms_left_tautology(self, mgr: FormulaManager, compiler, a: FNode) -> None:
+        formula = a
+        target = compiler.compile(formula, project_on=[])
+        assert self._is_true(target)
+
+    def test_projected_forget_one(self, mgr: FormulaManager, compiler, a: FNode, b: FNode) -> None:
+        formula = mgr.And(a, b)
+        target = compiler.compile(formula, project_on=[a])
+        assert not self._is_true(target)
+        assert not self._is_false(target)
+
+    def test_projected_forget_all_contradiction(self, mgr: FormulaManager, compiler, a: FNode) -> None:
+        formula = mgr.And(a, mgr.Not(a))
+        target = compiler.compile(formula, project_on=[])
+        assert self._is_false(target)

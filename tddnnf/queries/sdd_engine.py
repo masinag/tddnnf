@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from itertools import product
 
 from pysmt.fnode import FNode
 
@@ -16,11 +17,13 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
     def __init__(self, container: TheoryCompiledTarget[SddCompiledTarget]) -> None:
         self._target = container.target
         self._abstr = container.abstr
+        self._care_vars: list[FNode] = container.care_vars
+        self._care_set: set[FNode] = set(container.care_vars)
 
     def _lit_to_sdd(self, lit: FNode):
         atom = lit.arg(0) if lit.is_not() else lit
-        if atom not in self._abstr:
-            raise ValueError(f"Atom {atom} is not known to the compiled target")
+        if atom not in self._care_set:
+            raise ValueError(f"Atom {atom} is not a care variable")
         var_id = self._abstr.get_id(atom)
         node = self._target.manager.literal(var_id)
         return ~node if lit.is_not() else node
@@ -41,14 +44,17 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
             return not self._target.root.is_false()
         return not self._condition_chain(assumptions, negate=False).is_false()
 
+    def _forgotten_var_count(self) -> int:
+        return self._abstr.var_count - len(self._care_vars)
+
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
         if not assumptions:
-            return self._target.root.global_model_count()
+            return self._target.root.global_model_count() >> self._forgotten_var_count()
         unique = normalize_assumptions(assumptions)
         if unique is None:
             return 0
         temp = self._condition_chain(unique, negate=False)
-        return temp.global_model_count() >> len(unique)
+        return temp.global_model_count() >> (self._forgotten_var_count() + len(unique))
 
     def is_valid(self) -> bool:
         return self._target.root.is_true()
@@ -72,4 +78,14 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         if root.is_false():
             return
         for assignment in root.models():
-            yield {self._abstr.get_atom(var_id): val == 1 for var_id, val in assignment.items()}
+            base = {self._abstr.get_atom(var_id): val == 1 for var_id, val in assignment.items()}
+            present = set(base)
+            missing = [a for a in self._care_vars if a not in present]
+            if not missing:
+                yield base
+            else:
+                for bits in product([True, False], repeat=len(missing)):
+                    full = dict(base)
+                    for atom, val in zip(missing, bits):
+                        full[atom] = val
+                    yield full

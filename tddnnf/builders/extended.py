@@ -23,6 +23,7 @@ class TExtendedBuilder(Generic[T_Target]):
         phi: FNode,
         lemmas: list[FNode],
         abstractor: Abstractor,
+        project_on: list[FNode] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
         r"""Compile a T-Extended Target form of phi as
             sel.compiler($\phi \vee \bigvee \neg\ell$).
@@ -32,6 +33,8 @@ class TExtendedBuilder(Generic[T_Target]):
             lemmas: Theory lemmas ruling out T-consistent truth assignments propositionally
                 satisfying $\neg\phi$.
             abstractor: Maps SMT atoms to integer IDs.
+            project_on: Keep only these atoms in the compiled target;
+                all others are existentially quantified away.
 
         Returns:
             Compiled target bundled with the abstractor.
@@ -39,5 +42,9 @@ class TExtendedBuilder(Generic[T_Target]):
         mgr = self._env.formula_manager
         negated = [mgr.Not(lem) for lem in lemmas]
         combined = mgr.Or(phi, *negated)
-        artifact = self._compiler.compile(combined)
-        return TheoryCompiledTarget(artifact, abstractor)
+        artifact = self._compiler.compile(combined, project_on=project_on)
+        if project_on is not None:
+            care_vars = project_on
+        else:
+            care_vars = sorted(combined.get_atoms(), key=lambda a: abstractor.get_id(a))
+        return TheoryCompiledTarget(artifact, abstractor, care_vars=care_vars)
