@@ -8,7 +8,7 @@ from pysmt.fnode import FNode
 from tddnnf.compilers.pysdd import SddCompiledTarget
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import QueryEngine
-from tddnnf.core.pysmt_utils import clause_lits, cube_lits, is_clause, normalize_assumptions
+from tddnnf.core.pysmt_utils import clause_lits, cube_lits, normalize_assumptions
 
 
 class SddEngine(QueryEngine[SddCompiledTarget]):
