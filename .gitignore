@@ -194,5 +194,8 @@ tags
 # Persistent undo
 [._]*.un~
 
+# Local binaries
+tddnnf/bin/
+
 # End of https://www.toptal.com/developers/gitignore/api/python,vim
 

@@ -92,6 +92,20 @@ wheels = [
 ]
 
 [[package]]
+name = "ddnnife"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/14/b8/197c0b73c5eb1e8848dacea4bc2c1198071b027ab36a1b81c94e342d7afc/ddnnife-0.10.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:134784aa4464b640efef9ecb0431018b36ce5763b3eb64d2714841b12160cb8d", size = 385003, upload-time = "2025-09-12T11:32:23.413Z" },
+    { url = "https://files.pythonhosted.org/packages/43/38/bcf5d185c38a7efff2a0dcf78354d9648d7a6b0738f58bf13e1f15e50d5c/ddnnife-0.10.0-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:74f727f2e2d0ca827588fa6dc0a3f7471fdafff8b5af2b36ebca99641dc56e09", size = 416770, upload-time = "2025-09-12T11:32:24.96Z" },
+    { url = "https://files.pythonhosted.org/packages/a3/3b/bdb1ff2938867451e42678d001e1135da1cc032d14327e2e3f92cd9700c9/ddnnife-0.10.0-py3-none-manylinux_2_34_aarch64.whl", hash = "sha256:f53a236b77d28dd71da35f6f777d3dcdb965f4118243122d8340abcaaf845e66", size = 414251, upload-time = "2025-09-12T11:32:26.15Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/b7/7b94e2f1ec7743ae9003ac9aff427da10bd1f024148bf25333e738f0a0a2/ddnnife-0.10.0-py3-none-manylinux_2_34_x86_64.whl", hash = "sha256:8a5f647df2eda7423b274641c2bdf65c53038a01343b11d4b2d2765d541be2df", size = 439797, upload-time = "2025-09-12T11:32:27.079Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/61/55851a7cc966df677414c0a4de9b41143419c1f107f9bb5a12f3c711f84f/ddnnife-0.10.0-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:078a9fe982d4f4e9f3242cca6e665c482f1226e42e482b6336c0f57c2c017338", size = 482911, upload-time = "2025-09-12T11:32:28.857Z" },
+    { url = "https://files.pythonhosted.org/packages/55/36/cc3c695a1f999dc1f89b2a6c2b2a1696d1e6ff58dc2efd2158e18219d057/ddnnife-0.10.0-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:b3164a3daa4129eaf67ec8cda368cfe1069a62b623d05af114342208d5e63781", size = 527204, upload-time = "2025-09-12T11:32:30.263Z" },
+    { url = "https://files.pythonhosted.org/packages/78/91/29f25dac93a874f6b509b352f20b8de8aa2b9895f1c9b9aeefe9b2d9aea8/ddnnife-0.10.0-py3-none-win_amd64.whl", hash = "sha256:ce8c42234460c45c6cca02eda6d925453e4526aa7f0c63001ed9593e74cf940d", size = 414343, upload-time = "2025-09-12T11:32:31.36Z" },
+]
+
+[[package]]
 name = "distlib"
 version = "0.4.3"
 source = { registry = "https://pypi.org/simple" }
@@ -398,6 +412,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "dd" },
+    { name = "ddnnife" },
     { name = "pysdd" },
     { name = "pysmt" },
 ]
@@ -414,6 +429,7 @@ dev = [
 requires-dist = [
     { name = "basedpyright", marker = "extra == 'dev'" },
     { name = "dd" },
+    { name = "ddnnife", specifier = ">=0.1.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "pysdd", specifier = ">=1.0.6" },
     { name = "pysmt", specifier = ">=0.9.7.dev431" },
