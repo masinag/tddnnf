@@ -63,8 +63,6 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         return self._target.root == self._target.manager.true
 
     def entails_clause(self, query_clause: FNode) -> bool:
-        if not is_clause(query_clause):
-            raise ValueError(f"Expected a clause, got: {query_clause}")
         lits = clause_lits(query_clause)
         if lits is None:
             return True

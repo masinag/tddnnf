@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -14,17 +13,16 @@ from pysmt.walkers import DagWalker, handles
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
 
-RE_NNF_EDGE = re.compile(r"(\d+) (\d+)( .+)? 0")
-
 D4_BIN = Path(__file__).resolve().parent.parent / "bin" / "d4.bin"
 
 
 class D4CompiledTarget(PropCompiledTarget):
     """A compiled d-DNNF target backed by a d4 NNF file."""
 
-    def __init__(self, nnf_text: str, var_count: int) -> None:
+    def __init__(self, nnf_text: str, var_count: int, remapping: dict[int, int] | None = None) -> None:
         self._nnf_text = nnf_text
         self._var_count = var_count
+        self._remapping = remapping if remapping is not None else {}
 
     @property
     def nnf_text(self) -> str:
@@ -34,16 +32,28 @@ class D4CompiledTarget(PropCompiledTarget):
     def var_count(self) -> int:
         return self._var_count
 
+    @property
+    def remapping(self) -> dict[int, int]:
+        return self._remapping
+
     def save(self, directory: Path) -> None:
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "circuit.nnf").write_text(self._nnf_text)
-        (directory / "metadata.json").write_text(json.dumps({"var_count": self._var_count}))
+        (directory / "metadata.json").write_text(
+            json.dumps(
+                {
+                    "var_count": self._var_count,
+                    "remapping": {str(k): v for k, v in self._remapping.items()},
+                }
+            )
+        )
 
     @classmethod
     def load(cls, directory: Path) -> Self:
         nnf_text = (directory / "circuit.nnf").read_text()
         metadata = json.loads((directory / "metadata.json").read_text())
-        return cls(nnf_text, metadata["var_count"])
+        remapping = {int(k): v for k, v in metadata.get("remapping", {}).items()}
+        return cls(nnf_text, metadata["var_count"], remapping=remapping)
 
 
 class BCS12Walker(DagWalker):
@@ -158,31 +168,6 @@ class BCS12Walker(DagWalker):
         return result
 
 
-def _fix_ddnnf(nnf_path: Path, projected_ids: set[int]) -> None:
-    """Remove non-projected variable literals from NNF edge labels.
-
-    NNF edge lines have the form ``a b tok1 tok2 ... 0`` where *a* and *b*
-    are node indices and each *tok* is a signed variable ID on the edge label.
-    This function rewrites *nnf_path* in place, keeping only those *tok*
-    whose absolute value belongs to *projected_ids*.
-    """
-    lines = nnf_path.read_text().splitlines(keepends=True)
-    with open(nnf_path, "w") as f:
-        for line in lines:
-            if m := RE_NNF_EDGE.match(line):
-                a, b, ll = m.groups()
-                f.write(f"{a} {b}")
-                for tok in (ll or "").split():
-                    i = int(tok)
-                    aid = abs(i)
-                    s = 1 if i > 0 else -1
-                    if aid in projected_ids:
-                        f.write(f" {s * aid}")
-                f.write(" 0\n")
-            else:
-                f.write(line)
-
-
 class D4Compiler(PropCompiler[D4CompiledTarget]):
     """PropCompiler that compiles an SMT formula into a d-DNNF via d4v2.
 
@@ -210,7 +195,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
         self,
         formula: FNode,
         all_atom_ids: list[int],
-        projected_ids: set[int] | None,
+        projected_ids: set[int],
         path: Path,
     ) -> None:
         walker = BCS12Walker(self._abstractor)
@@ -220,12 +205,11 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
             f.write("c BC-S1.2\n")
             for aid in all_atom_ids:
                 f.write(f"I v{aid}\n")
-            if projected_ids is not None:
-                ids = sorted(projected_ids)
-                if ids:
-                    f.write("P " + " ".join(f"v{i}" for i in ids) + "\n")
-                else:
-                    f.write("P\n")
+            ids = sorted(projected_ids)
+            if ids:
+                f.write("P " + " ".join(f"v{i}" for i in ids) + "\n")
+            else:
+                f.write("P\n")
             for line in walker.gate_lines:
                 f.write(line + "\n")
             f.write(f"T {root_gate}\n")
@@ -262,7 +246,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
             all_atoms.update(project_on)
         all_atom_ids = sorted({self._abstractor.get_id(a) for a in all_atoms})
 
-        projected_ids = {self._abstractor.get_id(a) for a in proj_set} if project_on is not None else None
+        projected_ids = {self._abstractor.get_id(a) for a in proj_set}
 
         with tempfile.TemporaryDirectory(prefix="d4_compile_") as tmpdir:
             tmp = Path(tmpdir)
@@ -272,16 +256,16 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
             self._write_circuit(formula, all_atom_ids, projected_ids, circuit_path)
             self._run_d4(circuit_path, out_path)
 
-            if projected_ids is not None and len(projected_ids) == 0:
+            if len(projected_ids) == 0:
                 nnf_raw = out_path.read_text()
                 if nnf_raw.startswith("f"):
-                    return D4CompiledTarget("f 1\n", 0)
-                return D4CompiledTarget("t 1\n", 0)
-
-            if projected_ids is not None:
-                _fix_ddnnf(out_path, projected_ids)
+                    return D4CompiledTarget("f 1\n", 0, remapping={})
+                return D4CompiledTarget("t 1\n", 0, remapping={})
 
             nnf_text = out_path.read_text()
+            if nnf_text.startswith("f"):
+                return D4CompiledTarget("f 1\n", 0, remapping={})
 
-        var_count = max(projected_ids) if projected_ids is not None else self._abstractor.max_var
-        return D4CompiledTarget(nnf_text, var_count)
+        var_count = len(projected_ids)
+        remapping = {aid: i + 1 for i, aid in enumerate(sorted(projected_ids))}
+        return D4CompiledTarget(nnf_text, var_count, remapping=remapping)

@@ -60,8 +60,6 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         return self._target.root.is_true()
 
     def entails_clause(self, query_clause: FNode) -> bool:
-        if not is_clause(query_clause):
-            raise ValueError(f"Expected a clause, got: {query_clause}")
         lits = clause_lits(query_clause)
         if lits is None:
             return True
