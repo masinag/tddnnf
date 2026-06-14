@@ -3,17 +3,58 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
 
 import pysmt.operators as op
 from pysmt.fnode import FNode
+from pysmt.formula import FormulaManager
 from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
 
 D4_BIN = Path(__file__).resolve().parent.parent / "bin" / "d4.bin"
+
+
+@dataclass
+class _D4Node:
+    node_type: str
+    edges: list[tuple[int, list[int]]] = field(default_factory=list)
+    memo: FNode | None = None
+
+    def to_pysmt(
+        self,
+        graph: dict[int, _D4Node],
+        abstr: Abstractor,
+        mgr: FormulaManager,
+        inv_remap: dict[int, int],
+    ) -> FNode:
+        if self.memo is not None:
+            return self.memo
+        if self.node_type == "t":
+            self.memo = mgr.TRUE()
+        elif self.node_type == "f":
+            self.memo = mgr.FALSE()
+        elif self.node_type in ("o", "a"):
+            children: list[FNode] = []
+            for tgt, lits in self.edges:
+                child = graph[tgt].to_pysmt(graph, abstr, mgr, inv_remap)
+                if lits:
+                    lit_assignments = [
+                        abstr.get_atom(inv_remap[abs(lit)]) if lit > 0 else mgr.Not(abstr.get_atom(inv_remap[abs(lit)]))
+                        for lit in lits
+                    ]
+                    children.append(mgr.And(child, *lit_assignments))
+                else:
+                    children.append(child)
+            if self.node_type == "o":
+                self.memo = mgr.Or(children) if children else mgr.FALSE()
+            else:
+                self.memo = mgr.And(children) if children else mgr.TRUE()
+        assert self.memo is not None
+        return self.memo
 
 
 class D4CompiledTarget(PropCompiledTarget):
@@ -35,6 +76,28 @@ class D4CompiledTarget(PropCompiledTarget):
     @property
     def remapping(self) -> dict[int, int]:
         return self._remapping
+
+    def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
+        inv_remap = {v: k for k, v in self._remapping.items()}
+        graph: dict[int, _D4Node] = {}
+
+        for line in self._nnf_text.strip().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split()
+            if parts[0] in ("t", "f"):
+                graph[int(parts[1])] = _D4Node(parts[0])
+            elif parts[0] in ("o", "a"):
+                graph[int(parts[1])] = _D4Node(parts[0])
+            elif parts[-1] == "0":
+                parts = parts[:-1]
+                src = int(parts[0])
+                tgt = int(parts[1])
+                lits = [int(x) for x in parts[2:]]
+                graph[src].edges.append((tgt, lits))
+
+        return graph[1].to_pysmt(graph, abstr, mgr, inv_remap)
 
     def save(self, directory: Path) -> None:
         directory.mkdir(parents=True, exist_ok=True)

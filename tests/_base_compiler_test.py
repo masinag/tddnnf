@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
+from pysmt.shortcuts import is_valid
 from pysmt.typing import INT
 
 from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
@@ -106,3 +107,34 @@ class BaseTestCompiler:
         formula = mgr.And(a, mgr.Not(a))
         target = compiler.compile(formula, project_on=[])
         assert self._is_false(target)
+
+    def test_to_pysmt(self, mgr, compiler, abstr, a, b, c) -> None:
+        phi = mgr.And(mgr.Or(a, b), mgr.Not(c))
+        target = compiler.compile(phi)
+        reconstructed = target.to_pysmt(abstr, mgr)
+        assert is_valid(mgr.Iff(phi, reconstructed))
+
+    def test_to_pysmt_true(self, mgr, compiler, abstr) -> None:
+        target = compiler.compile(mgr.TRUE())
+        reconstructed = target.to_pysmt(abstr, mgr)
+        assert is_valid(mgr.Iff(mgr.TRUE(), reconstructed))
+
+    def test_to_pysmt_false(self, mgr, compiler, abstr) -> None:
+        target = compiler.compile(mgr.FALSE())
+        reconstructed = target.to_pysmt(abstr, mgr)
+        assert is_valid(mgr.Iff(mgr.FALSE(), reconstructed))
+
+    def test_to_pysmt_theory_atoms(self, mgr, compiler, abstr, x) -> None:
+        f1 = mgr.GT(x, mgr.Int(0))
+        f2 = mgr.LT(x, mgr.Int(10))
+        phi = mgr.And(f1, f2)
+        target = compiler.compile(phi)
+        reconstructed = target.to_pysmt(abstr, mgr)
+        assert is_valid(mgr.Iff(phi, reconstructed))
+
+    def test_to_pysmt_mixed_bool_theory(self, mgr, compiler, abstr, a, x) -> None:
+        f1 = mgr.GT(x, mgr.Int(0))
+        phi = mgr.Or(a, f1)
+        target = compiler.compile(phi)
+        reconstructed = target.to_pysmt(abstr, mgr)
+        assert is_valid(mgr.Iff(phi, reconstructed))

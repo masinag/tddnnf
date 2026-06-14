@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, Self, TypeVar, runtime_checkable
 
 from pysmt.fnode import FNode
+from pysmt.formula import FormulaManager
 
 if TYPE_CHECKING:
     from tddnnf.core.abstraction import Abstractor
@@ -19,6 +20,10 @@ class PropCompiledTarget(Protocol):
 
     @classmethod
     def load(cls, directory: Path) -> Self: ...
+
+    def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
+        """Reconstruct the formula from the compiled DAG."""
+        ...
 
 
 T_Target = TypeVar("T_Target", bound=PropCompiledTarget)

@@ -7,6 +7,7 @@ from typing import Self
 import pysmt.operators as op
 from dd.cudd import BDD, Function
 from pysmt.fnode import FNode
+from pysmt.formula import FormulaManager
 from pysmt.typing import BOOL
 from pysmt.walkers import DagWalker, handles
 
@@ -35,6 +36,27 @@ class BddCompiledTarget(PropCompiledTarget):
         self._manager.dump(str(bdd_path), [self._root])
         var_count = len(self._manager.vars)
         (directory / "metadata.json").write_text(json.dumps({"var_count": var_count}))
+
+    def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
+        _memo: dict[Function, FNode] = {}
+
+        def convert(f: Function) -> FNode:
+            if f in _memo:
+                return _memo[f]
+            if f.var is None:
+                result: FNode = mgr.TRUE() if not f.negated else mgr.FALSE()
+            else:
+                idx = int(f.var[1:])
+                atom = abstr.get_atom(idx)
+                high = convert(f.high)
+                low = convert(f.low)
+                result = mgr.Or(mgr.And(atom, high), mgr.And(mgr.Not(atom), low))
+                if f.negated:
+                    result = mgr.Not(result)
+            _memo[f] = result
+            return result
+
+        return convert(self._root)
 
     @classmethod
     def load(cls, directory: Path) -> Self:

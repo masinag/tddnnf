@@ -8,6 +8,7 @@ from typing import Self
 import pysmt.operators as op
 from pysdd.sdd import SddManager, SddNode
 from pysmt.fnode import FNode
+from pysmt.formula import FormulaManager
 from pysmt.typing import BOOL
 from pysmt.walkers import DagWalker, handles
 
@@ -29,6 +30,33 @@ class SddCompiledTarget(PropCompiledTarget):
     @property
     def manager(self) -> SddManager:
         return self._manager
+
+    def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
+        memo: dict[int, FNode] = {}
+
+        def convert(node: SddNode) -> FNode:
+            nid = id(node)
+            cached = memo.get(nid)
+            if cached is not None:
+                return cached
+            if node.is_true():
+                result = mgr.TRUE()
+            elif node.is_false():
+                result = mgr.FALSE()
+            elif node.is_literal():
+                lit = node.literal
+                idx = abs(lit)
+                atom = abstr.get_atom(idx)
+                result = atom if lit > 0 else mgr.Not(atom)
+            else:
+                terms: list[FNode] = []
+                for prime, sub in node.elements():
+                    terms.append(mgr.And(convert(prime), convert(sub)))
+                result = mgr.Or(terms)
+            memo[nid] = result
+            return result
+
+        return convert(self._root)
 
     def save(self, directory: Path) -> None:
         directory.mkdir(parents=True, exist_ok=True)

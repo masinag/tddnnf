@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Generic
 
 from pysmt.fnode import FNode
+from pysmt.formula import FormulaManager
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import T_Target
@@ -27,6 +28,9 @@ class TheoryCompiledTarget(Generic[T_Target]):
         }
         (directory / "abstraction.json").write_text(json.dumps(payload, indent=2))
         self.target.save(directory)
+
+    def to_pysmt(self, mgr: FormulaManager) -> FNode:
+        return self.target.to_pysmt(self.abstr, mgr)
 
     @classmethod
     def load(cls, directory: Path, target_type: type[T_Target]) -> TheoryCompiledTarget[T_Target]:
