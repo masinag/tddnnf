@@ -169,29 +169,25 @@ class BCS12Walker(DagWalker):
         return self._map(formula)
 
     def walk_and(self, formula: FNode, args: tuple, **kwargs: object) -> str:
-        if None in args:
-            raise ValueError("AND node with invalid children")
+        assert None not in args
         self._gate_counter += 1
         gate = f"g{self._gate_counter}"
         self._gate_lines.append(f"G {gate} := A " + " ".join(set(args)))
         return gate
 
     def walk_or(self, formula: FNode, args: tuple, **kwargs: object) -> str:
-        if None in args:
-            raise ValueError("OR node with invalid children")
+        assert None not in args
         self._gate_counter += 1
         gate = f"g{self._gate_counter}"
         self._gate_lines.append(f"G {gate} := O " + " ".join(set(args)))
         return gate
 
     def walk_not(self, formula: FNode, args: tuple, **kwargs: object) -> str:
-        if args[0] is None:
-            raise ValueError("NOT node with invalid child")
+        assert None not in args
         return self._remove_double_neg(f"-{args[0]}")
 
     def walk_implies(self, formula: FNode, args: tuple, **kwargs: object) -> str:
-        if args[0] is None or args[1] is None:
-            raise ValueError("IMPLIES node with invalid children")
+        assert None not in args
         self._gate_counter += 1
         gate = f"g{self._gate_counter}"
         line = f"G {gate} := O -{args[0]} {args[1]}"
@@ -199,8 +195,7 @@ class BCS12Walker(DagWalker):
         return gate
 
     def walk_iff(self, formula: FNode, args: tuple, **kwargs: object) -> str:
-        if args[0] is None or args[1] is None:
-            raise ValueError("IFF node with invalid children")
+        assert None not in args
         g1 = f"g{self._gate_counter + 1}"
         g2 = f"g{self._gate_counter + 2}"
         g3 = f"g{self._gate_counter + 3}"
@@ -212,8 +207,7 @@ class BCS12Walker(DagWalker):
         return g3
 
     def walk_ite(self, formula: FNode, args: tuple, **kwargs: object) -> str:
-        if args[0] is None or args[1] is None or args[2] is None:
-            raise ValueError("ITE node with invalid children")
+        assert None not in args
         g1 = f"g{self._gate_counter + 1}"
         g2 = f"g{self._gate_counter + 2}"
         g3 = f"g{self._gate_counter + 3}"
