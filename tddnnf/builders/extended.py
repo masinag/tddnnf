@@ -18,7 +18,7 @@ class TExtendedBuilder(Generic[T_Target]):
     def __init__(
         self,
         compiler: PropCompiler[T_Target],
-        env: Environment | None,
+        env: Environment | None = None,
         computation_logger: dict[str, object] | None = None,
     ) -> None:
         self._env = env or get_env()
