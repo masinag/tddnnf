@@ -41,8 +41,8 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
         if not assumptions:
-            return not self._target.root.is_false()
-        return not self._condition_chain(assumptions, negate=False).is_false()
+            return not bool(self._target.root.is_false())
+        return not bool(self._condition_chain(assumptions, negate=False).is_false())
 
     def _forgotten_var_count(self) -> int:
         return self._abstr.var_count - len(self._care_vars)
@@ -57,19 +57,19 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         return temp.global_model_count() >> (self._forgotten_var_count() + len(unique))
 
     def is_valid(self) -> bool:
-        return self._target.root.is_true()
+        return bool(self._target.root.is_true())
 
     def entails_clause(self, query_clause: FNode) -> bool:
         lits = clause_lits(query_clause)
         if lits is None:
             return True
-        return self._condition_chain(lits, negate=True).is_false()
+        return bool(self._condition_chain(lits, negate=True).is_false())
 
     def is_implicant(self, query_cube: FNode) -> bool:
         lits = cube_lits(query_cube)
         if lits is None:
             return True
-        return self._condition_chain(lits).is_true()
+        return bool(self._condition_chain(lits).is_true())
 
     def enumerate_truth_assignments(self) -> Iterator[dict[FNode, bool]]:
         # PySDD's models() walks the full vtree (incl. forgotten vars) and
