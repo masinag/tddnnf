@@ -72,18 +72,32 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         return self._condition_chain(lits).is_true()
 
     def enumerate_truth_assignments(self) -> Iterator[dict[FNode, bool]]:
+        # PySDD's models() walks the full vtree (incl. forgotten vars) and
+        # gap-fills with Cartesian products, emitting duplicate care-variable
+        # assignments. We dedup by canonical key. The proper fix is
+        # migrate_to_care_manager (rebuild SDD in a smaller manager with only
+        # care vars), which would eliminate duplicates at the source.
         root = self._target.root
         if root.is_false():
             return
+        seen: set[frozenset[tuple[FNode, bool]]] = set()
         for assignment in root.models():
-            base = {self._abstr.get_atom(var_id): val == 1 for var_id, val in assignment.items()}
-            present = set(base)
+            partial = {
+                atom: val == 1
+                for var_id, val in assignment.items()
+                if (atom := self._abstr.get_atom(var_id)) in self._care_set
+            }
+            canon = frozenset(partial.items())
+            if canon in seen:
+                continue
+            seen.add(canon)
+            present = set(partial)
             missing = [a for a in self._care_vars if a not in present]
             if not missing:
-                yield base
+                yield partial
             else:
                 for bits in product([True, False], repeat=len(missing)):
-                    full = dict(base)
+                    full = dict(partial)
                     for atom, val in zip(missing, bits):
                         full[atom] = val
                     yield full
