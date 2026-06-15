@@ -35,7 +35,7 @@ class SddCompiledTarget(PropCompiledTarget):
         memo: dict[int, FNode] = {}
 
         def convert(node: SddNode) -> FNode:
-            nid = id(node)
+            nid = node.id
             cached = memo.get(nid)
             if cached is not None:
                 return cached
