@@ -151,7 +151,10 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
 
     def compile(self, formula: FNode, project_on: list[FNode] | None = None) -> BddCompiledTarget:
         with self._stats.track_time("compile_time"):
-            atoms = list(formula.get_atoms())
+            atoms = set(formula.get_atoms())
+            if project_on is not None:
+                atoms.update(project_on)
+            atoms = list(atoms)
             for atom in atoms:
                 self._abstractor.get_id(atom)
             max_var = max(self._abstractor.max_var, 1)
