@@ -14,6 +14,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
+from tddnnf.core.stats_collector import StatsCollector
 
 
 class SddCompiledTarget(PropCompiledTarget):
@@ -153,24 +154,35 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
         self,
         abstractor: Abstractor,
         vtree_type: str = "balanced",
+        computation_logger: dict[str, object] | None = None,
     ) -> None:
         self._abstractor: Abstractor = abstractor
         self._vtree_type: str = vtree_type
+        self._stats = StatsCollector(computation_logger)
 
     def compile(self, formula: FNode, project_on: list[FNode] | None = None) -> SddCompiledTarget:
-        for atom in formula.get_atoms():
-            self._abstractor.get_id(atom)
-        var_count = max(self._abstractor.max_var, 1)
-        mgr = SddManager(var_count, self._vtree_type)
-        mgr.auto_gc_and_minimize_on()
-        walker = SddWalker(mgr, self._abstractor)
-        root = walker.translate(formula)
-        if project_on is not None:
-            project_set = set(project_on)
-            exists_map = array("i", [0]) * (mgr.var_count() + 1)
-            for atom in formula.get_atoms():
-                if atom not in project_set:
-                    vid = self._abstractor.get_id(atom)
-                    exists_map[vid] = 1
-            root = mgr.exists_multiple(exists_map, root)
-        return SddCompiledTarget(root, mgr)
+        with self._stats.track_time("compile_time"):
+            atoms = list(formula.get_atoms())
+            for atom in atoms:
+                self._abstractor.get_id(atom)
+            var_count = max(self._abstractor.max_var, 1)
+            mgr = SddManager(var_count, self._vtree_type)
+            mgr.auto_gc_and_minimize_on()
+            walker = SddWalker(mgr, self._abstractor)
+            root = walker.translate(formula)
+            n_proj_vars: int
+            if project_on is not None:
+                project_set = set(project_on)
+                exists_map = array("i", [0]) * (mgr.var_count() + 1)
+                for atom in atoms:
+                    if atom not in project_set:
+                        vid = self._abstractor.get_id(atom)
+                        exists_map[vid] = 1
+                with self._stats.track_time("forget_time"):
+                    root = mgr.exists_multiple(exists_map, root)
+                n_proj_vars = len(project_set)
+            else:
+                n_proj_vars = len(atoms)
+            self._stats.log("n_atoms", len(atoms))
+            self._stats.log("n_proj_vars", n_proj_vars)
+            return SddCompiledTarget(root, mgr)

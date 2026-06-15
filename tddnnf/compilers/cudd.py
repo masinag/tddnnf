@@ -13,6 +13,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
+from tddnnf.core.stats_collector import StatsCollector
 
 
 class BddCompiledTarget(PropCompiledTarget):
@@ -144,21 +145,31 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
     through the provided :class:`Abstractor`.
     """
 
-    def __init__(self, abstractor: Abstractor) -> None:
+    def __init__(self, abstractor: Abstractor, computation_logger: dict[str, object] | None = None) -> None:
         self._abstractor: Abstractor = abstractor
+        self._stats = StatsCollector(computation_logger)
 
     def compile(self, formula: FNode, project_on: list[FNode] | None = None) -> BddCompiledTarget:
-        for atom in formula.get_atoms():
-            self._abstractor.get_id(atom)
-        max_var = max(self._abstractor.max_var, 1)
-        mgr = BDD()
-        for i in range(1, max_var + 1):
-            mgr.declare(f"b{i}")
-        walker = BddWalker(mgr, self._abstractor)
-        root = walker.translate(formula)
-        if project_on is not None:
-            project_set = set(project_on)
-            forgotten = [f"b{self._abstractor.get_id(atom)}" for atom in formula.get_atoms() if atom not in project_set]
-            if forgotten:
-                root = root.exist(*forgotten)
-        return BddCompiledTarget(root, mgr)
+        with self._stats.track_time("compile_time"):
+            atoms = list(formula.get_atoms())
+            for atom in atoms:
+                self._abstractor.get_id(atom)
+            max_var = max(self._abstractor.max_var, 1)
+            mgr = BDD()
+            for i in range(1, max_var + 1):
+                mgr.declare(f"b{i}")
+            walker = BddWalker(mgr, self._abstractor)
+            root = walker.translate(formula)
+            n_proj_vars: int
+            if project_on is not None:
+                project_set = set(project_on)
+                forgotten = [f"b{self._abstractor.get_id(atom)}" for atom in atoms if atom not in project_set]
+                if forgotten:
+                    with self._stats.track_time("forget_time"):
+                        root = root.exist(*forgotten)
+                n_proj_vars = len(project_set)
+            else:
+                n_proj_vars = len(atoms)
+            self._stats.log("n_atoms", len(atoms))
+            self._stats.log("n_proj_vars", n_proj_vars)
+            return BddCompiledTarget(root, mgr)
