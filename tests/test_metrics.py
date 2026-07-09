@@ -21,6 +21,13 @@ def test_d4_target_dag_size() -> None:
     assert target.dag_size() == DagSize(vertices=3, edges=2)
 
 
+def test_larger_d4_target_dag_size() -> None:
+    nnf_text = "a 1\nt 2\nt 3\nt 4\n1 2 1 0\n1 3 2 0\n1 4 3 0\n"
+    target = D4CompiledTarget(nnf_text=nnf_text, var_count=3)
+
+    assert target.dag_size() == DagSize(vertices=7, edges=6)
+
+
 def test_sdd_target_dag_size(mgr: FormulaManager, a: FNode, b: FNode) -> None:
     target = SddCompiler(Abstractor()).compile(mgr.And(a, b))
 
