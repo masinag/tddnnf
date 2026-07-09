@@ -7,13 +7,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
 
+import ddnnife
 import pysmt.operators as op
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
+from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.stats_collector import StatsCollector
 
 D4_BIN = Path(__file__).resolve().parent.parent / "bin" / "d4.bin"
@@ -77,6 +78,14 @@ class D4CompiledTarget(PropCompiledTarget):
     @property
     def remapping(self) -> dict[int, int]:
         return self._remapping
+
+    def dag_size(self) -> DagSize:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "circuit.nnf"
+            path.write_text(self._nnf_text)
+            ddnnf = ddnnife.Ddnnf.from_file(str(path), self._var_count)
+        stats = ddnnf.statistics()
+        return DagSize(vertices=stats.nodes.total, edges=stats.child_connections.total)
 
     def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
         inv_remap = {v: k for k, v in self._remapping.items()}

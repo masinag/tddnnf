@@ -13,7 +13,7 @@ from pysmt.typing import BOOL
 from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
+from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -31,6 +31,25 @@ class SddCompiledTarget(PropCompiledTarget):
     @property
     def manager(self) -> SddManager:
         return self._manager
+
+    def dag_size(self) -> DagSize:
+        seen: set[int] = set()
+        edges = 0
+        stack = [self._root]
+
+        while stack:
+            node = stack.pop()
+            node_id = node.id
+            if node_id in seen:
+                continue
+            seen.add(node_id)
+            if node.is_decision():
+                for prime, sub in node.elements():
+                    edges += 2
+                    stack.append(prime)
+                    stack.append(sub)
+
+        return DagSize(vertices=int(self._root.node_size()), edges=edges)
 
     def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
         memo: dict[int, FNode] = {}

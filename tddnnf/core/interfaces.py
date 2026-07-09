@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, Self, TypeVar, runtime_checkable
 
@@ -12,9 +13,19 @@ if TYPE_CHECKING:
     from tddnnf.core.containers import TheoryCompiledTarget
 
 
+@dataclass(frozen=True)
+class DagSize:
+    """DAG size as reachable vertices and child-reference edges."""
+
+    vertices: int
+    edges: int
+
+
 @runtime_checkable
 class PropCompiledTarget(Protocol):
     """A propositionally compiled target (d-DNNF, SDD, OBDD, ...)."""
+
+    def dag_size(self) -> DagSize: ...
 
     def save(self, directory: Path) -> None: ...
 
