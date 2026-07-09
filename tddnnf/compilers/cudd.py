@@ -12,7 +12,7 @@ from pysmt.typing import BOOL
 from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
+from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -30,6 +30,25 @@ class BddCompiledTarget(PropCompiledTarget):
     @property
     def manager(self) -> BDD:
         return self._manager
+
+    def dag_size(self) -> DagSize:
+        seen: set[int] = set()
+        edges = 0
+        stack = [self._root]
+
+        while stack:
+            node = stack.pop()
+            node_key = int(node)
+            if node_key in seen:
+                continue
+            seen.add(node_key)
+            if node.var is None:
+                continue
+            edges += 2
+            stack.append(node.high)
+            stack.append(node.low)
+
+        return DagSize(vertices=int(self._root.dag_size), edges=edges)
 
     def save(self, directory: Path) -> None:
         directory.mkdir(parents=True, exist_ok=True)
