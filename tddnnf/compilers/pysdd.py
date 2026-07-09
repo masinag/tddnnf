@@ -49,7 +49,7 @@ class SddCompiledTarget(PropCompiledTarget):
                     stack.append(prime)
                     stack.append(sub)
 
-        return DagSize(vertices=int(self._root.node_size()), edges=edges)
+        return DagSize(vertices=int(self._root.size()), edges=edges)
 
     def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
         memo: dict[int, FNode] = {}
