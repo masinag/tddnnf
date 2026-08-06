@@ -26,7 +26,7 @@ the compiled artifact.
   predicates and Boolean variables throughout the compilation, querying, and
   serialization processes.
 - **Interoperability:** Integrate directly with external lemma enumerators,
-  specifically `tlemmas-enumeration`.
+  specifically `tlemma-enum`.
 
 ---
 
