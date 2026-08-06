@@ -1,8 +1,8 @@
 # ---- IMPORTS ----
 
-from enumerators.solvers.mathsat_total import MathSATTotalEnumerator
 from pysmt.shortcuts import GT, And, Not, Or, Plus, Real, Symbol
 from pysmt.typing import REAL
+from tlemma_enum.solvers.mathsat_total import MathSATTotalEnumerator
 
 from tddnnf.builders.reduced import TReducedBuilder
 from tddnnf.compilers.cudd import BddCompiler
