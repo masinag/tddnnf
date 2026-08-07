@@ -49,10 +49,9 @@ the theory lemmas, and all subsequent queries must pass through a
 - **Theory Lemmas** can introduce new atoms not present in the original formula
   $\phi$. The abstraction system must scale dynamically to assign new Boolean
   variables during compilation.
-- **Queries** are structurally bound. They **cannot** introduce atoms that
-  were not observed during the compilation phase. If a query introduces a
-  completely novel atom, it cannot be mapped to the compiled circuit and must
-  fail gracefully or evaluate to a trivial falsity.
+- **Queries** are structurally bound to the compiled target's exact
+  `projection_atoms`. Query inputs are normalized, then equivalent atoms are replaced
+  with those target atoms. A query containing an unknown atom must fail.
 
 ### Rule 3: The Artifact-Context Duality (Persistence)
 

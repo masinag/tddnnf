@@ -10,7 +10,6 @@ from pysmt.formula import FormulaManager
 
 if TYPE_CHECKING:
     from tddnnf.core.abstraction import Abstractor
-    from tddnnf.core.containers import TheoryCompiledTarget
 
 
 @dataclass(frozen=True)
@@ -53,8 +52,6 @@ class PropCompiler(Protocol[T_Target_co]):
 @runtime_checkable
 class QueryEngine(Protocol[T_Target_co]):
     """Polynomial-time queries over a compiled target."""
-
-    def __init__(self, target: TheoryCompiledTarget[T_Target_co]) -> None: ...
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
         """True iff the compiled formula has a satisfying assignment.

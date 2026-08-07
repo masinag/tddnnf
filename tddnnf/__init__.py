@@ -1,3 +1,3 @@
-from tddnnf.context import KCMTContext
+from tddnnf.context import CompilationContext, QueryContext
 
-__all__ = ["KCMTContext"]
+__all__ = ["CompilationContext", "QueryContext"]
