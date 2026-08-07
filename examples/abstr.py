@@ -3,11 +3,10 @@
 from pysmt.shortcuts import GT, Not, Or, Plus, Real, Symbol
 from pysmt.typing import REAL
 
-from tddnnf.builders.reduced import TReducedBuilder
+from tddnnf import CompilationContext, QueryContext
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
-from tddnnf.core.abstraction import Abstractor
 from tddnnf.queries.bdd_engine import BddEngine
 from tddnnf.queries.d4_engine import D4Engine
 from tddnnf.queries.sdd_engine import SddEngine
@@ -27,6 +26,10 @@ phi = Or(xgt0, xpygt5)
 assumptions = [Not(ygt5), Not(xgt0)]
 atoms = [xgt5, xgt0, ygt5, xpygt5]
 
+# ---- COMPILATION CONTEXT ----
+
+compilation = CompilationContext(phi, project_on=atoms)
+
 # ---- BACKEND LOOP ----
 
 print(f"phi: {phi}")
@@ -37,7 +40,6 @@ for name, compiler, qengine in [
     ("dDNNF", D4Compiler, D4Engine),
 ]:
     print(f"=== T-Reduced ({name}) ===")
-    abstr = Abstractor()
-    target = TReducedBuilder(compiler(abstr)).build(phi, [], abstr, project_on=atoms)
-    engine = qengine(target)
-    print(f"Is sat under assumpions {assumptions}? (unsound) {engine.is_satisfiable([assumptions])}")
+    target = compilation.compile_treduced(compiler, [])
+    engine = QueryContext(target).wrap_queries(qengine(target))
+    print(f"Is sat under assumpions {assumptions}? (unsound) {engine.is_satisfiable(assumptions)}")
