@@ -36,6 +36,8 @@ The following example compiles an SMT formula with the T-reduced strategy, then
 runs satisfiability, entailment, and model-counting queries on the resulting
 d-DNNF.
 
+First, import the SMT, lemma-enumeration, compilation, and query dependencies.
+
 ```python
 from pysmt.shortcuts import Symbol
 from pysmt.typing import REAL
@@ -47,32 +49,56 @@ from tlemma_enum.solvers import (
 from tddnnf import CompilationContext, QueryContext
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.queries.d4_engine import D4Engine
+```
 
+Define the SMT atoms and formula.
+
+```python
 x = Symbol("x", REAL)
 y = Symbol("y", REAL)
 
-# Formula definition
 x_gt_5 = x > 5
 x_gt_0 = x > 0
 y_gt_5 = y > 5
 x_plus_y_gt_5 = x + y > 5
 phi = (x_gt_0 & y_gt_5) | (x_gt_5 & x_plus_y_gt_5)
+```
 
+Create the compilation context. Its `project_on` vocabulary determines which
+atoms remain in the compiled target and may appear in queries. When omitted, as
+here, it defaults to the normalized atoms in `phi`.
+
+```python
 compilation = CompilationContext(phi)
+```
 
-# Lemma enumeration
+Enumerate theory lemmas for the normalized formula and its projection atoms.
+
+```python
 enumerator = MathSATDivideAndConquerEnumerator(
     parallel_procs=4,
     divide_strategy=DivideByProjectedEnumerationStrategy(),
 )
-enumerator.check_all_sat(compilation.phi, atoms=list(compilation.phi.get_atoms()))
+enumerator.check_all_sat(compilation.phi, atoms=compilation.project_on)
 lemmas = enumerator.get_theory_lemmas()
+```
 
-# Compilation
+Compile the formula and its lemmas with the T-reduced strategy and d4 backend.
+
+```python
 target = compilation.compile_treduced(D4Compiler, lemmas)
-engine = QueryContext(target).wrap_queries(D4Engine(target))
+```
 
-# Querying
+Create the matching d4 query engine. `QueryContext.wrap_queries()` normalizes
+query formulas and aligns their atoms with the target's projection vocabulary.
+
+```python
+engine = QueryContext(target).wrap_queries(D4Engine(target))
+```
+
+Run queries over that vocabulary.
+
+```python
 assumptions = [~y_gt_5, ~x_gt_0]
 clause = x_gt_5 | x_plus_y_gt_5
 
@@ -82,7 +108,7 @@ print(engine.count_truth_assignments())
 print(engine.count_truth_assignments(assumptions))
 ```
 
-Expected output:
+The expected output is:
 
 ```text
 False
@@ -91,10 +117,59 @@ True
 0
 ```
 
+## Available components
+
+### Compilation backends
+
+Each compiler produces a different representation and must be paired with its
+matching query engine.
+
+| Compiler      | Representation    | Query engine | Requirement            |
+| ------------- | ----------------- | ------------ | ---------------------- |
+| `D4Compiler`  | d-DNNF            | `D4Engine`   | Installed d4 binary    |
+| `SddCompiler` | SDD through PySDD | `SddEngine`  | PySDD dependency       |
+| `BddCompiler` | OBDD through CUDD | `BddEngine`  | `dd` with CUDD support |
+
+To swap backends, change the compiler and engine together. For example, the
+earlier workflow can use SDD as follows:
+
+```python
+from tddnnf.compilers.pysdd import SddCompiler
+from tddnnf.queries.sdd_engine import SddEngine
+
+target = compilation.compile_treduced(SddCompiler, lemmas)
+engine = QueryContext(target).wrap_queries(SddEngine(target))
+```
+
+### Compilation strategies
+
+Use the high-level `CompilationContext` methods for compilation.
+
+| Method                | Lemmas enumerated for | Compiled formula                                         |
+| --------------------- | --------------------- | -------------------------------------------------------- |
+| `compile_treduced()`  | `phi`                 | `phi` conjoined with its theory lemmas                   |
+| `compile_textended()` | `Not(phi)`            | `phi` disjoined with the negation of those theory lemmas |
+
+### Query operations
+
+All matching query engines expose the same operations.
+
+| Operation                                   | Result                                                                          |
+| ------------------------------------------- | ------------------------------------------------------------------------------- |
+| `is_satisfiable(assumptions=None)`          | Whether the target has a satisfying truth assignment, optionally under literals |
+| `count_truth_assignments(assumptions=None)` | Number of satisfying total truth assignments, optionally under literals         |
+| `is_valid()`                                | Whether every truth assignment satisfies the target                             |
+| `entails_clause(query_clause)`              | Whether the target entails a clause                                             |
+| `is_implicant(query_cube)`                  | Whether a cube implies the target                                               |
+| `enumerate_truth_assignments()`             | Iterator over satisfying total truth assignments                                |
+
 ## Saving lemmas and compiled targets
 
-Compilation can be expensive. Intermediate results can be stored on disk and
+Since compilation can be expensive, intermediate results can be stored on disk and
 loaded later.
+
+Prepare an artifact directory and persistence imports. This example continues
+from the d4 walkthrough above.
 
 ```python
 from pathlib import Path
@@ -106,11 +181,18 @@ from tddnnf.core.containers import TheoryCompiledTarget
 
 artifact_dir = Path("artifacts")
 artifact_dir.mkdir(exist_ok=True)
+```
 
-# Save and load the theory lemmas.
+Save the enumerated lemmas as an SMT-LIB formula.
+
+```python
 lemmas_file = artifact_dir / "lemmas.smt2"
 write_smtlib(And(lemmas), lemmas_file)
+```
 
+Load the SMT-LIB formula and recover the original lemma list.
+
+```python
 lemmas_formula = read_smtlib(str(lemmas_file))
 if lemmas_formula.is_true():
     loaded_lemmas = []
@@ -118,16 +200,25 @@ elif lemmas_formula.is_and():
     loaded_lemmas = list(lemmas_formula.args())
 else:
     loaded_lemmas = [lemmas_formula]
+```
 
-# Compile and save the d-DNNF target.
+Compile from the loaded lemmas and save the target.
+
+```python
 target = compilation.compile_treduced(D4Compiler, loaded_lemmas)
 target_dir = artifact_dir / "ddnnf"
 target.save(target_dir)
+```
 
-# Load without compiling again.
+Reload the d4 target without compiling again.
+
+```python
 loaded_target = TheoryCompiledTarget.load(target_dir, D4CompiledTarget)
+```
 
-# Query
+Wrap the matching engine and query the loaded target.
+
+```python
 loaded_engine = QueryContext(loaded_target).wrap_queries(D4Engine(loaded_target))
 print(loaded_engine.count_truth_assignments())
 ```
