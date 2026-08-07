@@ -50,9 +50,9 @@ class TReducedBuilder(Generic[T_Target]):
             conjoined = self._env.formula_manager.And(phi, *lemmas)
             artifact = self._compiler.compile(conjoined, project_on=project_on)
             if project_on is not None:
-                care_vars = project_on
+                projection_atoms = project_on
             else:
-                care_vars = sorted(conjoined.get_atoms(), key=lambda a: abstractor.get_id(a))
+                projection_atoms = sorted(conjoined.get_atoms(), key=lambda a: abstractor.get_id(a))
         self._stats.log("n_lemmas", len(lemmas))
-        self._stats.log("n_care_vars", len(care_vars))
-        return TheoryCompiledTarget(artifact, abstractor, care_vars=care_vars)
+        self._stats.log("n_projection_atoms", len(projection_atoms))
+        return TheoryCompiledTarget(artifact, abstractor, projection_atoms=projection_atoms)

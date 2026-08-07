@@ -1,9 +1,14 @@
+import json
+from pathlib import Path
+
 import pytest
 from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 
+from tddnnf.compilers.d4 import D4CompiledTarget
 from tddnnf.core.abstraction import Abstractor
+from tddnnf.core.containers import TheoryCompiledTarget
 
 
 class TestAbstractor:
@@ -74,3 +79,19 @@ class TestAbstractor:
         abstr2 = Abstractor.from_dict(data)
         assert abstr2.get_atom(1).is_symbol()
         assert abstr2.get_atom(1).symbol_name() == "p"
+
+
+def test_compiled_target_round_trip_preserves_projection_atoms(
+    tmp_path: Path, mgr: FormulaManager, a: FNode, b: FNode, abstr: Abstractor
+) -> None:
+    abstr.get_id(a)
+    abstr.get_id(b)
+    container = TheoryCompiledTarget(D4CompiledTarget("t 1\n", 2), abstr, projection_atoms=[b, a])
+
+    container.save(tmp_path)
+    payload = json.loads((tmp_path / "abstraction.json").read_text())
+    loaded = TheoryCompiledTarget.load(tmp_path, D4CompiledTarget, env=mgr.env)
+
+    assert payload["projection_atom_ids"] == [abstr.get_id(b), abstr.get_id(a)]
+    assert "care_var_ids" not in payload
+    assert [atom.serialize() for atom in loaded.projection_atoms] == [b.serialize(), a.serialize()]

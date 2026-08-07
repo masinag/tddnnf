@@ -17,15 +17,15 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
     def __init__(self, container: TheoryCompiledTarget[BddCompiledTarget]) -> None:
         self._target = container.target
         self._abstr = container.abstr
-        self._care_vars: list[FNode] = container.care_vars
-        self._care_set: set[FNode] = set(container.care_vars)
+        self._projection_atoms: list[FNode] = container.projection_atoms
+        self._projection_atom_set: set[FNode] = set(container.projection_atoms)
 
     def _restrict_chain(self, lits: list[FNode], negate: bool = False, root=None):
         assign: dict[str, bool] = {}
         for lit in lits:
             atom = lit.arg(0) if lit.is_not() else lit
-            if atom not in self._care_set:
-                raise ValueError(f"Atom {atom} is not a care variable")
+            if atom not in self._projection_atom_set:
+                raise ValueError(f"Atom {atom} is not a projection atom")
             val = (not lit.is_not()) if not negate else lit.is_not()
             name = f"b{self._abstr.get_id(atom)}"
             if name in assign and assign[name] != val:
@@ -44,7 +44,7 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         return self._restrict_chain(assumptions, negate=False) != mgr.false
 
     def _forgotten_var_count(self) -> int:
-        return len(self._target.manager.vars) - len(self._care_vars)
+        return len(self._target.manager.vars) - len(self._projection_atoms)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
         n = len(self._target.manager.vars)
@@ -81,10 +81,10 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         if root == self._target.manager.false:
             return
         mgr = self._target.manager
-        care_names = [f"b{self._abstr.get_id(a)}" for a in self._care_vars]
+        projection_names = [f"b{self._abstr.get_id(a)}" for a in self._projection_atoms]
         for partial in mgr.pick_iter(root):
             support = set(partial)
-            unused = [v for v in care_names if v not in support]
+            unused = [v for v in projection_names if v not in support]
             if not unused:
                 yield {self._abstr.get_atom(int(k[1:])): v for k, v in partial.items()}
             else:
