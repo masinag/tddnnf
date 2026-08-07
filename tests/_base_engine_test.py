@@ -22,13 +22,13 @@ class BaseTestEngine:
     @pytest.fixture
     def engine(self, compiler: PropCompiler, abstr: Abstractor, mgr: FormulaManager, a: FNode, b: FNode) -> QueryEngine:
         target = compiler.compile(mgr.And(a, b))
-        return self.engine_cls(TheoryCompiledTarget(target, abstr, care_vars=[a, b]))
+        return self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b]))
 
     def test_exhaustive_engine_and_solver_space(
         self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, bank_case: SolverGroundTruth
     ) -> None:
         target = compiler.compile(bank_case.original_formula, project_on=bank_case.project_on)
-        engine = self.engine_cls(TheoryCompiledTarget(target, abstr, care_vars=bank_case.project_on))
+        engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on))
 
         with mgr.env.factory.Solver() as solver:
             solver.add_assertion(bank_case.expected_formula)
@@ -90,7 +90,7 @@ class BaseTestEngine:
         self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, bank_case: SolverGroundTruth
     ) -> None:
         target = compiler.compile(bank_case.original_formula, project_on=bank_case.project_on)
-        engine = self.engine_cls(TheoryCompiledTarget(target, abstr, care_vars=bank_case.project_on))
+        engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on))
 
         projected_vars = bank_case.project_on
         if not projected_vars:
@@ -134,19 +134,19 @@ class BaseTestEngine:
     # --- Error / Validation Tests ---
 
     def test_is_satisfiable_unknown_assumption(self, engine: QueryEngine, c: FNode) -> None:
-        with pytest.raises(ValueError, match="not a care variable"):
+        with pytest.raises(ValueError, match="not a projection atom"):
             engine.is_satisfiable(assumptions=[c])
 
     def test_count_truth_assignments_unknown_assumption(self, engine: QueryEngine, c: FNode) -> None:
-        with pytest.raises(ValueError, match="not a care variable"):
+        with pytest.raises(ValueError, match="not a projection atom"):
             engine.count_truth_assignments(assumptions=[c])
 
     def test_entails_clause_unknown_atom(self, engine: QueryEngine, c: FNode) -> None:
-        with pytest.raises(ValueError, match="not a care variable"):
+        with pytest.raises(ValueError, match="not a projection atom"):
             engine.entails_clause(c)
 
     def test_is_implicant_unknown_atom(self, engine: QueryEngine, c: FNode) -> None:
-        with pytest.raises(ValueError, match="not a care variable"):
+        with pytest.raises(ValueError, match="not a projection atom"):
             engine.is_implicant(c)
 
     def test_is_implicant_invalid_input(self, engine: QueryEngine, mgr: FormulaManager, a: FNode, b: FNode) -> None:
@@ -157,8 +157,8 @@ class BaseTestEngine:
         self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, a: FNode, b: FNode, c: FNode
     ) -> None:
         target = compiler.compile(mgr.And(a, mgr.Or(b, c)), project_on=[a, b])
-        engine = self.engine_cls(TheoryCompiledTarget(target, abstr, care_vars=[a, b]))
-        with pytest.raises(ValueError, match="not a care variable"):
+        engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b]))
+        with pytest.raises(ValueError, match="not a projection atom"):
             engine.is_satisfiable(assumptions=[c])
-        with pytest.raises(ValueError, match="not a care variable"):
+        with pytest.raises(ValueError, match="not a projection atom"):
             engine.count_truth_assignments(assumptions=[c])

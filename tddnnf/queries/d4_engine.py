@@ -20,8 +20,8 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
         import ddnnife
 
         self._abstr = container.abstr
-        self._care_vars: list[FNode] = list(container.care_vars)
-        self._care_set: set[FNode] = set(container.care_vars)
+        self._projection_atoms: list[FNode] = list(container.projection_atoms)
+        self._projection_atom_set: set[FNode] = set(container.projection_atoms)
         self._var_count = container.target.var_count
         self._remapping = container.target.remapping
 
@@ -50,8 +50,8 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
         result: list[int] = []
         for lit in lits:
             atom = lit.arg(0) if lit.is_not() else lit
-            if atom not in self._care_set:
-                raise ValueError(f"Atom {atom} is not a care variable")
+            if atom not in self._projection_atom_set:
+                raise ValueError(f"Atom {atom} is not a projection atom")
             var_id = self._abstr.get_id(atom)
             nnf_id = self._remapping[var_id]
             result.append(-nnf_id if lit.is_not() else nnf_id)
@@ -62,7 +62,7 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
         return self._mut is None
 
     def _gap_shift(self) -> int:
-        return max(0, self._var_count - len(self._care_vars))
+        return max(0, self._var_count - len(self._projection_atoms))
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
         if self._formula_is_constant:
@@ -86,8 +86,8 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
                 unique = normalize_assumptions(assumptions)
                 if unique is None:
                     return 0
-                return 1 << (len(self._care_vars) - len(unique))
-            return (1 << len(self._care_vars)) if self._const_true else 0
+                return 1 << (len(self._projection_atoms) - len(unique))
+            return (1 << len(self._projection_atoms)) if self._const_true else 0
         if assumptions:
             unique = normalize_assumptions(assumptions)
             if unique is None:
@@ -99,7 +99,7 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
         return int(self._mut.count(lits)) >> self._gap_shift()
 
     def is_valid(self) -> bool:
-        return self.count_truth_assignments() == (1 << len(self._care_vars))
+        return self.count_truth_assignments() == (1 << len(self._projection_atoms))
 
     def entails_clause(self, query_clause: FNode) -> bool:
         lits = clause_lits(query_clause)
@@ -117,36 +117,36 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
         assert self._mut is not None
         ddnnf_lits = self._lits_to_ddnnf(lits)
         count = int(self._mut.count(ddnnf_lits)) >> self._gap_shift()
-        remaining = len(self._care_vars) - len(lits)
+        remaining = len(self._projection_atoms) - len(lits)
         return count == (1 << remaining)
 
     def enumerate_truth_assignments(self) -> Iterator[dict[FNode, bool]]:
         if self._formula_is_constant:
             if self._const_true:
-                for bits in product([True, False], repeat=len(self._care_vars)):
-                    yield dict(zip(self._care_vars, bits))
+                for bits in product([True, False], repeat=len(self._projection_atoms)):
+                    yield dict(zip(self._projection_atoms, bits))
             return
         assert self._mut is not None
         total = int(self._mut.count([]))
         if total == 0:
             return
         raw = self._mut.enumerate([], total)
-        care_ids = {self._abstr.get_id(a) for a in self._care_vars}
+        projection_ids = {self._abstr.get_id(a) for a in self._projection_atoms}
         nnf_to_abstr = {v: k for k, v in self._remapping.items()}
         for model_lits in raw:
             partial: dict[int, bool] = {}
             for lit in model_lits:
                 nnf_var_id = abs(lit)
                 abstr_id = nnf_to_abstr.get(nnf_var_id)
-                if abstr_id is not None and abstr_id in care_ids:
+                if abstr_id is not None and abstr_id in projection_ids:
                     partial[abstr_id] = lit > 0
             present = set(partial)
-            missing = [a for a in self._care_vars if self._abstr.get_id(a) not in present]
+            missing = [a for a in self._projection_atoms if self._abstr.get_id(a) not in present]
             if not missing:
-                yield {a: partial[self._abstr.get_id(a)] for a in self._care_vars}
+                yield {a: partial[self._abstr.get_id(a)] for a in self._projection_atoms}
             else:
                 for bits in product([True, False], repeat=len(missing)):
                     full = dict(partial)
                     for atom, val in zip(missing, bits):
                         full[self._abstr.get_id(atom)] = val
-                    yield {a: full[self._abstr.get_id(a)] for a in self._care_vars}
+                    yield {a: full[self._abstr.get_id(a)] for a in self._projection_atoms}

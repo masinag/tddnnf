@@ -17,13 +17,13 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
     def __init__(self, container: TheoryCompiledTarget[SddCompiledTarget]) -> None:
         self._target = container.target
         self._abstr = container.abstr
-        self._care_vars: list[FNode] = container.care_vars
-        self._care_set: set[FNode] = set(container.care_vars)
+        self._projection_atoms: list[FNode] = container.projection_atoms
+        self._projection_atom_set: set[FNode] = set(container.projection_atoms)
 
     def _lit_to_sdd(self, lit: FNode):
         atom = lit.arg(0) if lit.is_not() else lit
-        if atom not in self._care_set:
-            raise ValueError(f"Atom {atom} is not a care variable")
+        if atom not in self._projection_atom_set:
+            raise ValueError(f"Atom {atom} is not a projection atom")
         var_id = self._abstr.get_id(atom)
         node = self._target.manager.literal(var_id)
         return ~node if lit.is_not() else node
@@ -45,7 +45,7 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         return not bool(self._condition_chain(assumptions, negate=False).is_false())
 
     def _forgotten_var_count(self) -> int:
-        return self._abstr.var_count - len(self._care_vars)
+        return self._abstr.var_count - len(self._projection_atoms)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
         if not assumptions:
@@ -73,10 +73,10 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
 
     def enumerate_truth_assignments(self) -> Iterator[dict[FNode, bool]]:
         # PySDD's models() walks the full vtree (incl. forgotten vars) and
-        # gap-fills with Cartesian products, emitting duplicate care-variable
+        # gap-fills with Cartesian products, emitting duplicate projection-atom
         # assignments. We dedup by canonical key. The proper fix is
         # migrate_to_care_manager (rebuild SDD in a smaller manager with only
-        # care vars), which would eliminate duplicates at the source.
+        # projection atoms), which would eliminate duplicates at the source.
         root = self._target.root
         if root.is_false():
             return
@@ -85,14 +85,14 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
             partial = {
                 atom: val == 1
                 for var_id, val in assignment.items()
-                if (atom := self._abstr.get_atom(var_id)) in self._care_set
+                if (atom := self._abstr.get_atom(var_id)) in self._projection_atom_set
             }
             canon = frozenset(partial.items())
             if canon in seen:
                 continue
             seen.add(canon)
             present = set(partial)
-            missing = [a for a in self._care_vars if a not in present]
+            missing = [a for a in self._projection_atoms if a not in present]
             if not missing:
                 yield partial
             else:
