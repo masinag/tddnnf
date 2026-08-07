@@ -1,256 +1,259 @@
-# Architecture Specification: `tddnnf`
+# Architecture
 
-This document outlines the architecture, design principles, component interfaces,
-and implementation plan for `tddnnf`, a Python library for Knowledge Compilation
-Modulo Theories (KCMT).
+`tddnnf` compiles an SMT formula into a tractable propositional representation
+while retaining enough information to relate propositional variables back to SMT
+atoms. The supported targets are d-DNNF through d4, SDD through PySDD, and OBDD
+through CUDD.
 
----
+The library separates the workflow into four concerns:
 
-## 1. Context & Objectives
+1. normalize SMT syntax and choose the atoms to retain;
+2. combine the input formula with theory lemmas;
+3. map SMT atoms to propositional variables and compile the result;
+4. normalize queries against the vocabulary stored with the compiled target.
 
-Knowledge Compilation Modulo Theories (KCMT) compiles an SMT formula into a
-target tractable representation (such as d-DNNF, SDD, or OBDD) using a
-combination of theory lemmas and a classical propositional knowledge compiler.
-Once compiled, demanding queries like model counting, satisfiability, and
-clausal entailment can be executed in polynomial time relative to the size of
-the compiled artifact.
+Here, the vocabulary is the target’s `projection_atoms`: the normalized SMT atoms
+selected for projection and available to queries.
 
-### Core Architecture Goals
+## Compilation flow
 
-- **Backend Agnosticism:** Completely decouple syntax transformations from
-  underlying propositional compilers (e.g., CLI tools like `d4`, or memory-bound
-  Python libraries like `pysdd` and `cudd`).
-- **Composability:** Rely on lightweight, single-responsibility components and
-  Python Protocols rather than heavy, deeply nested inheritance hierarchies.
-- **Semantic Soundness:** Guarantee correct mapping between SMT atomic
-  predicates and Boolean variables throughout the compilation, querying, and
-  serialization processes.
-- **Interoperability:** Integrate directly with external lemma enumerators,
-  specifically `tlemma-enum`.
+`CompilationContext` is the public entry point for compilation. It owns the
+PySMT environment and a `NormalizerWalker`, normalizes the input formula at
+construction time, and builds the projection vocabulary.
 
----
+```python
+context = CompilationContext(phi, project_on=atoms)
+target = context.compile_treduced(D4Compiler, lemmas)
+```
 
-## 2. Core System Rules & Principles
+When `project_on` is omitted, the projection consists of the atoms in the
+normalized input formula. When supplied, every projection atom is normalized,
+a top-level negation is removed so the vocabulary contains positive atoms, and
+duplicates are removed while preserving their first occurrence.
 
-Every component implemented in this repository must adhere to the following
-architectural invariants:
+Both `compile_treduced()` and `compile_textended()` then:
 
-### Rule 1: Structural SMT Normalization
+- normalize every theory lemma in the same environment as the input formula;
+- create a fresh `Abstractor`;
+- construct the requested compiler with that abstractor;
+- pass the normalized formula, lemmas, abstractor, and projection vocabulary to
+  the corresponding builder; and
+- return a `TheoryCompiledTarget` containing the backend artifact, abstraction,
+  and exact projection atoms.
 
-SMT expressions can represent identical constraints via different syntactic
-structures (e.g., $x \le y$ versus $y \ge x$). To prevent structural mismatches:
+The compiler receives PySMT formulas directly. Atom abstraction happens inside
+each backend adapter, allowing all backends to share the same builder API.
 
-**All entry points must normalize expressions.** Both the input formula $\phi$,
-the theory lemmas, and all subsequent queries must pass through a
-`TheoryNormalizer` before entering the variable mapping layers.
+## Normalization and projection
 
-### Rule 2: Vocabulary Constraints
+`NormalizerWalker` canonicalizes PySMT DAGs. Theory relations are converted to
+and back from MathSAT terms, which makes syntactically different forms accepted
+by MathSAT converge on the same representation. Boolean connectives are rebuilt
+from their normalized children; constants, symbols, and non-relational theory
+operators are retained.
 
-- **Theory Lemmas** can introduce new atoms not present in the original formula
-  $\phi$. The abstraction system must scale dynamically to assign new Boolean
-  variables during compilation.
-- **Queries** are structurally bound to the compiled target's exact
-  `projection_atoms`. Query inputs are normalized, then equivalent atoms are replaced
-  with those target atoms. A query containing an unknown atom must fail.
+Normalization occurs at both boundaries:
 
-### Rule 3: The Artifact-Context Duality (Persistence)
+- `CompilationContext` normalizes the input formula, projection atoms, and
+  lemmas before compilation.
+- `QueryContext` normalizes query literals, clauses, and cubes before handing
+  them to a backend query engine.
 
-A compiled propositional graph (e.g., a `.nnf` file or an SDD node pointer)
-is uninterpretable without its exact mapping context.
+Projection controls the variables visible in the resulting artifact. Formula
+and lemma atoms outside `project_on` are existentially quantified away. d4 uses
+the projection declaration in its BC-S1.2 input, PySDD calls
+`exists_multiple()`, and CUDD calls `exist()`. Projection atoms not occurring in
+the compiled formula are still registered so query domains and truth-assignment
+counts use the requested vocabulary.
 
-- The unit of disk serialization is never a raw circuit; it is a unified
-  container (`TheoryCompiledTarget`) that packages the compiled target
-  alongside its unique `AbstractionContext`.
+The ordered `projection_atoms` list stored in `TheoryCompiledTarget` is the
+authoritative query vocabulary. Backend query engines reject atoms outside this
+set.
 
----
+## Abstraction and compiled containers
 
-## 3. Package Directory Layout
+`Abstractor` maintains a bidirectional mapping between SMT atoms and positive
+integer IDs. `get_id()` assigns IDs consecutively on first use, while
+`get_atom()` performs the reverse lookup. `var_count` reports the number of
+mapped atoms and `max_var` reports the largest assigned ID.
 
-The codebase must strictly follow the modular layout below:
+The mapping can be serialized with `to_dict()`. Each atom is encoded as a
+standalone SMT-LIB script and associated with its integer ID. `from_dict()`
+parses those scripts in a supplied PySMT environment, or the global environment
+when none is supplied.
+
+`TheoryCompiledTarget[T_Target]` binds three values that must travel together:
+
+- `target`: the backend-specific compiled DAG;
+- `abstr`: its SMT-atom-to-integer mapping; and
+- `projection_atoms`: the ordered, externally visible vocabulary.
+
+Its `to_pysmt()` method delegates DAG reconstruction to the backend target while
+supplying the stored abstraction and a `FormulaManager`.
+
+## Compilation strategies
+
+Builders combine already-normalized inputs and delegate propositional
+compilation. They do not implement backend-specific translation.
+
+### T-reduced
+
+`TReducedBuilder` compiles
+
+\[
+  \phi \land \bigwedge_{\ell \in L} \ell.
+\]
+
+Its lemmas rule out theory-inconsistent propositional assignments satisfying
+`phi`.
+
+### T-extended
+
+`TExtendedBuilder` compiles
+
+\[
+  \phi \lor \bigvee_{\ell \in L} \neg \ell.
+\]
+
+Its lemmas rule out theory-consistent propositional assignments satisfying
+`not phi`.
+
+Each builder records the requested projection list in the returned container.
+When a builder is used directly without `project_on`, it derives the projection
+from every atom in the combined formula and orders those atoms by abstraction
+ID.
+
+## Propositional backends
+
+### d-DNNF: d4
+
+`D4Compiler` translates a PySMT Boolean skeleton to BC-S1.2 circuit syntax with
+`BCS12Walker`, invokes the bundled d4 executable, and stores the emitted NNF in
+`D4CompiledTarget`. Projected abstraction IDs are remapped to d4's dense output
+variable range. Constant results are represented directly as `t 1` or `f 1`.
+
+`D4CompiledTarget` exposes the NNF text, projected variable count, and ID
+remapping. It uses `ddnnife` for DAG statistics, while its own NNF parser
+reconstructs a PySMT formula.
+
+### SDD: PySDD
+
+`SddCompiler` uses `SddWalker` to build an SDD through recursive Boolean apply.
+It creates a balanced vtree by default, enables automatic garbage collection
+and minimization, and existentially quantifies non-projection variables after
+translation.
+
+`SddCompiledTarget` retains the `SddNode` root and `SddManager`. It provides DAG
+statistics and reconstructs decision nodes as disjunctions of prime/sub
+conjunctions.
+
+### OBDD: CUDD
+
+`BddCompiler` uses `BddWalker` to translate the Boolean skeleton into a CUDD BDD
+and existentially quantifies non-projection variables after translation.
+
+`BddCompiledTarget` retains the CUDD `Function` root and `BDD` manager. It
+reports reachable-node and edge counts and reconstructs each decision as an
+if-then-else expansion over its SMT atom.
+
+## Queries
+
+Each backend has a matching query engine: `D4Engine`, `SddEngine`, and
+`BddEngine`. All implement the `QueryEngine` protocol:
+
+- `is_satisfiable(assumptions=None)` checks satisfiability, optionally under a
+  list of literals;
+- `count_truth_assignments(assumptions=None)` counts total assignments over the
+  projection vocabulary;
+- `is_valid()` checks whether every projected assignment satisfies the target;
+- `entails_clause(query_clause)` checks clausal entailment;
+- `is_implicant(query_cube)` checks whether a cube implies the target; and
+- `enumerate_truth_assignments()` yields total dictionaries from projection
+  atoms to Boolean values.
+
+Engines account for forgotten variables when counting and fill missing or
+unused projected variables during enumeration. Contradictory assumptions yield
+no models.
+
+Backend engines operate on the target's exact atom objects. To make public
+queries robust to equivalent SMT syntax, construct a `QueryContext` from the
+compiled container and call `wrap_queries(engine)`. The resulting
+`NormalizingQueryEngine` aligns assumptions, clauses, and cubes before
+delegation.
+
+`QueryContext` indexes every projection atom by its positive canonical form and
+tracks polarity separately. It rejects ambiguous projection vocabularies whose
+distinct atoms normalize to the same form. Query atoms absent from the index
+raise `ValueError`; matching atoms are replaced with the exact objects stored in
+the target, with polarity preserved.
+
+## Persistence and reconstruction
+
+`TheoryCompiledTarget.save(directory)` creates a directory and writes
+`abstraction.json`, containing the SMT-LIB abstraction map and the ordered list
+of projection atom IDs. It then delegates backend persistence to `target.save()`.
+
+Backend files are:
+
+| Target | Circuit file | `metadata.json` contents |
+| --- | --- | --- |
+| `D4CompiledTarget` | `circuit.nnf` | variable count and abstraction-to-d4 remapping |
+| `SddCompiledTarget` | `circuit.sdd` | PySDD manager variable count |
+| `BddCompiledTarget` | `circuit.dddmp` | CUDD manager variable count |
+
+`TheoryCompiledTarget.load(directory, target_type, env=None)` reverses this
+process: it reconstructs the `Abstractor`, asks `target_type.load()` to restore
+the backend artifact, resolves projection IDs back to SMT atoms, and returns the
+complete container. Supplying the intended PySMT environment keeps restored
+atoms in the same formula manager as the caller.
+
+All backend targets also implement `to_pysmt()`, so a loaded container can
+reconstruct a logically equivalent PySMT formula through
+`TheoryCompiledTarget.to_pysmt()`.
+
+## Protocols and instrumentation
+
+`core/interfaces.py` defines structural protocols rather than a shared backend
+base class:
+
+- `PropCompiledTarget` requires `dag_size()`, `save()`, `load()`, and
+  `to_pysmt()`;
+- `PropCompiler[T]` requires construction with an `Abstractor` and a
+  `compile(formula, project_on=None)` method; and
+- `QueryEngine[T]` defines the six query operations listed above.
+
+`DagSize` is the common immutable result for target size metrics, reporting
+reachable vertices and child-reference edges.
+
+Builders and compilers can receive a shared `dict[str, object]` as
+`computation_logger`. `StatsCollector` makes logging optional, accumulates
+wall-clock durations, and records counts such as lemmas, atoms, and projection
+variables. d4 additionally reports time spent registering atoms, writing the
+input circuit, and running the external compiler.
+
+## Package layout
 
 ```text
 tddnnf/
-│
-├── __init__.py
-│
+├── context.py                  # CompilationContext and QueryContext
 ├── core/
-│   ├── __init__.py
-│   ├── abstraction.py       # Tracks SMT Atom <-> Bool Var mappings
-│   ├── containers.py        # TheoryCompiledTarget unified wrapper
-│   └── interfaces.py        # Python Protocols (PropCompiler, QueryEngine)
-│
+│   ├── abstraction.py         # Abstractor mapping and serialization
+│   ├── containers.py          # TheoryCompiledTarget
+│   ├── interfaces.py          # Backend and query protocols, DagSize
+│   ├── pysmt_utils.py         # Atom, clause, cube, and assumption helpers
+│   └── stats_collector.py     # Optional timing and count instrumentation
 ├── normalization/
-│   ├── __init__.py
-│   └── normalizer.py        # SMT canonicalization layer
-│
+│   └── normalizer.py          # MathSAT-backed NormalizerWalker
 ├── builders/
-│   ├── __init__.py
-│   ├── reduced.py           # Implements T-Reduced syntax logic
-│   └── extended.py          # Implements T-Extended syntax logic
-│
+│   ├── reduced.py             # TReducedBuilder
+│   └── extended.py            # TExtendedBuilder
 ├── compilers/
-│   ├── __init__.py
-│   ├── d4.py                # Wrapper for CLI d4 tool
-│   ├── pysdd.py             # Adapter for PySDD
-│   └── cudd.py              # Adapter for CUDD
-│
+│   ├── d4.py                  # d4/d-DNNF compiler and target
+│   ├── pysdd.py               # PySDD compiler and target
+│   └── cudd.py                # CUDD OBDD compiler and target
 └── queries/
-    ├── __init__.py
-    ├── d4_engine.py         # Query handler for d4 output (via ddnnfe)
-    ├── sdd_engine.py        # Query handler for PySDD
-    └── bdd_engine.py        # Query handler for CUDD
-```
-
-## 4. Key Interfaces & Types
-
-To ensure type-safety and backend agnosticism across fundamentally different
-compilers, we leverage Python typing generics and structural
-subtyping (`Protocol`).
-
-```python
-from typing import Protocol, TypeVar
-from pathlib import Path
-from pysmt.fnode import FNode
-
-# Protocol all compiled targets must implement
-class PropCompiledTarget(Protocol):
-    def save(self, directory: Path) -> None: ...
-    @classmethod
-    def load(cls, directory: Path) -> PropCompiledTarget: ...
-
-T_Target = TypeVar("T_Target", bound=PropCompiledTarget)
-T_Target_co = TypeVar("T_Target_co", bound=PropCompiledTarget, covariant=True)
-```
-
-### 4.1. Core Abstraction Mappings (core/abstraction.py)
-
-Tracks the bidirectional state between normalized SMT atomic predicates and
-propositional literal integers.
-
-```python
-class AbstractionContext:
-    def __init__(self):
-        self._smt_to_bool: dict[FNode, int] = {}
-        self._bool_to_smt: dict[int, FNode] = {}
-
-    def get_bool(self, smt_atom: Any) -> int:
-        """Retrieves or registers a unique positive integer literal for an SMT atom."""
-        if smt_atom not in self._smt_to_bool:
-            idx = len(self._smt_to_bool) + 1
-            self._smt_to_bool[smt_atom] = idx
-            self._bool_to_smt[idx] = smt_atom
-        return self._smt_to_bool[smt_atom]
-
-    def get_smt(self, bool_var: int) -> Any:
-        """Retrieves the SMT atom associated with a given boolean variable integer."""
-        return self._bool_to_smt[abs(bool_var)]
-
-    def abstract(self, smt_formula: Any) -> Any:
-        """
-        Recursively parses an SMT formula tree, converting atoms to
-        propositional elements.
-        """
-        ...
-
-    def to_dict(self) -> dict: ...
-    @classmethod
-    def from_dict(cls, data: dict) -> "AbstractionContext": ...
-```
-
-### 4.2. Unified Storage Container (core/containers.py)
-
-Binds the compiled target and the abstraction context into an atomic, serialize-
-safe object.
-
-```python
-class TheoryCompiledTarget(Generic[T_Target]):
-    def __init__(self, target: T_Target, context: AbstractionContext):
-        self.target: T_Target = target
-        self.context: AbstractionContext = context
-
-    def save(self, directory: Path) -> None:
-        """Saves the context map and delegates target persistence to the
-        backend via PropCompiledTarget.save()."""
-        ...
-
-    @classmethod
-    def load(cls, directory: Path, target_type: type[T_Target]) -> "TheoryCompiledTarget[T_Target]":
-        """Reconstructs a context instance and loads the target via
-        PropCompiledTarget.load()."""
-        ...
-```
-
-### 4.3. Functional Protocols (core/interfaces.py)
-
-Defines the strict interfaces that third-party concrete classes must implement.
-
-```python
-class PropCompiler(Protocol[T_Target_co]):
-    def compile(self, propositional_formula: Any) -> T_Target_co:  # covariant
-        """Compiles a propositional structure into its target internal representation."""
-        ...
-
-class QueryEngine(Protocol[T_Target_co]):
-    def __init__(self, compilation: "TheoryCompiledTarget[T_Target_co]", normalizer: Any):
-      ...
-    def is_satisfiable(self) -> bool: ...
-    def model_count(self) -> int: ...
-    def clause_entails(self, query_clause: Any) -> bool: ...
-```
-
-### 4.4. Compilation Strategies (builders/)
-
-The builders implement syntax transformations. They remain oblivious to how the
-backend compiler works underneath.
-
-- T-reduced strategy: $\phi\wedge\bigwedge_{lemma\in Lemmas}{lemma}$
-- T-extended strategy: $\phi\vee\bigvee_{lemma\in Lemmas^\prime}{\neg lemma}$
-
-```python
-class TReducedBuilder(Generic[T_Target]):
-    def __init__(self, compiler: PropCompiler[T_Target]):
-        self.compiler = compiler
-
-    def build(self, phi: FNode, lemmas: List[FNode], context: AbstractionContext)
-      -> TheoryCompiledTarget[T_Target]:
-        # 1. Structural conjoin
-        combined_smt = self._conjoin(phi, lemmas)
-        # 2. Boolean map generation
-        bool_formula = context.abstract(combined_smt)
-        # 3. Prop compilation
-        target = self.compiler.compile(bool_formula)
-        return TheoryCompiledTarget(target, context)
-```
-
-## 5. Incremental Implementation Workflow (AI Instructions)
-
-When implementing code with an AI assistant (like Opencode), use the following
-sequential phases to maintain strict context isolation and prevent code
-regression:
-
-### Phase 1 (Directory Generation)
-
-Instruct the tool to output bash commands to create the folder hierarchy and
-empty files. Do not generate code logic during this step.
-
-### Phase 2 (Core Specifications)
-
-Implement core/interfaces.py, core/abstraction.py, and
-normalization/normalizer.py.
-Validate these with simple unit tests showing SMT to propositional round-trips.
-
-### Phase 3 (The T-Builders)
-
-Write builders/reduced.py and builders/extended.py.
-Test them using a mock compiler class that satisfies the PropCompiler protocol
-
-### Phase 4 (Isolated Backend Sprints)
-
-Dedicate isolated chat sessions to specific compilers (e.g., implementing
-compilers/d4.py and queries/d4_engine.py together).
-Wipe chat history before starting a different backend like PySDD to keep the
-context clean
-
-```
-
+    ├── normalizing.py         # NormalizingQueryEngine adapter
+    ├── d4_engine.py           # d-DNNF queries through ddnnife
+    ├── sdd_engine.py          # SDD queries
+    └── bdd_engine.py          # OBDD queries
 ```
