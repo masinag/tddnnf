@@ -3,10 +3,15 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from pysmt.environment import Environment
 from pysmt.fnode import FNode
+from pysmt.shortcuts import get_env
 
+from tddnnf.builders.extended import TExtendedBuilder
+from tddnnf.builders.reduced import TReducedBuilder
+from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
-from tddnnf.core.interfaces import QueryEngine, T_Target
+from tddnnf.core.interfaces import PropCompiler, QueryEngine, T_Target
 from tddnnf.normalization.normalizer import NormalizerWalker
 from tddnnf.queries.normalizing import NormalizingQueryEngine
 
@@ -15,7 +20,10 @@ class CompilationContext:
     """Normalized inputs for a KCMT compilation workflow."""
 
     def __init__(
-        self, phi: FNode, project_on: Iterable[FNode] | None = None, normalizer: NormalizerWalker | None = None
+        self,
+        phi: FNode,
+        project_on: Iterable[FNode] | None = None,
+        env: Environment | None = None,
     ) -> None:
         """Normalize a formula and its projection atoms.
 
@@ -23,9 +31,10 @@ class CompilationContext:
             phi: Formula to compile.
             project_on: Atoms retained by compilation. Defaults to atoms in
                 normalized ``phi`` when omitted.
-            normalizer: Normalizer instance to use. A new one is created when omitted.
+            env: PySMT environment used for normalization and compilation.
         """
-        self._normalizer = normalizer or NormalizerWalker()
+        self._env = env if env is not None else get_env()
+        self._normalizer = NormalizerWalker(self._env)
         self.phi = self.normalize(phi)
         atoms = self.phi.get_atoms() if project_on is None else project_on
         self.project_on = [self._normalize_atom(atom) for atom in atoms]
@@ -33,6 +42,38 @@ class CompilationContext:
     def normalize(self, formula: FNode) -> FNode:
         """Normalize a formula."""
         return self._normalizer.normalize(formula)
+
+    def compile_treduced(
+        self,
+        compiler_type: type[PropCompiler[T_Target]],
+        lemmas: Iterable[FNode],
+    ) -> TheoryCompiledTarget[T_Target]:
+        """Compile normalized inputs using the T-reduced strategy."""
+        normalized_lemmas = [self.normalize(lemma) for lemma in lemmas]
+        abstractor = Abstractor()
+        compiler = compiler_type(abstractor)
+        return TReducedBuilder(compiler, env=self._env).build(
+            self.phi,
+            normalized_lemmas,
+            abstractor,
+            project_on=self.project_on,
+        )
+
+    def compile_textended(
+        self,
+        compiler_type: type[PropCompiler[T_Target]],
+        lemmas: Iterable[FNode],
+    ) -> TheoryCompiledTarget[T_Target]:
+        """Compile normalized inputs using the T-extended strategy."""
+        normalized_lemmas = [self.normalize(lemma) for lemma in lemmas]
+        abstractor = Abstractor()
+        compiler = compiler_type(abstractor)
+        return TExtendedBuilder(compiler, env=self._env).build(
+            self.phi,
+            normalized_lemmas,
+            abstractor,
+            project_on=self.project_on,
+        )
 
     def _normalize_atom(self, atom: FNode) -> FNode:
         """Normalize an atom to its positive canonical representation."""
@@ -43,17 +84,17 @@ class CompilationContext:
 class QueryContext:
     """Align normalized queries with a target's exact ``projection_atoms``."""
 
-    def __init__(self, target: TheoryCompiledTarget[Any], normalizer: NormalizerWalker | None = None) -> None:
+    def __init__(self, target: TheoryCompiledTarget[Any], env: Environment | None = None) -> None:
         """Build a target atom index.
 
         Args:
             target: Compiled target whose projection atoms queries must use.
-            normalizer: Normalizer to use. Defaults to a new instance.
+            env: PySMT environment used for query normalization.
 
         Raises:
             ValueError: If distinct projection atoms have one canonical form.
         """
-        self._normalizer = normalizer or NormalizerWalker()
+        self._normalizer = NormalizerWalker(env)
         self._atom_index = self._index_atoms(target.projection_atoms)
 
     def wrap_queries(self, engine: QueryEngine[T_Target]) -> QueryEngine[T_Target]:

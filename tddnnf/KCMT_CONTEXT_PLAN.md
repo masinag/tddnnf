@@ -132,8 +132,8 @@ from tddnnf.compilers.d4 import D4CompiledTarget
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries.d4_engine import D4Engine
 
-target = TheoryCompiledTarget.load(Path("compiled-ddnnf"), D4CompiledTarget)
-queries = QueryContext(target)
+target = TheoryCompiledTarget.load(Path("compiled-ddnnf"), D4CompiledTarget, env=env)
+queries = QueryContext(target, env=env)
 engine = queries.wrap_queries(D4Engine(target))
 
 query = read_smtlib("query.smt2")
@@ -158,9 +158,10 @@ class CompilationContext:
         self,
         phi: FNode,
         project_on: Iterable[FNode] | None = None,
-        normalizer: NormalizerWalker | None = None,
+        env: Environment | None = None,
     ) -> None:
-        self._normalizer = normalizer or NormalizerWalker()
+        self._env = env if env is not None else get_env()
+        self._normalizer = NormalizerWalker(self._env)
         self.phi = self.normalize(phi)
 
         atoms = self.phi.get_atoms() if project_on is None else project_on
@@ -189,13 +190,12 @@ Public compilation methods:
 def compile_treduced(
     self,
     compiler_type: type[PropCompiler[T_Target]],
-    *,
     lemmas: Iterable[FNode],
 ) -> TheoryCompiledTarget[T_Target]:
     normalized_lemmas = [self.normalize(lemma) for lemma in lemmas]
     abstractor = Abstractor()
     compiler = compiler_type(abstractor)
-    return TReducedBuilder(compiler).build(
+    return TReducedBuilder(compiler, env=self._env).build(
         self.phi,
         normalized_lemmas,
         abstractor,
@@ -222,9 +222,9 @@ class QueryContext:
     def __init__(
         self,
         target: TheoryCompiledTarget[Any],
-        normalizer: NormalizerWalker | None = None,
+        env: Environment | None = None,
     ) -> None:
-        self._normalizer = normalizer or NormalizerWalker()
+        self._normalizer = NormalizerWalker(env)
         self._atom_index = self._index_atoms(target.projection_atoms)
 ```
 
@@ -390,8 +390,11 @@ Do not persist either context.
 - projection-atom IDs;
 - backend artifact.
 
-This is sufficient for `QueryContext(target)` to rebuild its index after load.
-No normalizer instance or query index needs serialization.
+This is sufficient for `QueryContext(target, env=env)` to rebuild its index
+after load. `TheoryCompiledTarget.load(..., env=env)` forwards the environment
+to abstraction deserialization, keeping loaded atoms in the same PySMT
+environment as subsequent queries. No normalizer instance or query index needs
+serialization.
 
 The normalization algorithm is treated as a library-wide invariant. Persisting
 a normalization-policy version remains out of scope unless multiple policies

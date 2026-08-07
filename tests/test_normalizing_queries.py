@@ -5,7 +5,6 @@ from typing import Any, cast
 import pytest
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
-from pysmt.shortcuts import get_env
 from pysmt.typing import BOOL, INT
 
 from tddnnf.context import QueryContext
@@ -52,14 +51,9 @@ class RecordingEngine:
         return self.models
 
 
-@pytest.fixture
-def global_mgr() -> FormulaManager:
-    return get_env().formula_manager
-
-
-def _context(*projection_atoms: FNode) -> QueryContext:
+def _context(mgr: FormulaManager, *projection_atoms: FNode) -> QueryContext:
     target = cast(TheoryCompiledTarget[Any], SimpleNamespace(projection_atoms=list(projection_atoms)))
-    return QueryContext(target)
+    return QueryContext(target, env=mgr.env)
 
 
 def _relations(mgr: FormulaManager) -> tuple[FNode, FNode, FNode, FNode]:
@@ -72,79 +66,81 @@ def _relations(mgr: FormulaManager) -> tuple[FNode, FNode, FNode, FNode]:
     return x_lt_y, y_le_x, x_ge_two, scaled_x_ge_two
 
 
-def test_context_aligns_equivalent_atoms_and_polarity(global_mgr: FormulaManager) -> None:
-    x_lt_y, y_le_x, compiled_atom, equivalent_atom = _relations(global_mgr)
+def test_context_aligns_equivalent_atoms_and_polarity(mgr: FormulaManager) -> None:
+    x_lt_y, y_le_x, compiled_atom, equivalent_atom = _relations(mgr)
 
-    assert _context(compiled_atom).align_assumptions([equivalent_atom, global_mgr.Not(equivalent_atom)]) == [
+    assert _context(mgr, compiled_atom).align_assumptions([equivalent_atom, mgr.Not(equivalent_atom)]) == [
         compiled_atom,
-        global_mgr.Not(compiled_atom),
+        mgr.Not(compiled_atom),
     ]
-    assert _context(y_le_x).align_assumptions([x_lt_y, global_mgr.Not(x_lt_y)]) == [
-        global_mgr.Not(y_le_x),
+    assert _context(mgr, y_le_x).align_assumptions([x_lt_y, mgr.Not(x_lt_y)]) == [
+        mgr.Not(y_le_x),
         y_le_x,
     ]
-    assert _context(x_lt_y).align_assumptions([y_le_x, x_lt_y]) == [global_mgr.Not(x_lt_y), x_lt_y]
+    assert _context(mgr, x_lt_y).align_assumptions([y_le_x, x_lt_y]) == [mgr.Not(x_lt_y), x_lt_y]
 
 
-def test_context_rejects_ambiguous_atoms(global_mgr: FormulaManager) -> None:
-    x_lt_y, y_le_x, _, _ = _relations(global_mgr)
+def test_context_rejects_ambiguous_atoms(mgr: FormulaManager) -> None:
+    x_lt_y, y_le_x, _, _ = _relations(mgr)
 
     with pytest.raises(ValueError, match="Ambiguous normalized atom"):
-        _context(x_lt_y, y_le_x)
+        _context(mgr, x_lt_y, y_le_x)
 
 
-def test_context_rejects_unknown_atom(global_mgr: FormulaManager) -> None:
-    _, _, compiled_atom, _ = _relations(global_mgr)
-    unknown = global_mgr.Symbol("normalizing_context_unknown", BOOL)
-    context = _context(compiled_atom)
+def test_context_rejects_unknown_atom(mgr: FormulaManager) -> None:
+    _, _, compiled_atom, _ = _relations(mgr)
+    unknown = mgr.Symbol("normalizing_context_unknown", BOOL)
+    context = _context(mgr, compiled_atom)
 
     with pytest.raises(ValueError, match="Query atom not in target projection_atoms: normalizing_context_unknown"):
         context.align_assumptions([unknown])
     with pytest.raises(ValueError, match="Query atom not in target projection_atoms: normalizing_context_unknown"):
-        context.align_formula(global_mgr.Or(compiled_atom, unknown))
+        context.align_formula(mgr.Or(compiled_atom, unknown))
 
 
-def test_context_aligns_nested_clause_and_cube(global_mgr: FormulaManager) -> None:
-    _, _, compiled_atom, equivalent_atom = _relations(global_mgr)
-    p = global_mgr.Symbol("normalizing_context_p", BOOL)
-    q = global_mgr.Symbol("normalizing_context_q", BOOL)
-    context = _context(p, q, compiled_atom)
+def test_context_aligns_nested_clause_and_cube(mgr: FormulaManager) -> None:
+    _, _, compiled_atom, equivalent_atom = _relations(mgr)
+    p = mgr.Symbol("normalizing_context_p", BOOL)
+    q = mgr.Symbol("normalizing_context_q", BOOL)
+    context = _context(mgr, p, q, compiled_atom)
 
-    clause = context.align_formula(global_mgr.Or(p, global_mgr.Or(equivalent_atom, global_mgr.Not(q))))
-    cube = context.align_formula(global_mgr.And(p, global_mgr.And(equivalent_atom, global_mgr.Not(q))))
+    clause = context.align_formula(mgr.Or(p, mgr.Or(equivalent_atom, mgr.Not(q))))
+    cube = context.align_formula(mgr.And(p, mgr.And(equivalent_atom, mgr.Not(q))))
 
-    expected = {p, compiled_atom, global_mgr.Not(q)}
+    expected = {p, compiled_atom, mgr.Not(q)}
     assert set(clause_lits(clause) or []) == expected
     assert set(cube_lits(cube) or []) == expected
 
 
-def test_context_preserves_none_assumptions(global_mgr: FormulaManager) -> None:
-    _, _, compiled_atom, _ = _relations(global_mgr)
+def test_context_preserves_none_assumptions(mgr: FormulaManager) -> None:
+    _, _, compiled_atom, _ = _relations(mgr)
 
-    assert _context(compiled_atom).align_assumptions(None) is None
+    assert _context(mgr, compiled_atom).align_assumptions(None) is None
 
 
-def test_wrapper_aligns_query_inputs(global_mgr: FormulaManager) -> None:
-    _, _, compiled_atom, equivalent_atom = _relations(global_mgr)
-    p = global_mgr.Symbol("normalizing_query_p", BOOL)
+def test_wrapper_aligns_query_inputs(mgr: FormulaManager) -> None:
+    _, _, compiled_atom, equivalent_atom = _relations(mgr)
+    p = mgr.Symbol("normalizing_query_p", BOOL)
     inner = RecordingEngine()
-    engine = _context(p, compiled_atom).wrap_queries(inner)
+    engine = _context(mgr, p, compiled_atom).wrap_queries(inner)
 
     assert engine.is_satisfiable([equivalent_atom])
-    assert engine.count_truth_assignments([global_mgr.Not(equivalent_atom)]) == 7
-    engine.entails_clause(global_mgr.Or(p, equivalent_atom))
-    engine.is_implicant(global_mgr.And(p, global_mgr.Not(equivalent_atom)))
+    assert engine.count_truth_assignments([mgr.Not(equivalent_atom)]) == 7
+    engine.entails_clause(mgr.Or(p, equivalent_atom))
+    engine.is_implicant(mgr.And(p, mgr.Not(equivalent_atom)))
 
     assert inner.satisfiability_assumptions == [compiled_atom]
-    assert inner.counting_assumptions == [global_mgr.Not(compiled_atom)]
+    assert inner.counting_assumptions == [mgr.Not(compiled_atom)]
+    assert inner.clause is not None
     assert set(clause_lits(inner.clause) or []) == {p, compiled_atom}
-    assert set(cube_lits(inner.cube) or []) == {p, global_mgr.Not(compiled_atom)}
+    assert inner.cube is not None
+    assert set(cube_lits(inner.cube) or []) == {p, mgr.Not(compiled_atom)}
 
 
-def test_wrapper_delegates_unchanged_inputs_and_outputs(global_mgr: FormulaManager) -> None:
-    _, _, compiled_atom, _ = _relations(global_mgr)
+def test_wrapper_delegates_unchanged_inputs_and_outputs(mgr: FormulaManager) -> None:
+    _, _, compiled_atom, _ = _relations(mgr)
     inner = RecordingEngine()
-    engine = _context(compiled_atom).wrap_queries(inner)
+    engine = _context(mgr, compiled_atom).wrap_queries(inner)
 
     assert isinstance(engine, QueryEngine)
     assert engine.is_satisfiable(None)
@@ -161,11 +157,11 @@ def test_wrapper_delegates_unchanged_inputs_and_outputs(global_mgr: FormulaManag
     ]
 
 
-def test_wrapper_rejects_unknown_atom_before_delegation(global_mgr: FormulaManager) -> None:
-    _, _, compiled_atom, _ = _relations(global_mgr)
-    unknown = global_mgr.Symbol("normalizing_query_unknown", BOOL)
+def test_wrapper_rejects_unknown_atom_before_delegation(mgr: FormulaManager) -> None:
+    _, _, compiled_atom, _ = _relations(mgr)
+    unknown = mgr.Symbol("normalizing_query_unknown", BOOL)
     inner = RecordingEngine()
-    engine = _context(compiled_atom).wrap_queries(inner)
+    engine = _context(mgr, compiled_atom).wrap_queries(inner)
 
     with pytest.raises(ValueError, match="Query atom not in target projection_atoms: normalizing_query_unknown"):
         engine.is_satisfiable([unknown])

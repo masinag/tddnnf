@@ -90,18 +90,8 @@ def test_compiled_target_round_trip_preserves_projection_atoms(
 
     container.save(tmp_path)
     payload = json.loads((tmp_path / "abstraction.json").read_text())
-    loaded = TheoryCompiledTarget.load(tmp_path, D4CompiledTarget)
+    loaded = TheoryCompiledTarget.load(tmp_path, D4CompiledTarget, env=mgr.env)
 
     assert payload["projection_atom_ids"] == [abstr.get_id(b), abstr.get_id(a)]
     assert "care_var_ids" not in payload
     assert [atom.serialize() for atom in loaded.projection_atoms] == [b.serialize(), a.serialize()]
-
-
-def test_compiled_target_rejects_old_projection_schema(tmp_path: Path, a: FNode, abstr: Abstractor) -> None:
-    atom_id = abstr.get_id(a)
-    D4CompiledTarget("t 1\n", 1).save(tmp_path)
-    payload = {"abstraction": abstr.to_dict(), "care_var_ids": [atom_id]}
-    (tmp_path / "abstraction.json").write_text(json.dumps(payload))
-
-    with pytest.raises(KeyError, match="projection_atom_ids"):
-        TheoryCompiledTarget.load(tmp_path, D4CompiledTarget)

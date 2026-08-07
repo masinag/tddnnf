@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Generic
 
+from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 
@@ -33,10 +34,15 @@ class TheoryCompiledTarget(Generic[T_Target]):
         return self.target.to_pysmt(self.abstr, mgr)
 
     @classmethod
-    def load(cls, directory: Path, target_type: type[T_Target]) -> TheoryCompiledTarget[T_Target]:
+    def load(
+        cls,
+        directory: Path,
+        target_type: type[T_Target],
+        env: Environment | None = None,
+    ) -> TheoryCompiledTarget[T_Target]:
         """Reconstruct a container from a directory and the target's load classmethod."""
         payload = json.loads((directory / "abstraction.json").read_text())
-        abstr = Abstractor.from_dict(payload["abstraction"])
+        abstr = Abstractor.from_dict(payload["abstraction"], env=env)
         projection_atom_ids: list[int] = payload["projection_atom_ids"]
         target = target_type.load(directory)
         projection_atoms = [abstr.get_atom(i) for i in projection_atom_ids]
