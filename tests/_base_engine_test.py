@@ -1,4 +1,6 @@
 import itertools
+from collections.abc import Callable
+from typing import Generic
 
 import pytest
 from pysmt.fnode import FNode
@@ -6,26 +8,37 @@ from pysmt.formula import FormulaManager
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
-from tddnnf.core.interfaces import PropCompiler, QueryEngine
+from tddnnf.core.interfaces import PropCompiler, QueryEngine, T_Target
 from tests.conftest import SolverGroundTruth
 
 
-class BaseTestEngine:
-    compiler_cls: type[PropCompiler]
-    engine_cls: type[QueryEngine]
+class BaseTestEngine(Generic[T_Target]):
+    compiler_cls: type[PropCompiler[T_Target]]
+    engine_cls: Callable[[TheoryCompiledTarget[T_Target]], QueryEngine[T_Target]]
     _skip_queries: frozenset[str] = frozenset()
 
     @pytest.fixture
-    def compiler(self, abstr: Abstractor) -> PropCompiler:
+    def compiler(self, abstr: Abstractor) -> PropCompiler[T_Target]:
         return self.compiler_cls(abstr)
 
     @pytest.fixture
-    def engine(self, compiler: PropCompiler, abstr: Abstractor, mgr: FormulaManager, a: FNode, b: FNode) -> QueryEngine:
+    def engine(
+        self,
+        compiler: PropCompiler[T_Target],
+        abstr: Abstractor,
+        mgr: FormulaManager,
+        a: FNode,
+        b: FNode,
+    ) -> QueryEngine[T_Target]:
         target = compiler.compile(mgr.And(a, b))
         return self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b]))
 
     def test_exhaustive_engine_and_solver_space(
-        self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, bank_case: SolverGroundTruth
+        self,
+        mgr: FormulaManager,
+        compiler: PropCompiler[T_Target],
+        abstr: Abstractor,
+        bank_case: SolverGroundTruth,
     ) -> None:
         target = compiler.compile(bank_case.original_formula, project_on=bank_case.project_on)
         engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on))
@@ -87,7 +100,11 @@ class BaseTestEngine:
             assert not solver.solve(), "Engine counter-model state coverage is incomplete!"
 
     def test_queries_with_assumptions(
-        self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, bank_case: SolverGroundTruth
+        self,
+        mgr: FormulaManager,
+        compiler: PropCompiler[T_Target],
+        abstr: Abstractor,
+        bank_case: SolverGroundTruth,
     ) -> None:
         target = compiler.compile(bank_case.original_formula, project_on=bank_case.project_on)
         engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on))
@@ -154,7 +171,13 @@ class BaseTestEngine:
             engine.is_implicant(mgr.Or(a, b))
 
     def test_projected_assumption_on_forgotten_var_raises(
-        self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, a: FNode, b: FNode, c: FNode
+        self,
+        mgr: FormulaManager,
+        compiler: PropCompiler[T_Target],
+        abstr: Abstractor,
+        a: FNode,
+        b: FNode,
+        c: FNode,
     ) -> None:
         target = compiler.compile(mgr.And(a, mgr.Or(b, c)), project_on=[a, b])
         engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b]))
