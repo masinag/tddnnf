@@ -65,3 +65,21 @@ def test_fresh_query_context_handles_direct_and_loaded_targets(
         engine = QueryContext(query_target, env=mgr.env).wrap_queries(SddEngine(query_target))
         assert engine.is_satisfiable([equivalent_atom])
         assert not engine.is_satisfiable([mgr.Not(equivalent_atom)])
+
+
+def test_context_deduplicates_equivalent_projection_atoms(mgr: FormulaManager) -> None:
+    x = mgr.Symbol("compilation_context_deduplication_x", INT)
+    p = mgr.Symbol("compilation_context_deduplication_p", BOOL)
+    atom = mgr.GE(x, mgr.Int(2))
+    equivalent_atom = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
+
+    context = CompilationContext(mgr.TRUE(), project_on=[atom, p, equivalent_atom], env=mgr.env)
+    canonical_atom = context.normalize(atom)
+
+    assert context.normalize(equivalent_atom) == canonical_atom
+    assert context.project_on == [canonical_atom, p]
+
+    target = context.compile_treduced(SddCompiler, [])
+
+    assert target.projection_atoms == [canonical_atom, p]
+    assert SddEngine(target).count_truth_assignments() == 4

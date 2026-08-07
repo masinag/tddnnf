@@ -37,7 +37,7 @@ class CompilationContext:
         self._normalizer = NormalizerWalker(self._env)
         self.phi = self.normalize(phi)
         atoms = self.phi.get_atoms() if project_on is None else project_on
-        self.project_on = [self._normalize_atom(atom) for atom in atoms]
+        self.project_on = list(dict.fromkeys(self._normalize_atom(atom) for atom in atoms))
 
     def normalize(self, formula: FNode) -> FNode:
         """Normalize a formula."""
