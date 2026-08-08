@@ -47,12 +47,17 @@ class CompilationContext:
         self,
         compiler_type: type[PropCompiler[T_Target]],
         lemmas: Iterable[FNode],
+        computation_logger: dict[str, object] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
         """Compile normalized inputs using the T-reduced strategy."""
         normalized_lemmas = [self.normalize(lemma) for lemma in lemmas]
         abstractor = Abstractor()
-        compiler = compiler_type(abstractor)
-        return TReducedBuilder(compiler, env=self._env).build(
+        compiler = compiler_type(abstractor, computation_logger=computation_logger)
+        return TReducedBuilder(
+            compiler,
+            env=self._env,
+            computation_logger=computation_logger,
+        ).build(
             self.phi,
             normalized_lemmas,
             abstractor,
@@ -63,12 +68,17 @@ class CompilationContext:
         self,
         compiler_type: type[PropCompiler[T_Target]],
         lemmas: Iterable[FNode],
+        computation_logger: dict[str, object] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
         """Compile normalized inputs using the T-extended strategy."""
         normalized_lemmas = [self.normalize(lemma) for lemma in lemmas]
         abstractor = Abstractor()
-        compiler = compiler_type(abstractor)
-        return TExtendedBuilder(compiler, env=self._env).build(
+        compiler = compiler_type(abstractor, computation_logger=computation_logger)
+        return TExtendedBuilder(
+            compiler,
+            env=self._env,
+            computation_logger=computation_logger,
+        ).build(
             self.phi,
             normalized_lemmas,
             abstractor,
