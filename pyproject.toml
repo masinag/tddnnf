@@ -11,7 +11,7 @@ dependencies = [
     "pysdd>=1.0.6",
     "dd",
     "ddnnife>=0.1.0",
-    "tlemma-enum @ git+ssh://git@github.com/ecivini/tlemmas-enumeration.git@develop",
+    "tlemma-enum @ git+https://github.com/ecivini/tlemmas-enumeration.git@develop",
 ]
 
 [project.optional-dependencies]

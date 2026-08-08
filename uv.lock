@@ -444,14 +444,14 @@ requires-dist = [
     { name = "pysmt", specifier = ">=0.9.7.dev431" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1" },
-    { name = "tlemma-enum", git = "ssh://git@github.com/ecivini/tlemmas-enumeration.git?rev=develop" },
+    { name = "tlemma-enum", git = "https://github.com/ecivini/tlemmas-enumeration.git?rev=develop" },
 ]
 provides-extras = ["dev"]
 
 [[package]]
 name = "tlemma-enum"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/ecivini/tlemmas-enumeration.git?rev=develop#2eff0ae868939c9e885c9fb6ba5d503f8874acb3" }
+source = { git = "https://github.com/ecivini/tlemmas-enumeration.git?rev=develop#2eff0ae868939c9e885c9fb6ba5d503f8874acb3" }
 dependencies = [
     { name = "allsat-cnf" },
     { name = "pysmt" },
