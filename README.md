@@ -79,13 +79,19 @@ phi = read_smtlib("formula.smt2")
 
 Create the compilation context. Its `project_on` vocabulary determines which
 atoms remain in the compiled target and may appear in queries. When omitted, as
-here, it defaults to the normalized atoms in `phi`.
+here, it defaults to the atoms in `phi`. A custom `project_on` may select atoms
+from `phi` as well as atoms that occur only in theory lemmas supplied at
+compilation. Any atom in `phi` or those lemmas that is omitted from `project_on`
+is existentially quantified away.
 
 ```python
 compilation = CompilationContext(phi)
 ```
 
-Enumerate theory lemmas for the normalized formula and its projection atoms.
+Enumerate theory lemmas for the normalized formula, passing the complete
+projection vocabulary through `atoms=compilation.project_on`. This allows the
+enumerator to generate lemmas involving query-only theory atoms that do not
+occur in `phi`.
 
 ```python
 enumerator = MathSATDivideAndConquerEnumerator(
