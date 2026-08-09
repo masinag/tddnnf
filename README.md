@@ -1,17 +1,22 @@
 # d-DNNF Modulo Theories
 
-`tddnnf` is a Python library for compiling and querying d-DNNF Modulo Theories (KCMT).
-It compiles SMT formulas into d-DNNF, SDD, or OBDD representations and supports
+`tddnnf` is a Python library for compiling and querying d-DNNF Modulo Theories.
+It compiles SMT formulas into d-DNNF, SDD, or OBDD representations and supports polytime
 queries over the compiled result.
 
+The framework’s compilation and query interfaces operate on SMT formulas represented
+using [PySMT](https://github.com/pysmt/pysmt).
+
 The framework implements the following paper:
+
 [1] [G. Masina, E. Civini, M. Michelutti, G. Spallitta, and R. Sebastiani,
 "d-DNNF Modulo Theories: A General Framework for Polytime SMT Queries," in SAT 2026](doi.org/10.4230/LIPIcs.SAT.2026.25).
 
 Theory-lemma enumeration is done using the [tlemma_enum package](https://github.com/ecivini/tlemmas-enumeration/tree/develop) implementing the paper:
+
 [2] [E. Civini, G. Masina, G. Spallitta, and R. Sebastiani,
 "Beyond Eager Encodings: A Theory-Agnostic Approach to Theory-Lemma Enumeration in SMT,"
-in IJCAR 2026](https://doi.org/10.1007/978-3-032-32589-1_18)
+in IJCAR 2026](https://doi.org/10.1007/978-3-032-32589-1_18).
 
 ## Installation
 
@@ -64,15 +69,29 @@ x_plus_y_gt_5 = x + y > 5
 phi = (x_gt_0 & y_gt_5) | (x_gt_5 & x_plus_y_gt_5)
 ```
 
+Alternatively, load `phi` from an SMT-LIB file through PySMT.
+
+```python
+from pysmt.shortcuts import read_smtlib
+
+phi = read_smtlib("formula.smt2")
+```
+
 Create the compilation context. Its `project_on` vocabulary determines which
 atoms remain in the compiled target and may appear in queries. When omitted, as
-here, it defaults to the normalized atoms in `phi`.
+here, it defaults to the atoms in `phi`. A custom `project_on` may select atoms
+from `phi` as well as atoms that occur only in theory lemmas supplied at
+compilation. Any atom in `phi` or those lemmas that is omitted from `project_on`
+is existentially quantified away.
 
 ```python
 compilation = CompilationContext(phi)
 ```
 
-Enumerate theory lemmas for the normalized formula and its projection atoms.
+Enumerate theory lemmas for the normalized formula, passing the complete
+projection vocabulary through `atoms=compilation.project_on`. This allows the
+enumerator to generate lemmas involving query-only theory atoms that do not
+occur in `phi`.
 
 ```python
 enumerator = MathSATDivideAndConquerEnumerator(
@@ -82,6 +101,10 @@ enumerator = MathSATDivideAndConquerEnumerator(
 enumerator.check_all_sat(compilation.phi, atoms=compilation.project_on)
 lemmas = enumerator.get_theory_lemmas()
 ```
+
+See the [`tlemma_enum` repository](https://github.com/ecivini/tlemmas-enumeration/tree/develop)
+for all available enumerators, enumeration strategies, configuration options,
+and alternatives.
 
 Compile the formula and its lemmas with the T-reduced strategy and d4 backend.
 

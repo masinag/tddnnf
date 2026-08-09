@@ -1,16 +1,27 @@
 # Architecture
 
-`tddnnf` compiles an SMT formula into a tractable propositional representation
-while retaining enough information to relate propositional variables back to SMT
-atoms. The supported targets are d-DNNF through d4, SDD through PySDD, and OBDD
+`tddnnf` exposes compilation and query interfaces for SMT formulas represented
+with PySMT. During compilation, it combines the input formula with a suitable
+set of theory lemmas, builds a Boolean abstraction of the combined formula, and
+passes that abstraction to a propositional backend. The resulting artifact
+retains the mapping between propositional variables and SMT atoms.
+
+The supported targets are d-DNNF through d4, SDD through PySDD, and OBDD
 through CUDD.
 
-The library separates the workflow into four concerns:
+The workflow has two stages:
+
+Compilation:
 
 1. normalize SMT syntax and choose the atoms to retain;
-2. combine the input formula with theory lemmas;
-3. map SMT atoms to propositional variables and compile the result;
-4. normalize queries against the vocabulary stored with the compiled target.
+2. combine the input formula with theory lemmas; and
+3. map SMT atoms to propositional variables and compile the Boolean abstraction.
+
+Querying:
+
+1. normalize queries against the vocabulary stored with the compiled target;
+   and
+2. use a backend-specific propositional query engine to answer them.
 
 Here, the vocabulary is the target’s `projection_atoms`: the normalized SMT atoms
 selected for projection and available to queries.
@@ -46,11 +57,21 @@ each backend adapter, allowing all backends to share the same builder API.
 
 ## Normalization and projection
 
-`NormalizerWalker` canonicalizes PySMT DAGs. Theory relations are converted to
-and back from MathSAT terms, which makes syntactically different forms accepted
-by MathSAT converge on the same representation. Boolean connectives are rebuilt
-from their normalized children; constants, symbols, and non-relational theory
-operators are retained.
+The architecture requires theory atoms to be in some canonical forms.
+Compilation and querying must map equivalent theory atoms
+to the same PySMT atom; otherwise, equivalent spellings can produce different
+propositional variables or fail query-vocabulary lookup. For example,
+$x \leq y$ and $x - y \leq 0$ must converge, as must $x \geq 2$ and
+$2x \geq 4$.
+
+`NormalizerWalker` currently meets this requirement pragmatically by
+round-tripping each theory relation through MathSAT and using the term returned
+by MathSAT's converter as its canonical PySMT representation. Boolean
+connectives are rebuilt from their normalized children; constants, symbols,
+and non-relational theory operators are retained. MathSAT is therefore an
+implementation dependency of the current normalizer, not a fundamental
+requirement of the architecture: another normalizer could replace it if it
+provided the same deterministic, semantics-preserving canonicalization.
 
 Normalization occurs at both boundaries:
 
@@ -59,16 +80,24 @@ Normalization occurs at both boundaries:
 - `QueryContext` normalizes query literals, clauses, and cubes before handing
   them to a backend query engine.
 
-Projection controls the variables visible in the resulting artifact. Formula
-and lemma atoms outside `project_on` are existentially quantified away. d4 uses
-the projection declaration in its BC-S1.2 input, PySDD calls
-`exists_multiple()`, and CUDD calls `exist()`. Projection atoms not occurring in
-the compiled formula are still registered so query domains and truth-assignment
-counts use the requested vocabulary.
+Here, the _compiled formula_ is the Boolean abstraction of the
+strategy-specific combination of the normalized input formula and normalized
+theory lemmas: their conjunction for T-reduced compilation, or the input
+formula disjoined with the negated lemmas for T-extended compilation.
+Valid projection vocabularies contain only atoms occurring in the normalized
+input formula or in the supplied theory lemmas. The ordered
+`projection_atoms` list stored in `TheoryCompiledTarget` is the authoritative
+query vocabulary. Atoms from the input formula or lemmas that are not requested
+are existentially quantified away, and backend query engines reject query atoms
+outside this list.
 
-The ordered `projection_atoms` list stored in `TheoryCompiledTarget` is the
-authoritative query vocabulary. Backend query engines reject atoms outside this
-set.
+Query-only theory atoms need not occur in the input formula, but they must occur
+in the supplied lemmas. Include such atoms in `compilation.project_on` and pass
+the complete projection vocabulary to the external lemma enumerator as
+`atoms=compilation.project_on`. For T-reduced compilation, enumerate over
+`compilation.phi`; for T-extended compilation, enumerate over
+`Not(compilation.phi)`. This ensures that every query-only theory atom can occur
+in the generated lemmas before those lemmas are supplied to compilation.
 
 ## Abstraction and compiled containers
 
@@ -100,23 +129,23 @@ compilation. They do not implement backend-specific translation.
 
 `TReducedBuilder` compiles
 
-\[
-  \phi \land \bigwedge_{\ell \in L} \ell.
-\]
+$$
+\varphi \land \bigwedge_{C \in \mathit{Cl}} C.
+$$
 
-Its lemmas rule out theory-inconsistent propositional assignments satisfying
-`phi`.
+Its lemmas $\mathit{Cl}$ rule out theory-inconsistent propositional
+assignments satisfying $\varphi$.
 
 ### T-extended
 
 `TExtendedBuilder` compiles
 
-\[
-  \phi \lor \bigvee_{\ell \in L} \neg \ell.
-\]
+$$
+\varphi \lor \bigvee_{C \in \mathit{Cl}} \neg C.
+$$
 
-Its lemmas rule out theory-consistent propositional assignments satisfying
-`not phi`.
+Its lemmas $\mathit{Cl}$ rule out theory-consistent propositional assignments
+satisfying $\neg\varphi$.
 
 Each builder records the requested projection list in the returned container.
 When a builder is used directly without `project_on`, it derives the projection
@@ -195,21 +224,17 @@ of projection atom IDs. It then delegates backend persistence to `target.save()`
 
 Backend files are:
 
-| Target | Circuit file | `metadata.json` contents |
-| --- | --- | --- |
-| `D4CompiledTarget` | `circuit.nnf` | variable count and abstraction-to-d4 remapping |
-| `SddCompiledTarget` | `circuit.sdd` | PySDD manager variable count |
-| `BddCompiledTarget` | `circuit.dddmp` | CUDD manager variable count |
+| Target              | Circuit file    | `metadata.json` contents                       |
+| ------------------- | --------------- | ---------------------------------------------- |
+| `D4CompiledTarget`  | `circuit.nnf`   | variable count and abstraction-to-d4 remapping |
+| `SddCompiledTarget` | `circuit.sdd`   | PySDD manager variable count                   |
+| `BddCompiledTarget` | `circuit.dddmp` | CUDD manager variable count                    |
 
 `TheoryCompiledTarget.load(directory, target_type, env=None)` reverses this
 process: it reconstructs the `Abstractor`, asks `target_type.load()` to restore
 the backend artifact, resolves projection IDs back to SMT atoms, and returns the
 complete container. Supplying the intended PySMT environment keeps restored
 atoms in the same formula manager as the caller.
-
-All backend targets also implement `to_pysmt()`, so a loaded container can
-reconstruct a logically equivalent PySMT formula through
-`TheoryCompiledTarget.to_pysmt()`.
 
 ## Protocols and instrumentation
 
