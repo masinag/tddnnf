@@ -112,10 +112,14 @@ Compile the formula and its lemmas with the T-reduced strategy and d4 backend.
 target = compilation.compile_treduced(D4Compiler(), lemmas)
 ```
 
-The target retains its environment, immutable abstraction, and tuple vocabulary
-after compilation closes. Reconstruct with `target.to_pysmt()` and inspect DAG
-metrics with `target.dag_size()`. Abstraction IDs are lookup-only; unknown atoms
-raise `KeyError`.
+The target retains frozen bindings to its environment, abstraction, and tuple
+vocabulary after compilation closes. Reconstruct with `target.to_pysmt()` and
+inspect DAG metrics with `target.dag_size()`. `Abstractor.get_id()` registers new
+atoms above the current maximum ID and preserves existing IDs. Constructor
+mappings are copied and public mapping views are read-only. Builders reuse a
+supplied abstractor; later registrations preserve earlier targets’ query
+dimensions. Concurrent mutation is unsupported; saved mappings may include atoms
+registered by later compilations.
 
 Create the matching d4 query engine. `QueryContext.wrap_queries()` normalizes
 query formulas and aligns their atoms with the target's projection vocabulary.
@@ -187,8 +191,9 @@ including negated atoms, are discarded; explicitly supplied constants and
 compound Boolean entries are rejected.
 Omitted projection uses normalized formula atoms in SMT-LIB serialization order;
 explicit projection preserves first occurrence, including an empty list or atoms
-absent from the formula and lemmas. Each compile call assigns IDs to projection
-atoms first, then the remaining combined-formula atoms in serialization order.
+absent from the formula and lemmas. Each compile call registers new projection
+atoms first, then the remaining new combined-formula atoms in serialization order,
+preserving any IDs in a supplied abstraction.
 Non-projection atoms and encoding auxiliaries are existentially eliminated.
 
 ### Compilation strategies

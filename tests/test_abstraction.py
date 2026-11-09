@@ -49,13 +49,37 @@ class TestAbstractor:
         assert abstr2.get_atom(a2) is abstr.get_atom(a2)
         assert abstr2.get_atom(a3) is abstr.get_atom(a3)
 
-    def test_unknown_lookup_does_not_register(self, a, b):
-        abstr = Abstractor({7: a})
-        with pytest.raises(KeyError):
-            abstr.get_id(b)
+    def test_registration_preserves_ids_and_read_only_views(self, a, b, c):
+        source = {7: a, 2: b}
+        abstr = Abstractor(source)
+        ids, atoms = abstr.id_to_atom, abstr.atom_to_id
+        source[7] = c
         assert abstr.get_id(a) == 7
-        assert dict(abstr.id_to_atom) == {7: a}
-        assert abstr.max_var == 7
+        assert abstr.get_id(b) == 2
+        assert abstr.get_id(c) == 8
+        assert abstr.get_id(c) == 8
+        assert dict(ids) == {7: a, 2: b, 8: c}
+        assert dict(atoms) == {a: 7, b: 2, c: 8}
+        assert abstr.max_var == 8
+        assert abstr.var_count == 3
+        with pytest.raises(TypeError):
+            ids[7] = c
+        with pytest.raises(TypeError):
+            del atoms[a]
+        with pytest.raises(AttributeError):
+            abstr.id_to_atom = {}
+        with pytest.raises(AttributeError):
+            abstr.atom_to_id = {}
+
+    def test_registration_starts_at_one(self, abstr, a, b):
+        assert abstr.get_id(a) == 1
+        assert abstr.get_id(b) == 2
+        assert abstr.get_id(a) == 1
+
+    def test_registration_rejects_non_atom(self, abstr, mgr, a, b):
+        with pytest.raises(AssertionError, match="atom"):
+            abstr.get_id(mgr.And(a, b))
+        assert abstr.var_count == 0
 
     def test_get_atom_rejects_negative(self, mgr: FormulaManager, x: FNode, abstr: Abstractor) -> None:
         with pytest.raises(ValueError, match="positive"):

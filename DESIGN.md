@@ -72,15 +72,16 @@ them anyway: they are unconstrained variables in the represented propositional
 function. The caller supplies theory lemmas appropriate to the requested
 vocabulary; compilation does not run an additional enumerator.
 
-Allocate one abstraction per compilation, in this order:
+Reuse a supplied abstraction or allocate a fresh one when absent. Preserve
+existing IDs and register new atoms above the current maximum, in this order:
 
 1. All active projection atoms, in their declared order.
 2. Remaining atoms of the combined normalized formula, in stable serialization
    order.
 
-IDs must be independent of set iteration, hash randomization, and backend
-traversal. Existentially eliminate every non-projection atom and encoding
-auxiliary. Keep abstraction IDs distinct from native variable IDs, NNF IDs,
+New IDs must be independent of set iteration, hash randomization, and backend
+traversal for a given starting abstraction. Existentially eliminate every
+non-projection atom and encoding auxiliary. Keep abstraction IDs distinct from native variable IDs, NNF IDs,
 and OBDD levels; explicit mappings connect them. A backend may renumber or
 reorder without changing the public vocabulary. Migrated artifacts retain
 their existing IDs instead of applying the new allocation order.
@@ -91,6 +92,14 @@ their existing IDs instead of applying the new allocation order.
 active vocabulary (`projection_atoms`), and owning PySMT environment. It is the
 only public target type. Backend-specific public target classes are removed
 at the final migration.
+
+Target bindings are frozen; the shared abstraction remains append-only. Its
+constructor copies input mappings and its public views are read-only, with no
+deletion or reassignment API. Compilers and targets receive the same abstractor.
+SDD counting uses the native manager's variable count so later registrations,
+sparse IDs, and the minimum one-variable constant manager cannot change query
+dimensions. BDD and d4 keep their existing native dimensions. Concurrent mutation
+is unsupported; saving may include atoms registered by later compilations.
 
 | Owner | Owned state and responsibilities |
 | --- | --- |

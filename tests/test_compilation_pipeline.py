@@ -144,8 +144,8 @@ def test_builder_preserves_abstraction(mgr, builder, backend):
     abstractor = Abstractor({2: atom})
     formula = mgr.And(atom, added)
     target = builder(backend(), env=mgr.env).build(formula, [], abstractor)
-    assert target.abstr is not abstractor
-    assert dict(abstractor.id_to_atom) == {2: atom}
+    assert target.abstr is abstractor
+    assert dict(abstractor.id_to_atom) == {2: atom, 3: added}
     assert target.abstr.get_id(atom) == 2
     assert target.abstr.get_id(added) == 3
     assert target.abstr.get_atom(2) is atom

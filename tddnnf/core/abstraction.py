@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from io import StringIO
 from types import MappingProxyType
 
@@ -10,26 +9,24 @@ from pysmt.fnode import FNode
 from pysmt.smtlib.parser import SmtLibParser
 from pysmt.smtlib.script import smtlibscript_from_formula
 
+from tddnnf.core.pysmt_utils import is_atom
 
-@dataclass(frozen=True, init=False)
+
 class Abstractor:
-    """Immutable bidirectional map between SMT atoms and integer IDs."""
-
-    _id_to_atom: Mapping[int, FNode]
-    _atom_to_id: Mapping[FNode, int]
+    """Append-only bidirectional map between SMT atoms and integer IDs."""
 
     def __init__(self, abstraction: Mapping[int, FNode] | None = None) -> None:
         atoms = dict(abstraction) if abstraction is not None else {}
-        object.__setattr__(self, "_id_to_atom", MappingProxyType(atoms))
-        object.__setattr__(self, "_atom_to_id", MappingProxyType({atom: idx for idx, atom in atoms.items()}))
+        self._id_to_atom = atoms
+        self._atom_to_id = {atom: idx for idx, atom in atoms.items()}
 
     @property
     def id_to_atom(self) -> Mapping[int, FNode]:
-        return self._id_to_atom
+        return MappingProxyType(self._id_to_atom)
 
     @property
     def atom_to_id(self) -> Mapping[FNode, int]:
-        return self._atom_to_id
+        return MappingProxyType(self._atom_to_id)
 
     @property
     def var_count(self) -> int:
@@ -43,6 +40,11 @@ class Abstractor:
         return smt_atom in self._atom_to_id
 
     def get_id(self, smt_atom: FNode) -> int:
+        assert is_atom(smt_atom), f"expected atom, got {smt_atom}"
+        if smt_atom not in self._atom_to_id:
+            idx = self.max_var + 1
+            self._atom_to_id[smt_atom] = idx
+            self._id_to_atom[idx] = smt_atom
         return self._atom_to_id[smt_atom]
 
     def get_atom(self, idx: int) -> FNode:

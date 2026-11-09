@@ -45,7 +45,7 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         return not bool(self._condition_chain(assumptions, negate=False).is_false())
 
     def _forgotten_var_count(self) -> int:
-        return self._abstr.var_count - len(self._projection_atoms)
+        return self._target.manager.var_count() - len(self._projection_atoms)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
         if not assumptions:

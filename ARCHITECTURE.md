@@ -43,8 +43,9 @@ a top-level negation is removed so the vocabulary contains positive atoms, and
 duplicates are removed while preserving their first occurrence.
 
 Both constructions use one private pipeline to normalize lemmas,
-combine them with the formula, allocate a fresh abstraction, compile, and log
-counts and durations. Projection atoms receive IDs first; remaining atoms follow
+combine them with the formula, prepare an abstraction, compile, and log
+counts and durations. Supplied abstractions are reused; otherwise a fresh one is
+created. New projection atoms receive IDs first; remaining new atoms follow
 SMT-LIB serialization order without DAG aliases. Omitted projection sorts the
 normalized formula atoms; explicit empty projection remains empty. Requested
 atoms absent from the formula and lemmas are registered as unconstrained atoms.
@@ -110,16 +111,21 @@ in the generated lemmas before those lemmas are supplied to compilation.
 ## Abstraction and compiled containers
 
 `Abstractor` maintains a bidirectional mapping between SMT atoms and positive
-integer IDs. `get_id()` is lookup-only and raises `KeyError` for unknown atoms, while
+integer IDs. `get_id()` validates atoms with `is_atom`, returns existing IDs,
+and registers new atoms above the current maximum ID, including sparse mappings.
 `get_atom()` performs the reverse lookup. `var_count` reports the number of
 mapped atoms and `max_var` reports the largest assigned ID. Constructor mappings
-are copied; `id_to_atom` and `atom_to_id` are read-only views. Compilation
-constructs the complete mapping in stable order, preserving supplied IDs.
+are copied; `id_to_atom` and `atom_to_id` are read-only views of private dictionaries.
+There is no public deletion or reassignment API.
 
-Compilation copies supplied mappings so it can add missing atoms while
-preserving existing IDs and leaving the caller's abstraction unchanged. The
-compiler and resulting target share the completed immutable abstractor. Always
-constructing a fresh abstraction avoids a special reuse path.
+Compilation extends a supplied abstractor in stable order and passes that same
+object to the compiler and target. Append-only sharing preserves callers' IDs
+and lets later compilations register atoms without invalidating earlier targets.
+Targets freeze their bindings and projection tuples, not the shared abstractor.
+SDD counting derives forgotten dimensions from the target's native manager,
+not the growing map; BDD and d4 retain their existing native counting dimensions.
+Concurrent mutation is unsupported. Saving a target serializes the current map,
+which may include atoms registered by later compilations.
 
 The mapping can be serialized with `to_dict()`. Each atom is encoded as a
 standalone SMT-LIB script and associated with its integer ID. `from_dict()`

@@ -1,4 +1,4 @@
-"""Targets retain their own immutable context after compilation ends."""
+"""Targets retain frozen context bindings after compilation ends."""
 
 import gc
 from dataclasses import FrozenInstanceError
@@ -56,8 +56,6 @@ def test_constructor_inputs_are_copied_and_state_is_read_only(mgr, backend):
     for field, value in [("target", representation), ("abstr", abstr), ("env", mgr.env), ("projection_atoms", ())]:
         with pytest.raises(FrozenInstanceError):
             setattr(target, field, value)
-    with pytest.raises(FrozenInstanceError):
-        abstr._id_to_atom = {}
     with pytest.raises(TypeError):
         abstr.id_to_atom[3] = b
     with pytest.raises(TypeError):
@@ -96,3 +94,53 @@ def test_transitional_backend_aliases():
     assert BddCompiledTarget is _BddRepresentation
     assert SddCompiledTarget is _SddRepresentation
     assert D4CompiledTarget is _D4Representation
+
+
+@pytest.mark.parametrize("backend", [BddCompiler, SddCompiler, D4Compiler])
+@pytest.mark.parametrize("builder_name", ["reduced", "extended"])
+def test_shared_abstraction_growth_preserves_earlier_target(mgr, backend, builder_name):
+    from tddnnf.builders.extended import TExtendedBuilder
+    from tddnnf.builders.reduced import TReducedBuilder
+    from tddnnf.queries.bdd_engine import BddEngine
+    from tddnnf.queries.d4_engine import D4Engine
+    from tddnnf.queries.sdd_engine import SddEngine
+
+    a, b, c, d = [mgr.Symbol(name) for name in ("a", "b", "c", "d")]
+    abstr = Abstractor()
+    builder_cls = TReducedBuilder if builder_name == "reduced" else TExtendedBuilder
+    builder = builder_cls(backend(), env=mgr.env)
+    first = builder.build(mgr.Or(a, b), [], abstr, [a, b])
+    engine_cls = {BddCompiler: BddEngine, SddCompiler: SddEngine, D4Compiler: D4Engine}[backend]
+    engine = engine_cls(first)
+
+    def check_first(query):
+        assert query.count_truth_assignments() == 3
+        assert query.count_truth_assignments([a]) == 2
+        assert query.count_truth_assignments([mgr.Not(a)]) == 1
+        assert query.count_truth_assignments([a, a]) == 2
+        assert query.count_truth_assignments([a, mgr.Not(a)]) == 0
+        assert not query.is_satisfiable([mgr.Not(a), mgr.Not(b)])
+        assert query.is_satisfiable([a])
+        assert query.entails_clause(mgr.Or(a, b))
+        assert query.is_implicant(a)
+        models = list(query.enumerate_truth_assignments())
+        assert len(models) == 3
+        assert {frozenset(model.items()) for model in models} == {
+            frozenset({a: True, b: True}.items()),
+            frozenset({a: True, b: False}.items()),
+            frozenset({a: False, b: True}.items()),
+        }
+        equivalent(mgr, first.to_pysmt(), mgr.Or(a, b))
+
+    check_first(engine)
+    second = builder.build(mgr.And(c, d), [], abstr, [d, c])
+    assert first.abstr is second.abstr is abstr
+    assert dict(abstr.id_to_atom) == {1: a, 2: b, 3: d, 4: c}
+    assert first.projection_atoms == (a, b)
+    assert second.projection_atoms == (d, c)
+    equivalent(mgr, second.to_pysmt(), mgr.And(c, d))
+    assert engine_cls(second).count_truth_assignments() == 1
+    check_first(engine)
+    check_first(engine_cls(first))
+    with pytest.raises(ValueError, match="projection atom"):
+        engine.count_truth_assignments([c])

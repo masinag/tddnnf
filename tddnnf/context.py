@@ -110,15 +110,10 @@ class TheoryCompilation:
                 if extended
                 else mgr.And(self.phi, *normalized_lemmas)
             )
-            mapping = dict(abstractor.id_to_atom) if abstractor is not None else {}
-            known = set(mapping.values())
-            next_id = max(mapping, default=0) + 1
+            if abstractor is None:
+                abstractor = Abstractor()
             for atom in (*self.project_on, *sorted(combined.get_atoms(), key=lambda a: to_smtlib(a, daggify=False))):
-                if atom not in known:
-                    mapping[next_id] = atom
-                    known.add(atom)
-                    next_id += 1
-            abstractor = Abstractor(mapping)
+                abstractor.get_id(atom)
             artifact = compiler.compile(
                 combined, abstractor, project_on=self.project_on, computation_logger=computation_logger
             )

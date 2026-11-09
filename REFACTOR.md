@@ -89,7 +89,7 @@ acceptance details below extend the table rather than introducing extra stages.
 | 0 | `refactor/00-design` | Design, execution plan, deferred-work list | None |
 | 1 | `refactor/01-baseline` | Reproducible test and benchmark baseline | 0 |
 | 2 | `refactor/02-compilation` | One pipeline and configured compiler instances | 1 |
-| 3 | `refactor/03-target-ownership` | Private representations and bound immutable target state | 2 |
+| 3 | `refactor/03-target-ownership` | Private representations, frozen target bindings, append-only abstraction reuse | 2 |
 | 4 | `refactor/04-query-sessions` | Query composition, input handling, native delegation, cleanup | 3 |
 | 5 | `refactor/05-persistence` | Versioned persistence and paired consumer migration | 4 |
 | 6 | `refactor/06-ddnnf-conversion` | Explicit SDD/OBDD DAG conversion | 5 |
@@ -142,7 +142,9 @@ testbench callers in a companion PR if needed for these checks.
 
 Introduce private representation objects and one public target bound to its
 environment, abstraction, and immutable active vocabulary. Preserve native
-manager/root lifetimes, reconstruction, and metrics.
+manager/root lifetimes, reconstruction, and metrics. Reuse supplied abstractions
+with append-only registration and stable IDs; derive SDD counting dimensions
+from the native manager so shared growth does not alter earlier targets.
 
 Check targets after compilation-session closure, constants and shared DAGs,
 mapping/vocabulary mutation attempts, reconstruction in the bound environment,
@@ -578,11 +580,11 @@ merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
   `refactor/03-target-ownership` starts at library integration `f54db08`;
   isolated testbench worktree `/tmp/tddnnf-testbench-03-validation` starts at
   integration `f3cd841`. The original testbench checkout was not modified.
-- Abstractor copies its input and exposes immutable bidirectional mappings;
-  compilation constructs complete maps in stable order without mutating supplied
-  abstractions. Sparse supplied IDs remain unchanged. Targets freeze the
-  representation, abstraction, tuple vocabulary, and environment. Reconstruction
-  binds to that environment; metrics delegate. Backend aliases and `.target`
+- Abstractor copies constructor input and exposes read-only bidirectional views.
+  Compilation reuses supplied abstractions with append-only registration in
+  stable order, preserving sparse IDs and allocating above the maximum. Targets
+  freeze bindings to the representation, abstraction, tuple vocabulary, and
+  environment. Reconstruction binds to that environment; metrics delegate. Backend aliases and `.target`
   remain available. Artifact formats, native settings, and logs are unchanged.
 - PySDD's installed `SddNode.wrap` retains the manager and calls `ref()`; native
   roots/managers remain together without additional manual reference counting.
@@ -621,3 +623,42 @@ existing warnings (`/tmp/tddnnf-step3-independent-review.log`). Review included
 connected ownership, reconstruction, compiler, query, persistence, and metric
 code; no implementation corrections were requested. Original testbench pending
 file SHA-256 hashes still match `baseline/preserved-checkout.json`.
+
+
+### Append-only abstraction reuse correction
+
+- Restored `get_id()` registration with the existing `is_atom` assertion. The
+  ordinary class owns private dictionaries, copies constructor mappings, and
+  exposes read-only live views. New IDs are above the maximum, preserving sparse
+  IDs; there is no public deletion or reassignment API. Supplied abstractors are
+  extended in deterministic order and shared by compiler and target; absent
+  abstractors are created fresh. Backend preparation assertions remain.
+- Target bindings remain frozen, projection vocabularies remain tuples, and
+  environment ownership is unchanged. SDD forgotten dimensions now use
+  `manager.var_count() - len(projection_atoms)`; BDD and d4 counting are unchanged.
+- **Reproduced before the SDD fix**, after restoring shared registration:
+  an earlier `a OR b` target counted **0 instead of 3** after a second compilation
+  added two atoms. Sparse `{7: a}` counted **64 instead of 1**, including under
+  assumption `a`; a fresh true constant with empty projection counted **2 instead
+  of 1**. The new focused regressions had **7 failures, 11 passes**. Log:
+  `/tmp/tddnnf-append-only-before.log`.
+- **Current validation**, using the existing testbench virtual environment's
+  Python and Ruff directly (no dependency changes):
+  `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python -m pytest -q`
+  passes **552 tests**, 751 existing native/deprecation warnings, 14.78 s.
+  The four affected suites pass **245 tests**, 290 warnings, 5.27 s.
+  These cover registration, stable sparse IDs, copied inputs, read-only views,
+  supplied-object reuse, frozen target bindings, and both builders across all
+  three backends. Earlier targets preserve counts, assumptions, enumeration,
+  reconstruction, and query scope after growth, with both existing and new
+  engines. SDD counts cover sparse IDs, empty projections, and true/false constants.
+  Logs: `/tmp/tddnnf-append-only-{focused,full}.log`.
+- `ruff check tddnnf tests examples`, affected Python-file `ruff format --check`,
+  and `git diff --check` pass. Earlier step-3 testbench **191 passed**, examples,
+  smoke **12 compile + 36 query tasks**, and independent review evidence above
+  are historical checks, not rerun for this correction. No external testbench
+  changes, benchmark reruns, or static type checks were performed.
+- Concurrent mutation is unsupported; saved mappings can include atoms from
+  later compilations. Existing native shutdown/deprecation warnings and ddnnife
+  zero-feature constant metric errors remain. Persistence migration and query
+  sessions remain later steps.
