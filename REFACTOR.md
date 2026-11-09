@@ -506,3 +506,12 @@ merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
   PySDD sources and exercised by tests. Six invalid-input regressions failed
   before the fix and pass afterward. The full library suite above includes
   these corrections. No other review findings were reported.
+- Follow-up read-only review at `e2f6ccc` confirmed the finding resolved with no
+  new findings, independently running all 11 added vtree checks (**11 passed**).
+  The full companion suite was rerun against this correction: **184 passed**,
+  5 warnings, 4.03 s. Markdown links/fences and embedded Python/bash syntax pass.
+- Paired verified runtime revisions: library
+  `e2f6cccff71032ca9cce88904f15dcdb7884da73`, testbench
+  `16e0c27776e6494f6445f5a4d6ae4a458cd0c9bd`. Subsequent commits only record
+  this review/revision evidence. Both PRs target `refactor/lean-core`; leave them
+  open without auto-merge and stop before step 3.
