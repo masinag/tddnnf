@@ -49,20 +49,20 @@ def test_projected_semantics(mgr, backend, strategy, projection, constant):
         )
         forgotten = [atom for atom in combined.get_atoms() if atom not in compilation.project_on]
         expected = shannon_forget(mgr, combined, forgotten)
-        equivalent(mgr, target.to_pysmt(mgr), expected)
+        equivalent(mgr, target.to_pysmt(), expected)
         vocabulary = (
             list(dict.fromkeys(selected))
             if selected is not None
             else sorted(phi.get_atoms(), key=lambda atom: to_smtlib(atom, daggify=False))
         )
-        assert target.projection_atoms == vocabulary
-        assert target.to_pysmt(mgr).get_atoms() <= set(target.projection_atoms)
-        ordered = target.projection_atoms + sorted(
+        assert target.projection_atoms == tuple(vocabulary)
+        assert target.to_pysmt().get_atoms() <= set(target.projection_atoms)
+        ordered = list(target.projection_atoms) + sorted(
             combined.get_atoms() - set(target.projection_atoms), key=lambda atom: to_smtlib(atom, daggify=False)
         )
         assert [target.abstr.get_atom(i + 1) for i in range(len(ordered))] == ordered
     # Closing compilation must not invalidate the result.
-    equivalent(mgr, target.to_pysmt(mgr), expected)
+    equivalent(mgr, target.to_pysmt(), expected)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -75,13 +75,13 @@ def test_constant_normalizing_projection_atoms(mgr, backend, strategy, negated):
     entries = [mgr.Not(atom) for atom in atoms] if negated else atoms
     with TheoryCompilation(p, [*entries, p], env=mgr.env) as compilation:
         assert [compilation.normalize(atom) for atom in atoms] == [mgr.TRUE(), mgr.FALSE()]
-        assert compilation.project_on == [p]
+        assert compilation.project_on == (p,)
         target = getattr(compilation, strategy)(backend(), [])
-        assert target.projection_atoms == [p]
+        assert target.projection_atoms == (p,)
         assert target.abstr.var_count == 1
         assert target.abstr.get_atom(1) == p
         assert all(atom not in target.abstr for atom in [*entries, mgr.TRUE(), mgr.FALSE()])
-        equivalent(mgr, target.to_pysmt(mgr), p)
+        equivalent(mgr, target.to_pysmt(), p)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -95,7 +95,7 @@ def test_normalized_projection_and_compiler_reuse(mgr, backend, strategy):
     first_log, second_log = {}, {}
     with TheoryCompilation(p, [absent, atom, mgr.Not(duplicate), p], env=mgr.env) as compilation:
         first = getattr(compilation, strategy)(compiler, [duplicate], first_log)
-        assert first.projection_atoms == [absent, compilation.normalize(atom), p]
+        assert first.projection_atoms == (absent, compilation.normalize(atom), p)
         assert [first.abstr.get_id(a) for a in first.projection_atoms] == [1, 2, 3]
         snapshot = dict(first_log)
         second = getattr(compilation, strategy)(compiler, [], second_log)
@@ -134,7 +134,7 @@ def test_sdd_native_options(mgr, strategy, options):
         assert bool(manager.is_auto_gc_and_minimize_on()) is options.get("auto_gc_and_minimize", True)
         expected = SddManager.from_vtree(Vtree(var_count=3, vtree_type="right"))
         assert manager.vtree().left().is_leaf() == expected.vtree().left().is_leaf()
-        equivalent(mgr, target.to_pysmt(mgr), phi)
+        equivalent(mgr, target.to_pysmt(), phi)
 
 
 @pytest.mark.parametrize("builder", [TReducedBuilder, TExtendedBuilder])
@@ -144,11 +144,12 @@ def test_builder_preserves_abstraction(mgr, builder, backend):
     abstractor = Abstractor({2: atom})
     formula = mgr.And(atom, added)
     target = builder(backend(), env=mgr.env).build(formula, [], abstractor)
-    assert target.abstr is abstractor
+    assert target.abstr is not abstractor
+    assert dict(abstractor.id_to_atom) == {2: atom}
     assert target.abstr.get_id(atom) == 2
     assert target.abstr.get_id(added) == 3
     assert target.abstr.get_atom(2) is atom
-    equivalent(mgr, target.to_pysmt(mgr), formula)
+    equivalent(mgr, target.to_pysmt(), formula)
 
 
 @pytest.mark.parametrize("bad", ["sdd", SddCompiler, object(), None])
@@ -275,8 +276,8 @@ def test_compound_constants_and_lemmas(mgr, backend, strategy, value):
     expected = value if strategy == "compile_treduced" else True
     with TheoryCompilation(phi, env=mgr.env) as compilation:
         target = getattr(compilation, strategy)(backend(), lemmas)
-    equivalent(mgr, target.to_pysmt(mgr), mgr.Bool(expected))
-    assert target.projection_atoms == []
+    equivalent(mgr, target.to_pysmt(), mgr.Bool(expected))
+    assert target.projection_atoms == ()
 
 
 @pytest.mark.parametrize("value", ["typo", ""])
@@ -290,4 +291,4 @@ def test_sdd_supported_vtree_types(mgr, vtree_type):
     phi = mgr.And(mgr.Symbol("a"), mgr.Symbol("b"))
     with TheoryCompilation(phi, env=mgr.env) as compilation:
         target = compilation.compile_treduced(SddCompiler(vtree_type=vtree_type), [])
-    equivalent(mgr, target.to_pysmt(mgr), phi)
+    equivalent(mgr, target.to_pysmt(), phi)

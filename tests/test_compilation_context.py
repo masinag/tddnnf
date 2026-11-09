@@ -35,7 +35,7 @@ def test_context_compilation_matches_manual_builder(mgr: FormulaManager, strateg
             context.phi, [normalized_lemma], abstractor, project_on=context.project_on
         )
 
-    difference = mgr.Not(mgr.Iff(target.to_pysmt(mgr), manual.to_pysmt(mgr)))
+    difference = mgr.Not(mgr.Iff(target.to_pysmt(), manual.to_pysmt()))
     with mgr.env.factory.Solver() as solver:
         solver.add_assertion(difference)
         assert not solver.solve()
@@ -44,7 +44,7 @@ def test_context_compilation_matches_manual_builder(mgr: FormulaManager, strateg
     assert raw_atom != normalized_atom
     assert raw_atom not in target.abstr
     assert normalized_atom in target.abstr
-    assert target.projection_atoms == [p, normalized_atom]
+    assert target.projection_atoms == (p, normalized_atom)
 
 
 def test_fresh_query_context_handles_direct_and_loaded_targets(
@@ -77,9 +77,9 @@ def test_context_deduplicates_equivalent_projection_atoms(mgr: FormulaManager) -
     canonical_atom = context.normalize(atom)
 
     assert context.normalize(equivalent_atom) == canonical_atom
-    assert context.project_on == [canonical_atom, p]
+    assert context.project_on == (canonical_atom, p)
 
     target = context.compile_treduced(SddCompiler(), [])
 
-    assert target.projection_atoms == [canonical_atom, p]
+    assert target.projection_atoms == (canonical_atom, p)
     assert SddEngine(target).count_truth_assignments() == 4

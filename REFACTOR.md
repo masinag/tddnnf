@@ -570,3 +570,47 @@ merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
   Original testbench pending files/status still match `baseline/preserved-checkout.json`.
 - No timer changes or full performance rerun. `plans` selection intentionally can
   differ when normalization cancels original variables. Both PRs stay open.
+
+
+## Step 3 evidence — target ownership (2026-11-09)
+
+- GitHub confirms library PR #9 and testbench PR #12 merged. Branch
+  `refactor/03-target-ownership` starts at library integration `f54db08`;
+  isolated testbench worktree `/tmp/tddnnf-testbench-03-validation` starts at
+  integration `f3cd841`. The original testbench checkout was not modified.
+- Abstractor copies its input and exposes immutable bidirectional mappings;
+  compilation constructs complete maps in stable order without mutating supplied
+  abstractions. Sparse supplied IDs remain unchanged. Targets freeze the
+  representation, abstraction, tuple vocabulary, and environment. Reconstruction
+  binds to that environment; metrics delegate. Backend aliases and `.target`
+  remain available. Artifact formats, native settings, and logs are unchanged.
+- PySDD's installed `SddNode.wrap` retains the manager and calls `ref()`; native
+  roots/managers remain together without additional manual reference counting.
+- Environment: Python 3.12.15, PySMT 0.9.7.dev431, PySDD 1.0.6, dd 0.6.0,
+  ddnnife 0.10.0, tlemma-enum 0.1.0, pytest 9.1.1, ruff 0.15.17. Existing
+  MathSAT/d4 installations from the baseline were reused; no dependencies changed.
+- Commands use `UV_CACHE_DIR=/tmp/uv-cache` and
+  `UV_PROJECT_ENVIRONMENT=/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv`.
+  `uv run --no-sync python -m pytest -q`: **532 passed**, 729 warnings, 15.60 s.
+  Added tests cover session closure + GC, constants/shared DAGs, sparse mappings,
+  read-only state/input copies, bound reconstruction under another active
+  environment, native minimization/GC and OBDD reordering, and backend aliases.
+  Existing exception-cleanup tests remain. The loaded-target environment check
+  was added afterward and the abstraction suite rerun successfully.
+- Testbench suite, from its isolated worktree with
+  `PYTHONPATH=/tmp/tddnnf-testbench-03-validation/scripts`, using the same pytest
+  command: **191 passed**, 5 warnings, 3.94 s. Before the companion change three
+  parameterizations failed on list-versus-tuple equality; its only code change
+  updates that assertion. Production consumers require no change.
+- All three `uv run --no-sync python examples/{abstr,tred,text}.py` runs pass.
+  `uv run --no-sync python /tmp/tddnnf-step3-smoke.py` with the isolated testbench
+  PYTHONPATH and `PYTHONHASHSEED=0`: **12 compile + 36 CT/CE/IM tasks passed**,
+  with answers agreeing across backends. Inputs are the existing frozen synthetic
+  baseline sample; exact argv/stdout/stderr are `/tmp/tddnnf-step3-smoke/commands.json`.
+  Other raw logs are `/tmp/tddnnf-step3-*.log`.
+- `ruff check tddnnf tests examples`, affected-file `ruff format --check`, and
+  `git diff --check` pass. Type checkers remain unavailable; no full performance
+  benchmarks, persistence migration, compatibility overloads, or query sessions
+  were added. Existing CUDD shutdown-reference/deprecation warnings remain;
+  ddnnife zero-feature constant metrics still raise its documented native error
+  (covered explicitly), rather than changing metric behavior in this step.

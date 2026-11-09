@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, Self, TypeVar, runtime_checkable
@@ -49,7 +49,7 @@ class PropCompiler(Protocol[T_Target_co]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        project_on: list[FNode] | None = None,
+        project_on: Sequence[FNode] | None = None,
         computation_logger: dict[str, object] | None = None,
     ) -> T_Target_co: ...
 

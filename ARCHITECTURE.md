@@ -94,10 +94,10 @@ theory lemmas: their conjunction for T-reduced compilation, or the input
 formula disjoined with the negated lemmas for T-extended compilation.
 Valid projection vocabularies contain only atoms occurring in the normalized
 input formula or in the supplied theory lemmas. The ordered
-`projection_atoms` list stored in `TheoryCompiledTarget` is the authoritative
+`projection_atoms` tuple stored in `TheoryCompiledTarget` is the authoritative
 query vocabulary. Atoms from the input formula or lemmas that are not requested
 are existentially quantified away, and backend query engines reject query atoms
-outside this list.
+outside this tuple.
 
 Query-only theory atoms need not occur in the input formula, but they must occur
 in the supplied lemmas. Include such atoms in `compilation.project_on` and pass
@@ -110,23 +110,31 @@ in the generated lemmas before those lemmas are supplied to compilation.
 ## Abstraction and compiled containers
 
 `Abstractor` maintains a bidirectional mapping between SMT atoms and positive
-integer IDs. `get_id()` assigns IDs consecutively on first use, while
+integer IDs. `get_id()` is lookup-only and raises `KeyError` for unknown atoms, while
 `get_atom()` performs the reverse lookup. `var_count` reports the number of
-mapped atoms and `max_var` reports the largest assigned ID.
+mapped atoms and `max_var` reports the largest assigned ID. Constructor mappings
+are copied; `id_to_atom` and `atom_to_id` are read-only views. Compilation
+constructs the complete mapping in stable order, preserving supplied IDs.
 
 The mapping can be serialized with `to_dict()`. Each atom is encoded as a
 standalone SMT-LIB script and associated with its integer ID. `from_dict()`
 parses those scripts in a supplied PySMT environment, or the global environment
 when none is supplied.
 
-`TheoryCompiledTarget[T_Target]` binds three values that must travel together:
+`TheoryCompiledTarget[T_Target]` binds four read-only values that must travel together:
 
 - `target`: the backend-specific compiled DAG;
 - `abstr`: its SMT-atom-to-integer mapping; and
-- `projection_atoms`: the ordered, externally visible vocabulary.
+- `projection_atoms`: the ordered, externally visible tuple; and
+- `env`: the owning PySMT environment.
 
 Its `to_pysmt()` method delegates DAG reconstruction to the backend target while
-supplying the stored abstraction and a `FormulaManager`.
+supplying the stored abstraction and its bound environment’s formula manager.
+Public reconstruction is argument-free: `target.to_pysmt()`. `target.dag_size()`
+delegates metrics to the representation. Backend class names remain transitional
+aliases for private representations, and `.target` remains available until the
+public migration. Native roots and managers stay together, using the bindings’
+reference ownership. d4 remapping is copied and exposed read-only.
 
 ## Compilation strategies
 

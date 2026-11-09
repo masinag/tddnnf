@@ -112,6 +112,11 @@ Compile the formula and its lemmas with the T-reduced strategy and d4 backend.
 target = compilation.compile_treduced(D4Compiler(), lemmas)
 ```
 
+The target retains its environment, immutable abstraction, and tuple vocabulary
+after compilation closes. Reconstruct with `target.to_pysmt()` and inspect DAG
+metrics with `target.dag_size()`. Abstraction IDs are lookup-only; unknown atoms
+raise `KeyError`.
+
 Create the matching d4 query engine. `QueryContext.wrap_queries()` normalizes
 query formulas and aligns their atoms with the target's projection vocabulary.
 

@@ -84,7 +84,7 @@ def test_context_makes_explicit_projection_atoms_positive(
 
     normalized = norm.normalize(x_lt_two)
     assert normalized.is_not()
-    assert context.project_on == [normalized.arg(0)]
+    assert context.project_on == (normalized.arg(0),)
 
 
 def test_context_exposes_normalization(env: Environment, mgr: FormulaManager, x: FNode, p: FNode) -> None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from array import array
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Self
 
@@ -17,7 +18,7 @@ from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.stats_collector import StatsCollector
 
 
-class SddCompiledTarget(PropCompiledTarget):
+class _SddRepresentation(PropCompiledTarget):
     """A propositionally compiled SDD target backed by PySDD."""
 
     def __init__(self, root: SddNode, manager: SddManager) -> None:
@@ -161,7 +162,7 @@ class SddWalker(DagWalker):
         return result
 
 
-class SddCompiler(PropCompiler[SddCompiledTarget]):
+class SddCompiler(PropCompiler[_SddRepresentation]):
     """PropCompiler that compiles an SMT formula into an SDD via PySDD.
 
     Accepts the original (non-abstracted) SMT formula. All atoms – both
@@ -191,9 +192,9 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        project_on: list[FNode] | None = None,
+        project_on: Sequence[FNode] | None = None,
         computation_logger: dict[str, object] | None = None,
-    ) -> SddCompiledTarget:
+    ) -> _SddRepresentation:
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
             atoms = set(formula.get_atoms())
@@ -225,4 +226,8 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
                 n_proj_vars = len(atoms)
             stats.log("n_atoms", len(atoms))
             stats.log("n_proj_vars", n_proj_vars)
-            return SddCompiledTarget(root, mgr)
+            return _SddRepresentation(root, mgr)
+
+
+# Transitional alias until the public API migration.
+SddCompiledTarget = _SddRepresentation

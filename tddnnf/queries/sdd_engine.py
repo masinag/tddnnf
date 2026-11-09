@@ -17,7 +17,7 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
     def __init__(self, container: TheoryCompiledTarget[SddCompiledTarget]) -> None:
         self._target = container.target
         self._abstr = container.abstr
-        self._projection_atoms: list[FNode] = container.projection_atoms
+        self._projection_atoms: tuple[FNode, ...] = container.projection_atoms
         self._projection_atom_set: set[FNode] = set(container.projection_atoms)
 
     def _lit_to_sdd(self, lit: FNode):

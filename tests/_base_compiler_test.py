@@ -22,6 +22,7 @@ class BaseTestCompiler:
     def test_bank_compilation_equivalence(
         self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, bank_case: SolverGroundTruth
     ) -> None:
+        abstr = bank_case.abstr
         target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
         compiled_pysmt = target.to_pysmt(abstr, mgr)
 
@@ -33,6 +34,7 @@ class BaseTestCompiler:
     def test_save_load_roundtrip_equivalence(
         self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, bank_case: SolverGroundTruth
     ) -> None:
+        abstr = bank_case.abstr
         target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
         original_pysmt = target.to_pysmt(abstr, mgr)
 

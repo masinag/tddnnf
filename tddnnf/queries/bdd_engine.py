@@ -17,7 +17,7 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
     def __init__(self, container: TheoryCompiledTarget[BddCompiledTarget]) -> None:
         self._target = container.target
         self._abstr = container.abstr
-        self._projection_atoms: list[FNode] = container.projection_atoms
+        self._projection_atoms: tuple[FNode, ...] = container.projection_atoms
         self._projection_atom_set: set[FNode] = set(container.projection_atoms)
 
     def _restrict_chain(self, lits: list[FNode], negate: bool = False, root=None):
