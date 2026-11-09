@@ -16,7 +16,7 @@ class BaseTestCompiler:
     target_cls: type[PropCompiledTarget]
 
     @pytest.fixture
-    def compiler(self, abstr: Abstractor) -> PropCompiler:
+    def compiler(self) -> PropCompiler:
         return self.compiler_cls()
 
     def test_bank_compilation_equivalence(

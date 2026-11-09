@@ -8,7 +8,6 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
-from pysmt.environment import Environment
 from pysmt.smtlib.printers import to_smtlib
 from pysmt.typing import INT
 
@@ -119,12 +118,6 @@ def test_sdd_native_options(mgr, strategy, options):
         equivalent(mgr, target.to_pysmt(mgr), phi)
 
 
-@pytest.mark.parametrize("value", [None, 0, 1, "false", [], object()])
-def test_sdd_rejects_non_boolean_option(value):
-    with pytest.raises(TypeError, match="Boolean"):
-        SddCompiler(auto_gc_and_minimize=value)
-
-
 @pytest.mark.parametrize("builder", [TReducedBuilder, TExtendedBuilder])
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_builder_preserves_abstraction(mgr, builder, backend):
@@ -145,24 +138,6 @@ def test_invalid_compiler(mgr, bad):
         for strategy in STRATEGIES:
             with pytest.raises(TypeError, match="instance"):
                 getattr(compilation, strategy)(bad, [])
-
-
-@pytest.mark.parametrize("where", ["formula", "projection", "lemma"])
-@pytest.mark.parametrize("bad_kind", ["foreign", "embedded", "non_boolean", "not_node"])
-def test_invalid_inputs(mgr, where, bad_kind):
-    foreign = Environment().formula_manager.Symbol("foreign")
-    bad = {"foreign": foreign, "non_boolean": mgr.Int(1), "not_node": "a"}.get(bad_kind)
-    if bad_kind == "embedded":
-        # Local root deliberately embeds a foreign child, even if types were cached.
-        bad = mgr.And(mgr.Symbol("local"), foreign)
-    with TheoryCompilation(mgr.TRUE(), env=mgr.env) as compilation:
-        with pytest.raises((TypeError, ValueError)):
-            if where == "formula":
-                TheoryCompilation(bad, env=mgr.env)
-            elif where == "projection":
-                TheoryCompilation(mgr.TRUE(), [bad], env=mgr.env)
-            else:
-                compilation.compile_treduced(BddCompiler(), [bad])
 
 
 @pytest.mark.parametrize("entry", ["true", "false", "and", "or"])
@@ -193,8 +168,8 @@ def test_partial_initialization_cleanup(mgr, monkeypatch):
     solver = Mock()
     solver.converter = Mock()
     monkeypatch.setattr(mgr.env.factory, "Solver", Mock(return_value=solver))
-    with pytest.raises(TypeError):
-        TheoryCompilation("not a node", env=mgr.env)
+    with pytest.raises(ValueError, match="Projection entries"):
+        TheoryCompilation(mgr.TRUE(), project_on=[mgr.TRUE()], env=mgr.env)
     solver.exit.assert_called_once()
 
     # Failure while reading the newly allocated solver's converter also cleans up.
@@ -283,7 +258,7 @@ def test_compound_constants_and_lemmas(mgr, backend, strategy, value):
     assert target.projection_atoms == []
 
 
-@pytest.mark.parametrize("value", ["typo", "", None, 1, [], b"balanced"])
+@pytest.mark.parametrize("value", ["typo", ""])
 def test_sdd_rejects_invalid_vtree_type(value):
     with pytest.raises(ValueError, match="vtree_type"):
         SddCompiler(vtree_type=value)

@@ -12,7 +12,11 @@ from tddnnf.core.pysmt_utils import SuspendTypeChecking
 
 
 class NormalizerWalker(DagWalker):
-    """Walks an SMT DAG, normalizing theory atoms through a Mathsat solver."""
+    """Normalize theory atoms through MathSAT, using DagWalker's memoization.
+
+    Callers must supply Boolean FNodes whose entire DAG belongs to the selected
+    environment. Type hints and this environment precondition are trusted.
+    """
 
     def __init__(self, env: Environment | None = None) -> None:
         self._closed = False
@@ -66,20 +70,6 @@ class NormalizerWalker(DagWalker):
     def walk(self, formula: FNode, **kwargs: object) -> FNode:
         if self._closed:
             raise RuntimeError("Normalizer is closed")
-        if not isinstance(formula, FNode):
-            raise TypeError("Expected a PySMT formula node")
-        seen: set[FNode] = set()
-        pending = [formula]
-        while pending:
-            node = pending.pop()
-            if node in seen:
-                continue
-            if self.mgr.formulae.get(node._content) is not node:
-                raise ValueError("Formula node belongs to a different environment")
-            seen.add(node)
-            pending.extend(node.args())
-        if not self.env.stc.get_type(formula).is_bool_type():
-            raise ValueError("Expected a Boolean formula")
         with SuspendTypeChecking(self.env):
             return super().walk(formula, **kwargs)
 

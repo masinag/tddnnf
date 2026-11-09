@@ -18,7 +18,12 @@ from tddnnf.queries.normalizing import NormalizingQueryEngine
 
 
 class TheoryCompilation:
-    """Normalize inputs and compile either theory construction through one pipeline."""
+    """Normalize inputs and compile either theory construction through one pipeline.
+
+    Callers must provide Boolean FNodes for phi and lemmas, with all input DAGs
+    (including projection entries) belonging to the selected environment.
+    These type and environment preconditions are not checked at runtime.
+    """
 
     def __init__(
         self,
@@ -60,7 +65,7 @@ class TheoryCompilation:
             raise RuntimeError("Compilation session is closed")
 
     def normalize(self, formula: FNode) -> FNode:
-        """Validate and normalize a Boolean formula in this session's environment."""
+        """Normalize a Boolean FNode supplied in this session's environment."""
         self._ensure_open()
         assert self._normalizer is not None
         return self._normalizer.normalize(formula)

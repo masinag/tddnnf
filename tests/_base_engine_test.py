@@ -18,7 +18,7 @@ class BaseTestEngine(Generic[T_Target]):
     _skip_queries: frozenset[str] = frozenset()
 
     @pytest.fixture
-    def compiler(self, abstr: Abstractor) -> PropCompiler[T_Target]:
+    def compiler(self) -> PropCompiler[T_Target]:
         return self.compiler_cls()
 
     @pytest.fixture

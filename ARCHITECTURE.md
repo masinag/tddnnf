@@ -42,7 +42,7 @@ normalized input formula. When supplied, every projection atom is normalized,
 a top-level negation is removed so the vocabulary contains positive atoms, and
 duplicates are removed while preserving their first occurrence.
 
-Both constructions use one private pipeline to validate and normalize lemmas,
+Both constructions use one private pipeline to normalize lemmas,
 combine them with the formula, allocate a fresh abstraction, compile, and log
 counts and durations. Projection atoms receive IDs first; remaining atoms follow
 SMT-LIB serialization order without DAG aliases. Omitted projection sorts the
@@ -58,6 +58,12 @@ including cleanup on exceptions and initialization failure. Closed sessions
 reject operations. Query-session lifecycle migration remains a later step.
 
 ## Normalization and projection
+
+Callers must respect the annotated Python types and provide Boolean formulas
+from the selected environment, including every descendant. The normalizer
+trusts these preconditions and uses `DagWalker` memoization without a separate
+validation traversal. SDD configuration types are likewise caller preconditions;
+unsupported vtree names still raise `ValueError` before entering native code.
 
 The architecture requires theory atoms to be in some canonical forms.
 Compilation and querying must map equivalent theory atoms

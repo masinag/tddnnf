@@ -168,14 +168,16 @@ Compiler arguments must be instances, for example `D4Compiler()`, rather than
 classes or strings. Instances can be reused: abstractions and computation logs
 belong to each call. `SddCompiler(vtree_type="balanced", auto_gc_and_minimize=True)`
 accepts vtree types `right`, `left`, `vertical`, `balanced`, and `random`, rejecting
-invalid values before entering native code. Its Boolean option jointly controls native
-automatic garbage collection and minimization. Pass `False` to disable both.
+invalid names before entering native code. Its Boolean option jointly controls
+native automatic garbage collection and minimization. Pass `False` to disable both;
+callers must respect the annotated argument types.
 
 `TheoryCompilation` supports `with` and idempotent `close()`; normalization and
 compilation fail after closure. `CompilationContext` remains an alias during
 migration. Inputs must be Boolean nodes from the selected PySMT environment,
-including every descendant. Projection entries normalize to positive Boolean
-symbols or theory atoms; constants and compound Boolean entries are rejected.
+including every descendant; type hints and environment membership are caller
+preconditions, without repeated runtime validation. Projection entries normalize
+to positive Boolean symbols or theory atoms; constants and compound Boolean entries are rejected.
 Omitted projection uses normalized formula atoms in SMT-LIB serialization order;
 explicit projection preserves first occurrence, including an empty list or atoms
 absent from the formula and lemmas. Each compile call assigns IDs to projection

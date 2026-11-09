@@ -515,3 +515,28 @@ merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
   `16e0c27776e6494f6445f5a4d6ae4a458cd0c9bd`. Subsequent commits only record
   this review/revision evidence. Both PRs target `refactor/lean-core`; leave them
   open without auto-merge and stop before step 3.
+
+#### PR #9 review updates
+
+- Applied the user's [normalizer review](https://github.com/masinag/tddnnf/pull/9#discussion_r4513168208)
+  and [environment-contract clarification](https://github.com/masinag/tddnnf/pull/9#discussion_r4513182122):
+  trust annotated FNode inputs and their environment membership. Removed the
+  repeated Python/sort checks and the separate whole-DAG ownership traversal;
+  `DagWalker` retains its existing memoization. Boolean input and environment
+  membership are documented caller preconditions in docstrings and design/API
+  documentation. This supersedes the original validation requirements and
+  related initial acceptance evidence above.
+- Applied the [SDD constructor review](https://github.com/masinag/tddnnf/pull/9#discussion_r4513208347):
+  removed Python type checks and documented argument types and the joint native
+  Boolean setting. Retained supported-vtree-name validation, since an unknown
+  name terminates the native process instead of raising a Python exception.
+- Removed both unused `abstr` compiler-fixture arguments per the
+  [compiler-test](https://github.com/masinag/tddnnf/pull/9#discussion_r4513272487)
+  and [engine-test](https://github.com/masinag/tddnnf/pull/9#discussion_r4513276611)
+  comments. Removed 22 obsolete runtime-input-type/environment rejection cases;
+  initialization-failure cleanup is still checked using an invalid projection
+  value, without violating the annotated input types.
+- With the same environment and `uv run --no-sync` commands above, the library
+  suite passes **500 tests**, 697 existing native/deprecation warnings, 12.51 s;
+  the isolated companion suite also passes. Library lint, affected formatting,
+  and whitespace checks pass. No testbench source changes are required.

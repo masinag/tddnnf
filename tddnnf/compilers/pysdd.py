@@ -170,11 +170,19 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
     """
 
     def __init__(self, vtree_type: str = "balanced", auto_gc_and_minimize: bool = True) -> None:
-        """Configure the native vtree and joint automatic GC/minimization setting."""
-        if not isinstance(vtree_type, str) or vtree_type not in ("right", "left", "vertical", "balanced", "random"):
+        """Configure the native vtree and joint automatic GC/minimization setting.
+
+        Args:
+            vtree_type: One of "right", "left", "vertical", "balanced", "random".
+            auto_gc_and_minimize: Boolean enabling both native automatic garbage
+                collection and minimization (default True). Types are trusted
+                as annotated.
+
+        Raises:
+            ValueError: If the vtree name is unsupported by the native library.
+        """
+        if vtree_type not in ("right", "left", "vertical", "balanced", "random"):
             raise ValueError(f"Unsupported vtree_type: {vtree_type!r}")
-        if not isinstance(auto_gc_and_minimize, bool):
-            raise TypeError("auto_gc_and_minimize must be a Boolean")
         self._vtree_type = vtree_type
         self._auto_gc_and_minimize = auto_gc_and_minimize
 
