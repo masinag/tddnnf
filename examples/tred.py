@@ -4,7 +4,7 @@ from pysmt.shortcuts import GT, And, Not, Or, Plus, Real, Symbol
 from pysmt.typing import REAL
 from tlemma_enum.solvers.mathsat_total import MathSATTotalEnumerator
 
-from tddnnf import CompilationContext, QueryContext
+from tddnnf import QueryContext, TheoryCompilation
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
@@ -30,35 +30,34 @@ atoms = [xgt5, xgt0, ygt5, xpygt5]
 
 # ---- COMPILATION CONTEXT ----
 
-compilation = CompilationContext(phi, project_on=atoms)
+with TheoryCompilation(phi, project_on=atoms) as compilation:
+    # ---- LEMMA ENUMERATION ----
 
-# ---- LEMMA ENUMERATION ----
+    enumerator = MathSATTotalEnumerator()
+    enumerator.check_all_sat(compilation.phi, atoms=compilation.project_on)
+    lemmas = enumerator.get_theory_lemmas()
 
-enumerator = MathSATTotalEnumerator()
-enumerator.check_all_sat(compilation.phi, atoms=compilation.project_on)
-lemmas = enumerator.get_theory_lemmas()
+    # ---- OUTPUT ----
 
-# ---- OUTPUT ----
+    print(f"phi: {compilation.phi}")
+    print(f"Lemmas from phi ({len(lemmas)}):")
+    for lem in lemmas:
+        print(f"  {lem}")
 
-print(f"phi: {compilation.phi}")
-print(f"Lemmas from phi ({len(lemmas)}):")
-for lem in lemmas:
-    print(f"  {lem}")
+    # ---- BACKEND LOOP ----
 
-# ---- BACKEND LOOP ----
+    for name, compiler, qengine in [
+        ("BDD", BddCompiler, BddEngine),
+        ("SDD", SddCompiler, SddEngine),
+        ("dDNNF", D4Compiler, D4Engine),
+    ]:
+        print(f"=== T-Reduced ({name}) ===")
+        target = compilation.compile_treduced(compiler(), lemmas)
+        engine = QueryContext(target).wrap_queries(qengine(target))
 
-for name, compiler, qengine in [
-    ("BDD", BddCompiler, BddEngine),
-    ("SDD", SddCompiler, SddEngine),
-    ("dDNNF", D4Compiler, D4Engine),
-]:
-    print(f"=== T-Reduced ({name}) ===")
-    target = compilation.compile_treduced(compiler, lemmas)
-    engine = QueryContext(target).wrap_queries(qengine(target))
-
-    print(f"Is sat under assumpions {assumptions}? {engine.is_satisfiable(assumptions)}")
-    print(f"Entails {clause}? {engine.entails_clause(clause)}")
-    print(f"Model count: {engine.count_truth_assignments()}")
-    print("Models:")
-    for m in engine.enumerate_truth_assignments():
-        print(f"  {m}")
+        print(f"Is sat under assumpions {assumptions}? {engine.is_satisfiable(assumptions)}")
+        print(f"Entails {clause}? {engine.entails_clause(clause)}")
+        print(f"Model count: {engine.count_truth_assignments()}")
+        print("Models:")
+        for m in engine.enumerate_truth_assignments():
+            print(f"  {m}")

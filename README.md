@@ -51,7 +51,7 @@ from tlemma_enum.solvers import (
     MathSATDivideAndConquerEnumerator,
 )
 
-from tddnnf import CompilationContext, QueryContext
+from tddnnf import TheoryCompilation, QueryContext
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.queries.d4_engine import D4Engine
 ```
@@ -85,7 +85,7 @@ compilation. Any atom in `phi` or those lemmas that is omitted from `project_on`
 is existentially quantified away.
 
 ```python
-compilation = CompilationContext(phi)
+compilation = TheoryCompilation(phi)
 ```
 
 Enumerate theory lemmas for the normalized formula, passing the complete
@@ -109,7 +109,7 @@ and alternatives.
 Compile the formula and its lemmas with the T-reduced strategy and d4 backend.
 
 ```python
-target = compilation.compile_treduced(D4Compiler, lemmas)
+target = compilation.compile_treduced(D4Compiler(), lemmas)
 ```
 
 Create the matching d4 query engine. `QueryContext.wrap_queries()` normalizes
@@ -160,13 +160,30 @@ earlier workflow can use SDD as follows:
 from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.queries.sdd_engine import SddEngine
 
-target = compilation.compile_treduced(SddCompiler, lemmas)
+target = compilation.compile_treduced(SddCompiler(), lemmas)
 engine = QueryContext(target).wrap_queries(SddEngine(target))
 ```
 
+Compiler arguments must be instances, for example `D4Compiler()`, rather than
+classes or strings. Instances can be reused: abstractions and computation logs
+belong to each call. `SddCompiler(vtree_type="balanced", auto_gc_and_minimize=True)`
+constructs the requested native vtree; its Boolean option jointly controls native
+automatic garbage collection and minimization. Pass `False` to disable both.
+
+`TheoryCompilation` supports `with` and idempotent `close()`; normalization and
+compilation fail after closure. `CompilationContext` remains an alias during
+migration. Inputs must be Boolean nodes from the selected PySMT environment,
+including every descendant. Projection entries normalize to positive Boolean
+symbols or theory atoms; constants and compound Boolean entries are rejected.
+Omitted projection uses normalized formula atoms in SMT-LIB serialization order;
+explicit projection preserves first occurrence, including an empty list or atoms
+absent from the formula and lemmas. Each compile call assigns IDs to projection
+atoms first, then the remaining combined-formula atoms in serialization order.
+Non-projection atoms and encoding auxiliaries are existentially eliminated.
+
 ### Compilation strategies
 
-Use the high-level `CompilationContext` methods for compilation.
+Use the high-level `TheoryCompilation` methods for compilation.
 
 | Method                | Lemmas enumerated for | Compiled formula                                         |
 | --------------------- | --------------------- | -------------------------------------------------------- |
@@ -228,7 +245,7 @@ else:
 Compile from the loaded lemmas and save the target.
 
 ```python
-target = compilation.compile_treduced(D4Compiler, loaded_lemmas)
+target = compilation.compile_treduced(D4Compiler(), loaded_lemmas)
 target_dir = artifact_dir / "ddnnf"
 target.save(target_dir)
 ```

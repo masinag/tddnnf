@@ -164,34 +164,37 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
     through the provided :class:`Abstractor`.
     """
 
-    def __init__(self, abstractor: Abstractor, computation_logger: dict[str, object] | None = None) -> None:
-        self._abstractor: Abstractor = abstractor
-        self._stats = StatsCollector(computation_logger)
-
-    def compile(self, formula: FNode, project_on: list[FNode] | None = None) -> BddCompiledTarget:
-        with self._stats.track_time("compile_time"):
+    def compile(
+        self,
+        formula: FNode,
+        abstractor: Abstractor,
+        *,
+        project_on: list[FNode] | None = None,
+        computation_logger: dict[str, object] | None = None,
+    ) -> BddCompiledTarget:
+        stats = StatsCollector(computation_logger)
+        with stats.track_time("compile_time"):
             atoms = set(formula.get_atoms())
             if project_on is not None:
                 atoms.update(project_on)
             atoms = list(atoms)
-            for atom in atoms:
-                self._abstractor.get_id(atom)
-            max_var = max(self._abstractor.max_var, 1)
+            assert all(atom in abstractor for atom in atoms), "Abstraction must be prepared before compilation"
+            max_var = max(abstractor.max_var, 1)
             mgr = BDD()
             for i in range(1, max_var + 1):
                 mgr.declare(f"b{i}")
-            walker = BddWalker(mgr, self._abstractor)
+            walker = BddWalker(mgr, abstractor)
             root = walker.translate(formula)
             n_proj_vars: int
             if project_on is not None:
                 project_set = set(project_on)
-                forgotten = [f"b{self._abstractor.get_id(atom)}" for atom in atoms if atom not in project_set]
+                forgotten = [f"b{abstractor.get_id(atom)}" for atom in atoms if atom not in project_set]
                 if forgotten:
-                    with self._stats.track_time("forget_time"):
+                    with stats.track_time("forget_time"):
                         root = root.exist(*forgotten)
                 n_proj_vars = len(project_set)
             else:
                 n_proj_vars = len(atoms)
-            self._stats.log("n_atoms", len(atoms))
-            self._stats.log("n_proj_vars", n_proj_vars)
+            stats.log("n_atoms", len(atoms))
+            stats.log("n_proj_vars", n_proj_vars)
             return BddCompiledTarget(root, mgr)

@@ -4,7 +4,7 @@ from pysmt.shortcuts import GT, And, Not, Or, Plus, Real, Symbol
 from pysmt.typing import REAL
 from tlemma_enum.solvers.mathsat_total import MathSATTotalEnumerator
 
-from tddnnf import CompilationContext, QueryContext
+from tddnnf import QueryContext, TheoryCompilation
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
@@ -29,31 +29,30 @@ atoms = list(phi.get_atoms() | cube.get_atoms())
 
 # ---- COMPILATION CONTEXT ----
 
-compilation = CompilationContext(phi, project_on=atoms)
+with TheoryCompilation(phi, project_on=atoms) as compilation:
+    # ---- LEMMA ENUMERATION ----
 
-# ---- LEMMA ENUMERATION ----
+    enumerator = MathSATTotalEnumerator()
+    enumerator.check_all_sat(Not(compilation.phi), compilation.project_on)
+    lemmas = enumerator.get_theory_lemmas()
 
-enumerator = MathSATTotalEnumerator()
-enumerator.check_all_sat(Not(compilation.phi), compilation.project_on)
-lemmas = enumerator.get_theory_lemmas()
+    # ---- OUTPUT ----
 
-# ---- OUTPUT ----
+    print(f"phi: {compilation.phi}")
+    print(f"Lemmas from phi ({len(lemmas)}):")
+    for lem in lemmas:
+        print(f"  {lem}")
 
-print(f"phi: {compilation.phi}")
-print(f"Lemmas from phi ({len(lemmas)}):")
-for lem in lemmas:
-    print(f"  {lem}")
+    # ---- BACKEND LOOP ----
 
-# ---- BACKEND LOOP ----
+    for name, compiler, qengine in [
+        ("BDD", BddCompiler, BddEngine),
+        ("SDD", SddCompiler, SddEngine),
+        ("dDNNF", D4Compiler, D4Engine),
+    ]:
+        print(f"=== T-Extended ({name}) ===")
+        target = compilation.compile_textended(compiler(), lemmas)
+        engine = QueryContext(target).wrap_queries(qengine(target))
 
-for name, compiler, qengine in [
-    ("BDD", BddCompiler, BddEngine),
-    ("SDD", SddCompiler, SddEngine),
-    ("dDNNF", D4Compiler, D4Engine),
-]:
-    print(f"=== T-Extended ({name}) ===")
-    target = compilation.compile_textended(compiler, lemmas)
-    engine = QueryContext(target).wrap_queries(qengine(target))
-
-    print(f"Valid? {engine.is_valid()}")
-    print(f"{cube} is implicant? {engine.is_implicant(cube)}")
+        print(f"Valid? {engine.is_valid()}")
+        print(f"{cube} is implicant? {engine.is_implicant(cube)}")

@@ -1,4 +1,4 @@
-from typing import cast
+from typing import Self, cast
 
 import pysmt.operators as op
 from pysmt.environment import Environment
@@ -15,13 +15,34 @@ class NormalizerWalker(DagWalker):
     """Walks an SMT DAG, normalizing theory atoms through a Mathsat solver."""
 
     def __init__(self, env: Environment | None = None) -> None:
+        self._closed = False
+        self._solver = None
         self._env = env if env is not None else get_env()
         DagWalker.__init__(self, self._env)
-        self._solver: MathSAT5Solver = self._env.factory.Solver("msat")
-        self._converter = cast(MSatConverter, self._solver.converter)
+        try:
+            self._solver: MathSAT5Solver = self._env.factory.Solver("msat")
+            self._converter = cast(MSatConverter, self._solver.converter)
+        except BaseException:
+            self.close()
+            raise
 
     def __del__(self) -> None:
-        self._solver.exit()
+        self.close()
+
+    def __enter__(self) -> Self:
+        if self._closed:
+            raise RuntimeError("Normalizer is closed")
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Release the solver exactly once, including after partial initialization."""
+        if not self._closed:
+            self._closed = True
+            if self._solver is not None:
+                self._solver.exit()
 
     @property
     def mgr(self) -> FormulaManager:
@@ -43,6 +64,22 @@ class NormalizerWalker(DagWalker):
         return self.mgr.create_node(formula.node_type(), tuple(args))
 
     def walk(self, formula: FNode, **kwargs: object) -> FNode:
+        if self._closed:
+            raise RuntimeError("Normalizer is closed")
+        if not isinstance(formula, FNode):
+            raise TypeError("Expected a PySMT formula node")
+        seen: set[FNode] = set()
+        pending = [formula]
+        while pending:
+            node = pending.pop()
+            if node in seen:
+                continue
+            if self.mgr.formulae.get(node._content) is not node:
+                raise ValueError("Formula node belongs to a different environment")
+            seen.add(node)
+            pending.extend(node.args())
+        if not self.env.stc.get_type(formula).is_bool_type():
+            raise ValueError("Expected a Boolean formula")
         with SuspendTypeChecking(self.env):
             return super().walk(formula, **kwargs)
 

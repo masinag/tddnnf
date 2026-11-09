@@ -1,3 +1,3 @@
-from tddnnf.context import CompilationContext, QueryContext
+from tddnnf.context import CompilationContext, QueryContext, TheoryCompilation
 
-__all__ = ["CompilationContext", "QueryContext"]
+__all__ = ["TheoryCompilation", "CompilationContext", "QueryContext"]

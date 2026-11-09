@@ -19,7 +19,7 @@ class BaseTestEngine(Generic[T_Target]):
 
     @pytest.fixture
     def compiler(self, abstr: Abstractor) -> PropCompiler[T_Target]:
-        return self.compiler_cls(abstr)
+        return self.compiler_cls()
 
     @pytest.fixture
     def engine(
@@ -30,7 +30,9 @@ class BaseTestEngine(Generic[T_Target]):
         a: FNode,
         b: FNode,
     ) -> QueryEngine[T_Target]:
-        target = compiler.compile(mgr.And(a, b))
+        for atom in (a, b):
+            abstr.get_id(atom)
+        target = compiler.compile(mgr.And(a, b), abstr)
         return self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b]))
 
     def test_exhaustive_engine_and_solver_space(
@@ -40,7 +42,7 @@ class BaseTestEngine(Generic[T_Target]):
         abstr: Abstractor,
         bank_case: SolverGroundTruth,
     ) -> None:
-        target = compiler.compile(bank_case.original_formula, project_on=bank_case.project_on)
+        target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
         engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on))
 
         with mgr.env.factory.Solver() as solver:
@@ -106,7 +108,7 @@ class BaseTestEngine(Generic[T_Target]):
         abstr: Abstractor,
         bank_case: SolverGroundTruth,
     ) -> None:
-        target = compiler.compile(bank_case.original_formula, project_on=bank_case.project_on)
+        target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
         engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on))
 
         projected_vars = bank_case.project_on
@@ -179,7 +181,9 @@ class BaseTestEngine(Generic[T_Target]):
         b: FNode,
         c: FNode,
     ) -> None:
-        target = compiler.compile(mgr.And(a, mgr.Or(b, c)), project_on=[a, b])
+        for atom in (a, b, c):
+            abstr.get_id(atom)
+        target = compiler.compile(mgr.And(a, mgr.Or(b, c)), abstr, project_on=[a, b])
         engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b]))
         with pytest.raises(ValueError, match="not a projection atom"):
             engine.is_satisfiable(assumptions=[c])
