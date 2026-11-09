@@ -116,6 +116,11 @@ mapped atoms and `max_var` reports the largest assigned ID. Constructor mappings
 are copied; `id_to_atom` and `atom_to_id` are read-only views. Compilation
 constructs the complete mapping in stable order, preserving supplied IDs.
 
+Compilation copies supplied mappings so it can add missing atoms while
+preserving existing IDs and leaving the caller's abstraction unchanged. The
+compiler and resulting target share the completed immutable abstractor. Always
+constructing a fresh abstraction avoids a special reuse path.
+
 The mapping can be serialized with `to_dict()`. Each atom is encoded as a
 standalone SMT-LIB script and associated with its integer ID. `from_dict()`
 parses those scripts in a supplied PySMT environment, or the global environment
@@ -127,6 +132,11 @@ when none is supplied.
 - `abstr`: its SMT-atom-to-integer mapping; and
 - `projection_atoms`: the ordered, externally visible tuple; and
 - `env`: the owning PySMT environment.
+
+Projection order and membership define the target's query dimensions. Storing
+the vocabulary as a tuple prevents later mutation from invalidating query
+indexes and counting assumptions, and isolates the target from changes to
+constructor input lists.
 
 Its `to_pysmt()` method delegates DAG reconstruction to the backend target while
 supplying the stored abstraction and its bound environment’s formula manager.
