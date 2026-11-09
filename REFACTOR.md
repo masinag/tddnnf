@@ -614,3 +614,10 @@ merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
   were added. Existing CUDD shutdown-reference/deprecation warnings remain;
   ddnnife zero-feature constant metrics still raise its documented native error
   (covered explicitly), rather than changing metric behavior in this step.
+
+Fresh read-only review of library `148bf20` and companion `3d501dd` reported
+**no actionable findings**. Independent focused checks passed **31 tests**, 20
+existing warnings (`/tmp/tddnnf-step3-independent-review.log`). Review included
+connected ownership, reconstruction, compiler, query, persistence, and metric
+code; no implementation corrections were requested. Original testbench pending
+file SHA-256 hashes still match `baseline/preserved-checkout.json`.
