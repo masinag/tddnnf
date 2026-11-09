@@ -281,3 +281,17 @@ def test_compound_constants_and_lemmas(mgr, backend, strategy, value):
         target = getattr(compilation, strategy)(backend(), lemmas)
     equivalent(mgr, target.to_pysmt(mgr), mgr.Bool(expected))
     assert target.projection_atoms == []
+
+
+@pytest.mark.parametrize("value", ["typo", "", None, 1, [], b"balanced"])
+def test_sdd_rejects_invalid_vtree_type(value):
+    with pytest.raises(ValueError, match="vtree_type"):
+        SddCompiler(vtree_type=value)
+
+
+@pytest.mark.parametrize("vtree_type", ["right", "left", "vertical", "balanced", "random"])
+def test_sdd_supported_vtree_types(mgr, vtree_type):
+    phi = mgr.And(mgr.Symbol("a"), mgr.Symbol("b"))
+    with TheoryCompilation(phi, env=mgr.env) as compilation:
+        target = compilation.compile_treduced(SddCompiler(vtree_type=vtree_type), [])
+    equivalent(mgr, target.to_pysmt(mgr), phi)

@@ -463,8 +463,8 @@ merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
   export PYTHONHASHSEED=0
   ```
 
-- Library: `uv run --no-sync python -m pytest -q` — **511 passed**, 705 warnings,
-  13.28 s. The 136 added focused checks cover both constructions/all backends,
+- Library: `uv run --no-sync python -m pytest -q` — **522 passed**, 710 warnings,
+  13.70 s. The 147 added focused checks cover both constructions/all backends,
   independent Shannon-projected formulas, constants/compound constants,
   omitted/empty/partial/absent projection, normalized duplicates/polarity,
   formula-only and lemma-only elimination, compiler reuse, ID order across hash
@@ -498,3 +498,11 @@ merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
   remain visible; documented SDD counting/query/persistence defects and native
   numerical/buffering limits remain for later steps. Stable IDs and native SDD
   settings may change DAG shape, memory, and performance.
+- Fresh independent read-only review of library `1e05bdb` and testbench
+  `16e0c27` found one SDD configuration defect: an unrecognized vtree name
+  terminated the interpreter inside native `Vtree` (exit 1), preventing Python
+  cleanup. Constructor validation now rejects unsupported names/types with
+  `ValueError`; the five native supported names are verified against installed
+  PySDD sources and exercised by tests. Six invalid-input regressions failed
+  before the fix and pass afterward. The full library suite above includes
+  these corrections. No other review findings were reported.

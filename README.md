@@ -167,7 +167,8 @@ engine = QueryContext(target).wrap_queries(SddEngine(target))
 Compiler arguments must be instances, for example `D4Compiler()`, rather than
 classes or strings. Instances can be reused: abstractions and computation logs
 belong to each call. `SddCompiler(vtree_type="balanced", auto_gc_and_minimize=True)`
-constructs the requested native vtree; its Boolean option jointly controls native
+accepts vtree types `right`, `left`, `vertical`, `balanced`, and `random`, rejecting
+invalid values before entering native code. Its Boolean option jointly controls native
 automatic garbage collection and minimization. Pass `False` to disable both.
 
 `TheoryCompilation` supports `with` and idempotent `close()`; normalization and
