@@ -6,10 +6,10 @@ from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.shortcuts import get_env
 
+from tddnnf.context import TheoryCompilation
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import PropCompiler, T_Target
-from tddnnf.core.stats_collector import StatsCollector
 
 
 class TReducedBuilder(Generic[T_Target]):
@@ -23,7 +23,7 @@ class TReducedBuilder(Generic[T_Target]):
     ) -> None:
         self._env = env or get_env()
         self._compiler = compiler
-        self._stats = StatsCollector(computation_logger)
+        self._computation_logger = computation_logger
 
     def build(
         self,
@@ -46,13 +46,5 @@ class TReducedBuilder(Generic[T_Target]):
         Returns:
             Compiled target bundled with the abstractor.
         """
-        with self._stats.track_time("build_time"):
-            conjoined = self._env.formula_manager.And(phi, *lemmas)
-            artifact = self._compiler.compile(conjoined, project_on=project_on)
-            if project_on is not None:
-                projection_atoms = project_on
-            else:
-                projection_atoms = sorted(conjoined.get_atoms(), key=lambda a: abstractor.get_id(a))
-        self._stats.log("n_lemmas", len(lemmas))
-        self._stats.log("n_projection_atoms", len(projection_atoms))
-        return TheoryCompiledTarget(artifact, abstractor, projection_atoms=projection_atoms)
+        with TheoryCompilation(phi, project_on=project_on, env=self._env) as compilation:
+            return compilation._compile(self._compiler, lemmas, False, self._computation_logger, abstractor)

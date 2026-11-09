@@ -56,8 +56,10 @@ acceptance check exposes an adapter defect.
 `TheoryCompilation(phi, project_on=None, env=None)` selects the supplied PySMT
 environment or the active environment when omitted. Stored formula nodes must
 belong to that environment. Normalize the formula, supplied projection entries,
-and later the lemmas there; reject incompatible input rather than mixing nodes
-from different formula managers.
+and later the lemmas there. Callers must respect type hints and supply Boolean
+formulas/lemmas and DAGs entirely from that formula manager, including embedded
+nodes. These are caller preconditions; normalization relies on `DagWalker`
+memoization without repeated type checks or environment-validation traversals.
 
 Projection entries normalize to positive Boolean symbols or theory atoms;
 strip a normalized top-level negation and reject arbitrary Boolean formulas.

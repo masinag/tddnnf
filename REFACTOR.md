@@ -319,7 +319,7 @@ Leave the PR open for renewed approval. Do not merge or start the next step.
 ## Completed checks
 
 Record evidence here as steps are implemented; consult GitHub for approvals and
-merges. Step 1 establishes the baseline below; steps 2–7 have not started.
+merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
 
 ### Step 0 — `refactor/00-design`
 
@@ -418,3 +418,155 @@ merges. Step 1 establishes the baseline below; steps 2–7 have not started.
   bookkeeping defect: true over an empty active vocabulary counts as 2 instead
   of 1 because the dummy native variable is not removed. This remains documented
   separately from native count overflow.
+
+### Step 2 — `refactor/02-compilation`
+
+- Verified prerequisite library PR [#8](https://github.com/masinag/tddnnf/pull/8)
+  and testbench PR [#11](https://github.com/masinag/tddnnf-testbench/pull/11)
+  are merged. Created both step branches from freshly fetched integration heads:
+  library `baec2264aafd4d1551b2cb71713bf09d6513c82f`, testbench
+  `0d64937ee2e14bf490af5fb6c03654dbbe2e0179`. Testbench changes are isolated in
+  `/tmp/tddnnf-testbench-02-compilation`.
+- Added `TheoryCompilation` (`CompilationContext` remains an alias), a shared
+  private compilation pipeline, and forwarding builders. Constructors retain
+  backend configuration only; `compile(formula, abstractor, *, project_on=None,
+  computation_logger=None)` takes a prepared abstraction and per-call logger.
+  Strings and compiler classes are rejected by the compilation session.
+- Validate Boolean inputs and every descendant's environment before normalizing;
+  normalize/deduplicate positive projection atoms, reject constants and compound
+  Boolean projection entries, preserve explicit empty/absent atoms, and allocate
+  projection-first IDs followed by SMT-LIB serialization order without aliases.
+  Omitted projection comes from normalized phi, excluding lemma-only atoms.
+  Extending a caller-supplied sparse abstraction now allocates above its maximum
+  ID, avoiding an existing collision that could overwrite a supplied atom.
+- `SddCompiler(vtree_type="balanced", auto_gc_and_minimize=True)` explicitly
+  constructs a native `Vtree`. The Boolean option jointly controls automatic
+  garbage collection and minimization and rejects non-Booleans. Tests inspect
+  the native setting for default/True/False under both constructions, use a
+  right-linear vtree, and compare semantics. CUDD configuration and d4 CLI,
+  projection remapping, diagnostics, temporary cleanup, and log keys remain.
+- Compilation/normalizer context managers and idempotent `close()` release owned
+  solver resources on exit and partial initialization failure and reject use
+  after closure. Query-session lifecycle and target ownership remain deferred.
+- Updated tests, public examples, README/architecture, and active testbench
+  compilation callers to instances. The testbench closes its normalization and
+  compilation sessions even on task failures, retaining CLI modes, result schema,
+  logs, and T-extended compilation of `Not(phi)` in `textended-negation` mode.
+- Reused the existing testbench `.venv` and editable library, without dependency
+  synchronization or installation. Python 3.12.15, PySMT 0.9.7.dev431, PySDD
+  1.0.6, dd 0.6.0, ddnnife 0.10.0, and tlemma-enum 0.1.0 match step 1;
+  MathSAT and d4 installations are unchanged. Set these variables for the commands:
+
+  ```bash
+  export UV_CACHE_DIR=/tmp/uv-cache
+  export UV_PROJECT_ENVIRONMENT=/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv
+  export PYTHONHASHSEED=0
+  ```
+
+- Library: `uv run --no-sync python -m pytest -q` — **522 passed**, 710 warnings,
+  13.70 s. The 147 added focused checks cover both constructions/all backends,
+  independent Shannon-projected formulas, constants/compound constants,
+  omitted/empty/partial/absent projection, normalized duplicates/polarity,
+  formula-only and lemma-only elimination, compiler reuse, ID order across hash
+  seeds 0/1/99, malformed/foreign DAGs, invalid compilers/options, supplied sparse
+  abstractions, closure/initialization failures, and d4 diagnostics/cleanup.
+- Testbench, from the isolated worktree with
+  `export PYTHONPATH=/tmp/tddnnf-testbench-02-compilation/scripts`:
+  `uv run --no-sync python -c 'import tddnnf,tasks.compile; print(tddnnf.__file__,tasks.compile.__file__)'`
+  verified the intended library checkout and isolated task module.
+  `uv run --no-sync python -m pytest -q` — **184 passed**, 5 warnings, 3.96 s.
+- `uv run --no-sync ruff check tddnnf tests examples`, affected-file
+  `ruff format --check`, and `git diff --check` pass in the library; testbench
+  `ruff check scripts/tasks/compile.py tests/test_compile_task.py` and whitespace
+  checks pass. `basedpyright`/`pyright` are not installed in this environment;
+  static type checking was not run and dependencies were not changed to add it.
+- Ran `uv run --no-sync python examples/abstr.py`, `examples/tred.py`, and
+  `examples/text.py`; all complete across the three backends. Raw local test and
+  example logs are `/tmp/tddnnf-step2-*.log`.
+- Real sample: reused the frozen synthetic `ldd_phi_problems_b10_r10_d4_m20_s1234/02`
+  formula, lemmas, and queries. **12 compile tasks and 36 query tasks passed**
+  (all three backends, both constructions, all/plans projections, CT/CE/IM).
+  Query answers agree across backends within each construction/projection.
+  [Companion verification commands](https://github.com/masinag/tddnnf-testbench/blob/refactor/02-compilation/REFACTOR.md)
+  reproduce these checks; exact executed argv/stdout/stderr are in
+  `/tmp/tddnnf-step2-smoke/commands.json`. This is a semantic smoke check, not
+  a repeat of the full timing/memory benchmark matrix.
+- Verified original testbench status and SHA-256 hashes of all three pending
+  files against `baseline/preserved-checkout.json`: unchanged. Frozen step-1
+  evidence, dependencies, artifacts/persistence, and query implementations were
+  not migrated. The original native CUDD shutdown assertions/deprecation warnings
+  remain visible; documented SDD counting/query/persistence defects and native
+  numerical/buffering limits remain for later steps. Stable IDs and native SDD
+  settings may change DAG shape, memory, and performance.
+- Fresh independent read-only review of library `1e05bdb` and testbench
+  `16e0c27` found one SDD configuration defect: an unrecognized vtree name
+  terminated the interpreter inside native `Vtree` (exit 1), preventing Python
+  cleanup. Constructor validation now rejects unsupported names/types with
+  `ValueError`; the five native supported names are verified against installed
+  PySDD sources and exercised by tests. Six invalid-input regressions failed
+  before the fix and pass afterward. The full library suite above includes
+  these corrections. No other review findings were reported.
+- Follow-up read-only review at `e2f6ccc` confirmed the finding resolved with no
+  new findings, independently running all 11 added vtree checks (**11 passed**).
+  The full companion suite was rerun against this correction: **184 passed**,
+  5 warnings, 4.03 s. Markdown links/fences and embedded Python/bash syntax pass.
+- Paired verified runtime revisions: library
+  `e2f6cccff71032ca9cce88904f15dcdb7884da73`, testbench
+  `16e0c27776e6494f6445f5a4d6ae4a458cd0c9bd`. Subsequent commits only record
+  this review/revision evidence. Both PRs target `refactor/lean-core`; leave them
+  open without auto-merge and stop before step 3.
+
+#### PR #9 review updates
+
+- Applied the user's [normalizer review](https://github.com/masinag/tddnnf/pull/9#discussion_r4513168208)
+  and [environment-contract clarification](https://github.com/masinag/tddnnf/pull/9#discussion_r4513182122):
+  trust annotated FNode inputs and their environment membership. Removed the
+  repeated Python/sort checks and the separate whole-DAG ownership traversal;
+  `DagWalker` retains its existing memoization. Boolean input and environment
+  membership are documented caller preconditions in docstrings and design/API
+  documentation. This supersedes the original validation requirements and
+  related initial acceptance evidence above.
+- Applied the [SDD constructor review](https://github.com/masinag/tddnnf/pull/9#discussion_r4513208347):
+  removed Python type checks and documented argument types and the joint native
+  Boolean setting. Retained supported-vtree-name validation, since an unknown
+  name terminates the native process instead of raising a Python exception.
+- Removed both unused `abstr` compiler-fixture arguments per the
+  [compiler-test](https://github.com/masinag/tddnnf/pull/9#discussion_r4513272487)
+  and [engine-test](https://github.com/masinag/tddnnf/pull/9#discussion_r4513276611)
+  comments. Removed 22 obsolete runtime-input-type/environment rejection cases;
+  initialization-failure cleanup is still checked using an invalid projection
+  value, without violating the annotated input types.
+- With the same environment and `uv run --no-sync` commands above, the library
+  suite passes **500 tests**, 697 existing native/deprecation warnings, 12.51 s;
+  the isolated companion suite passes **184 tests**, 5 warnings, 3.68 s.
+  Library lint, affected formatting,
+  and whitespace checks pass. No testbench source changes are required.
+- Fresh read-only review at `c7053c2` found no actionable issues and independently
+  passed all **135** normalization, compilation-context, and pipeline tests.
+  Paired feedback-check revisions: library
+  `c7053c2cad2415a99c2549195702138b97a64633`, unchanged companion
+  `97e8aa5b466c05111fb6c6dce636a61a0dda3b68`. Subsequent library changes only
+  record review evidence. Full performance benchmarks and unavailable static
+  type checks were not repeated; inputs violating the documented type/environment
+  preconditions are intentionally outside the supported contract.
+
+## Remove preliminary testbench normalization
+
+- Compilation now selects `plans` from original formula atoms and includes original
+  query atoms before creating one `TheoryCompilation`. Formula/projection counts
+  come from that context; lemma/query counts use its normalizer while open.
+- The library discards valid projection atoms that normalize to constants,
+  including negated atoms. Explicit constants and compound entries remain invalid.
+  A code comment explains why constant atoms add no projection dimension.
+- Regression checks cover both constructions/all three backends without assigning
+  abstraction IDs to discarded atoms; normalized duplicate counts, all CLI modes,
+  context cleanup, and original-variable selection after cancellation are covered.
+- Using the existing testbench environment and isolated sources: library **516
+  tests pass**, testbench **191 tests pass**. Existing MathSAT deprecation and CUDD
+  shutdown warnings remain. Affected Ruff lint/format and whitespace checks pass.
+- Small synthetic smoke: **12 compilations and 36 CT/CE/IM query tasks pass**;
+  query answers agree across backends within each construction/projection.
+  Exact commands and logs: `/tmp/tddnnf-no-preliminary-normalization-smoke/commands.json`.
+  Original testbench pending files/status still match `baseline/preserved-checkout.json`.
+- No timer changes or full performance rerun. `plans` selection intentionally can
+  differ when normalization cancels original variables. Both PRs stay open.

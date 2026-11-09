@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Self
 
 import pysmt.operators as op
-from pysdd.sdd import SddManager, SddNode
+from pysdd.sdd import SddManager, SddNode, Vtree
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 from pysmt.typing import BOOL
@@ -169,28 +169,46 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
     through the provided :class:`Abstractor`.
     """
 
-    def __init__(
-        self,
-        abstractor: Abstractor,
-        vtree_type: str = "balanced",
-        computation_logger: dict[str, object] | None = None,
-    ) -> None:
-        self._abstractor: Abstractor = abstractor
-        self._vtree_type: str = vtree_type
-        self._stats = StatsCollector(computation_logger)
+    def __init__(self, vtree_type: str = "balanced", auto_gc_and_minimize: bool = True) -> None:
+        """Configure the native vtree and joint automatic GC/minimization setting.
 
-    def compile(self, formula: FNode, project_on: list[FNode] | None = None) -> SddCompiledTarget:
-        with self._stats.track_time("compile_time"):
+        Args:
+            vtree_type: One of "right", "left", "vertical", "balanced", "random".
+            auto_gc_and_minimize: Boolean enabling both native automatic garbage
+                collection and minimization (default True). Types are trusted
+                as annotated.
+
+        Raises:
+            ValueError: If the vtree name is unsupported by the native library.
+        """
+        if vtree_type not in ("right", "left", "vertical", "balanced", "random"):
+            raise ValueError(f"Unsupported vtree_type: {vtree_type!r}")
+        self._vtree_type = vtree_type
+        self._auto_gc_and_minimize = auto_gc_and_minimize
+
+    def compile(
+        self,
+        formula: FNode,
+        abstractor: Abstractor,
+        *,
+        project_on: list[FNode] | None = None,
+        computation_logger: dict[str, object] | None = None,
+    ) -> SddCompiledTarget:
+        stats = StatsCollector(computation_logger)
+        with stats.track_time("compile_time"):
             atoms = set(formula.get_atoms())
             if project_on is not None:
                 atoms.update(project_on)
             atoms = list(atoms)
-            for atom in atoms:
-                self._abstractor.get_id(atom)
-            var_count = max(self._abstractor.max_var, 1)
-            mgr = SddManager(var_count, self._vtree_type)
-            mgr.auto_gc_and_minimize_on()
-            walker = SddWalker(mgr, self._abstractor)
+            assert all(atom in abstractor for atom in atoms), "Abstraction must be prepared before compilation"
+            var_count = max(abstractor.max_var, 1)
+            vtree = Vtree(var_count=var_count, vtree_type=self._vtree_type)
+            mgr = SddManager.from_vtree(vtree)
+            if self._auto_gc_and_minimize:
+                mgr.auto_gc_and_minimize_on()
+            else:
+                mgr.auto_gc_and_minimize_off()
+            walker = SddWalker(mgr, abstractor)
             root = walker.translate(formula)
             n_proj_vars: int
             if project_on is not None:
@@ -198,13 +216,13 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
                 exists_map = array("i", [0]) * (mgr.var_count() + 1)
                 for atom in atoms:
                     if atom not in project_set:
-                        vid = self._abstractor.get_id(atom)
+                        vid = abstractor.get_id(atom)
                         exists_map[vid] = 1
-                with self._stats.track_time("forget_time"):
+                with stats.track_time("forget_time"):
                     root = mgr.exists_multiple(exists_map, root)
                 n_proj_vars = len(project_set)
             else:
                 n_proj_vars = len(atoms)
-            self._stats.log("n_atoms", len(atoms))
-            self._stats.log("n_proj_vars", n_proj_vars)
+            stats.log("n_atoms", len(atoms))
+            stats.log("n_proj_vars", n_proj_vars)
             return SddCompiledTarget(root, mgr)

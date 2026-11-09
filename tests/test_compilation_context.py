@@ -4,7 +4,7 @@ import pytest
 from pysmt.formula import FormulaManager
 from pysmt.typing import BOOL, INT
 
-from tddnnf import CompilationContext, QueryContext
+from tddnnf import QueryContext, TheoryCompilation
 from tddnnf.builders.extended import TExtendedBuilder
 from tddnnf.builders.reduced import TReducedBuilder
 from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
@@ -19,19 +19,19 @@ def test_context_compilation_matches_manual_builder(mgr: FormulaManager, strateg
     p = mgr.Symbol(f"compilation_context_{strategy}_p", BOOL)
     raw_atom = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
     raw_lemma = mgr.Or(mgr.Not(p), raw_atom)
-    context = CompilationContext(p, project_on=[p, raw_atom], env=mgr.env)
+    context = TheoryCompilation(p, project_on=[p, raw_atom], env=mgr.env)
     normalized_lemma = context.normalize(raw_lemma)
 
     if strategy == "treduced":
-        target = context.compile_treduced(SddCompiler, [raw_lemma])
+        target = context.compile_treduced(SddCompiler(), [raw_lemma])
         abstractor = Abstractor()
-        manual = TReducedBuilder(SddCompiler(abstractor), env=mgr.env).build(
+        manual = TReducedBuilder(SddCompiler(), env=mgr.env).build(
             context.phi, [normalized_lemma], abstractor, project_on=context.project_on
         )
     else:
-        target = context.compile_textended(SddCompiler, [raw_lemma])
+        target = context.compile_textended(SddCompiler(), [raw_lemma])
         abstractor = Abstractor()
-        manual = TExtendedBuilder(SddCompiler(abstractor), env=mgr.env).build(
+        manual = TExtendedBuilder(SddCompiler(), env=mgr.env).build(
             context.phi, [normalized_lemma], abstractor, project_on=context.project_on
         )
 
@@ -55,8 +55,8 @@ def test_fresh_query_context_handles_direct_and_loaded_targets(
     p = mgr.Symbol("compilation_context_roundtrip_p", BOOL)
     atom = mgr.GE(x, mgr.Int(2))
     equivalent_atom = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
-    compilation = CompilationContext(mgr.And(p, atom), env=mgr.env)
-    target = compilation.compile_treduced(SddCompiler, [])
+    compilation = TheoryCompilation(mgr.And(p, atom), env=mgr.env)
+    target = compilation.compile_treduced(SddCompiler(), [])
 
     target.save(tmp_path)
     loaded = TheoryCompiledTarget.load(tmp_path, SddCompiledTarget, env=mgr.env)
@@ -73,13 +73,13 @@ def test_context_deduplicates_equivalent_projection_atoms(mgr: FormulaManager) -
     atom = mgr.GE(x, mgr.Int(2))
     equivalent_atom = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
 
-    context = CompilationContext(mgr.TRUE(), project_on=[atom, p, equivalent_atom], env=mgr.env)
+    context = TheoryCompilation(mgr.TRUE(), project_on=[atom, p, equivalent_atom], env=mgr.env)
     canonical_atom = context.normalize(atom)
 
     assert context.normalize(equivalent_atom) == canonical_atom
     assert context.project_on == [canonical_atom, p]
 
-    target = context.compile_treduced(SddCompiler, [])
+    target = context.compile_treduced(SddCompiler(), [])
 
     assert target.projection_atoms == [canonical_atom, p]
     assert SddEngine(target).count_truth_assignments() == 4

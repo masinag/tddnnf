@@ -16,13 +16,13 @@ class BaseTestCompiler:
     target_cls: type[PropCompiledTarget]
 
     @pytest.fixture
-    def compiler(self, abstr: Abstractor) -> PropCompiler:
-        return self.compiler_cls(abstr)
+    def compiler(self) -> PropCompiler:
+        return self.compiler_cls()
 
     def test_bank_compilation_equivalence(
         self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, bank_case: SolverGroundTruth
     ) -> None:
-        target = compiler.compile(bank_case.original_formula, project_on=bank_case.project_on)
+        target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
         compiled_pysmt = target.to_pysmt(abstr, mgr)
 
         not_equivalent = mgr.Not(mgr.Iff(compiled_pysmt, bank_case.expected_formula))
@@ -33,7 +33,7 @@ class BaseTestCompiler:
     def test_save_load_roundtrip_equivalence(
         self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, bank_case: SolverGroundTruth
     ) -> None:
-        target = compiler.compile(bank_case.original_formula, project_on=bank_case.project_on)
+        target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
         original_pysmt = target.to_pysmt(abstr, mgr)
 
         with tempfile.TemporaryDirectory() as tmpdir:

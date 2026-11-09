@@ -16,6 +16,7 @@ class Abstractor:
     def __init__(self, abstraction: dict[int, FNode] | None = None) -> None:
         self._id_to_atom: dict[int, FNode] = abstraction if abstraction is not None else {}
         self._atom_to_id: dict[FNode, int] = {atom: idx for idx, atom in self._id_to_atom.items()}
+        self._next_id = self.max_var + 1
 
     @property
     def var_count(self) -> int:
@@ -32,7 +33,8 @@ class Abstractor:
         assert is_atom(smt_atom)
         idx = self._atom_to_id.get(smt_atom)
         if idx is None:
-            idx = len(self._atom_to_id) + 1
+            idx = self._next_id
+            self._next_id += 1
             self._atom_to_id[smt_atom] = idx
             self._id_to_atom[idx] = smt_atom
         return idx

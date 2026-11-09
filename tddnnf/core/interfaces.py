@@ -44,9 +44,14 @@ T_Target_co = TypeVar("T_Target_co", bound=PropCompiledTarget, covariant=True)
 class PropCompiler(Protocol[T_Target_co]):
     """Compiles a propositional formula into a PropCompiledTarget."""
 
-    def __init__(self, abstractor: Abstractor, computation_logger: dict[str, object] | None = None) -> None: ...
-
-    def compile(self, formula: FNode, project_on: list[FNode] | None = None) -> T_Target_co: ...
+    def compile(
+        self,
+        formula: FNode,
+        abstractor: Abstractor,
+        *,
+        project_on: list[FNode] | None = None,
+        computation_logger: dict[str, object] | None = None,
+    ) -> T_Target_co: ...
 
 
 @runtime_checkable

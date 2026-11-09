@@ -143,6 +143,7 @@ class BCS12Walker(DagWalker):
         return self._gate_lines
 
     def _map(self, formula: FNode) -> str:
+        assert formula in self._abs, "Abstraction must be prepared"
         return f"v{self._abs.get_id(formula)}"
 
     @staticmethod
@@ -150,9 +151,7 @@ class BCS12Walker(DagWalker):
         return s.replace("--", "")
 
     def walk_symbol(self, formula: FNode, args: tuple, **kwargs: object) -> str | None:
-        if not formula.is_symbol():
-            return None
-        if formula not in self._abs:
+        if not formula.symbol_type().is_bool_type():
             return None
         return self._map(formula)
 
@@ -174,8 +173,6 @@ class BCS12Walker(DagWalker):
 
     @handles(*op.RELATIONS)
     def walk_theory_atom(self, formula: FNode, args: tuple, **kwargs: object) -> str | None:
-        if formula not in self._abs:
-            return None
         return self._map(formula)
 
     def walk_and(self, formula: FNode, args: tuple, **kwargs: object) -> str:
@@ -242,31 +239,15 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
     by the d4 binary. The resulting NNF is packaged into a D4CompiledTarget.
     """
 
-    def __init__(self, abstractor: Abstractor, computation_logger: dict[str, object] | None = None) -> None:
-        self._abstractor: Abstractor = abstractor
-        self._stats = StatsCollector(computation_logger)
-
-    def _register_atoms(self, atoms: list[FNode], project_on: list[FNode] | None) -> set[FNode]:
-        proj_set: set[FNode]
-        if project_on is not None:
-            proj_set = set(project_on)
-        else:
-            proj_set = set(atoms)
-        all_atoms = list(atoms)
-        if project_on is not None:
-            all_atoms.extend(a for a in project_on if a not in atoms)
-        for atom in all_atoms:
-            self._abstractor.get_id(atom)
-        return proj_set
-
     def _write_circuit(
         self,
         formula: FNode,
+        abstractor: Abstractor,
         all_atom_ids: list[int],
         projected_ids: set[int],
         path: Path,
     ) -> None:
-        walker = BCS12Walker(self._abstractor)
+        walker = BCS12Walker(abstractor)
         root_gate = walker.translate(formula)
 
         with open(path, "w") as f:
@@ -299,57 +280,66 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
         if result.returncode != 0:
             raise RuntimeError(f"d4 compilation failed (exit {result.returncode}):\n{result.stderr.decode()}")
 
-    def compile(self, formula: FNode, project_on: list[FNode] | None = None) -> D4CompiledTarget:
-        with self._stats.track_time("compile_time"):
+    def compile(
+        self,
+        formula: FNode,
+        abstractor: Abstractor,
+        *,
+        project_on: list[FNode] | None = None,
+        computation_logger: dict[str, object] | None = None,
+    ) -> D4CompiledTarget:
+        stats = StatsCollector(computation_logger)
+        with stats.track_time("compile_time"):
             atoms = list(formula.get_atoms())
             if not atoms and (project_on is None or len(project_on) == 0):
                 if formula.is_true():
-                    self._stats.log("n_atoms", 0)
-                    self._stats.log("n_proj_vars", 0)
+                    stats.log("n_atoms", 0)
+                    stats.log("n_proj_vars", 0)
                     return D4CompiledTarget("t 1\n", 0)
                 if formula.is_false():
-                    self._stats.log("n_atoms", 0)
-                    self._stats.log("n_proj_vars", 0)
+                    stats.log("n_atoms", 0)
+                    stats.log("n_proj_vars", 0)
                     return D4CompiledTarget("f 1\n", 0)
 
-            with self._stats.track_time("register_atoms_time"):
-                proj_set = self._register_atoms(atoms, project_on)
+            with stats.track_time("register_atoms_time"):
+                proj_set = set(atoms if project_on is None else project_on)
+                assert all(a in abstractor for a in atoms + list(proj_set)), "Abstraction must be prepared"
 
             all_atoms = set(atoms)
             if project_on is not None:
                 all_atoms.update(project_on)
-            all_atom_ids = sorted({self._abstractor.get_id(a) for a in all_atoms})
+            all_atom_ids = sorted({abstractor.get_id(a) for a in all_atoms})
 
-            projected_ids = {self._abstractor.get_id(a) for a in proj_set}
+            projected_ids = {abstractor.get_id(a) for a in proj_set}
 
             with tempfile.TemporaryDirectory(prefix="d4_compile_") as tmpdir:
                 tmp = Path(tmpdir)
                 circuit_path = tmp / "circuit.bc"
                 out_path = tmp / "output.nnf"
 
-                with self._stats.track_time("write_circuit_time"):
-                    self._write_circuit(formula, all_atom_ids, projected_ids, circuit_path)
-                with self._stats.track_time("run_d4_time"):
+                with stats.track_time("write_circuit_time"):
+                    self._write_circuit(formula, abstractor, all_atom_ids, projected_ids, circuit_path)
+                with stats.track_time("run_d4_time"):
                     self._run_d4(circuit_path, out_path)
 
                 if len(projected_ids) == 0:
                     nnf_raw = out_path.read_text()
                     if nnf_raw.startswith("f"):
-                        self._stats.log("n_atoms", len(all_atoms))
-                        self._stats.log("n_proj_vars", 0)
+                        stats.log("n_atoms", len(all_atoms))
+                        stats.log("n_proj_vars", 0)
                         return D4CompiledTarget("f 1\n", 0, remapping={})
-                    self._stats.log("n_atoms", len(all_atoms))
-                    self._stats.log("n_proj_vars", 0)
+                    stats.log("n_atoms", len(all_atoms))
+                    stats.log("n_proj_vars", 0)
                     return D4CompiledTarget("t 1\n", 0, remapping={})
 
                 nnf_text = out_path.read_text()
                 if nnf_text.startswith("f"):
-                    self._stats.log("n_atoms", len(all_atoms))
-                    self._stats.log("n_proj_vars", len(projected_ids))
+                    stats.log("n_atoms", len(all_atoms))
+                    stats.log("n_proj_vars", len(projected_ids))
                     return D4CompiledTarget("f 1\n", 0, remapping={})
 
             var_count = len(projected_ids)
             remapping = {aid: i + 1 for i, aid in enumerate(sorted(projected_ids))}
-            self._stats.log("n_atoms", len(all_atoms))
-            self._stats.log("n_proj_vars", len(projected_ids))
+            stats.log("n_atoms", len(all_atoms))
+            stats.log("n_proj_vars", len(projected_ids))
             return D4CompiledTarget(nnf_text, var_count, remapping=remapping)

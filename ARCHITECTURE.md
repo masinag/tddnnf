@@ -28,13 +28,13 @@ selected for projection and available to queries.
 
 ## Compilation flow
 
-`CompilationContext` is the public entry point for compilation. It owns the
+`TheoryCompilation` is the public entry point for compilation. It owns the
 PySMT environment and a `NormalizerWalker`, normalizes the input formula at
 construction time, and builds the projection vocabulary.
 
 ```python
-context = CompilationContext(phi, project_on=atoms)
-target = context.compile_treduced(D4Compiler, lemmas)
+context = TheoryCompilation(phi, project_on=atoms)
+target = context.compile_treduced(D4Compiler(), lemmas)
 ```
 
 When `project_on` is omitted, the projection consists of the atoms in the
@@ -42,20 +42,28 @@ normalized input formula. When supplied, every projection atom is normalized,
 a top-level negation is removed so the vocabulary contains positive atoms, and
 duplicates are removed while preserving their first occurrence.
 
-Both `compile_treduced()` and `compile_textended()` then:
+Both constructions use one private pipeline to normalize lemmas,
+combine them with the formula, allocate a fresh abstraction, compile, and log
+counts and durations. Projection atoms receive IDs first; remaining atoms follow
+SMT-LIB serialization order without DAG aliases. Omitted projection sorts the
+normalized formula atoms; explicit empty projection remains empty. Requested
+atoms absent from the formula and lemmas are registered as unconstrained atoms.
 
-- normalize every theory lemma in the same environment as the input formula;
-- create a fresh `Abstractor`;
-- construct the requested compiler with that abstractor;
-- pass the normalized formula, lemmas, abstractor, and projection vocabulary to
-  the corresponding builder; and
-- return a `TheoryCompiledTarget` containing the backend artifact, abstraction,
-  and exact projection atoms.
-
-The compiler receives PySMT formulas directly. Atom abstraction happens inside
-each backend adapter, allowing all backends to share the same builder API.
+Compilers are configured instances. Their `compile` methods receive the PySMT
+formula, prepared abstraction, projection, and logger for each call; native
+translators never allocate IDs. The old builders forward to this pipeline while
+preserving caller-supplied abstractions. `CompilationContext` remains an alias.
+Compilation sessions and normalizers support `with` and idempotent `close()`,
+including cleanup on exceptions and initialization failure. Closed sessions
+reject operations. Query-session lifecycle migration remains a later step.
 
 ## Normalization and projection
+
+Callers must respect the annotated Python types and provide Boolean formulas
+from the selected environment, including every descendant. The normalizer
+trusts these preconditions and uses `DagWalker` memoization without a separate
+validation traversal. SDD configuration types are likewise caller preconditions;
+unsupported vtree names still raise `ValueError` before entering native code.
 
 The architecture requires theory atoms to be in some canonical forms.
 Compilation and querying must map equivalent theory atoms
@@ -75,7 +83,7 @@ provided the same deterministic, semantics-preserving canonicalization.
 
 Normalization occurs at both boundaries:
 
-- `CompilationContext` normalizes the input formula, projection atoms, and
+- `TheoryCompilation` normalizes the input formula, projection atoms, and
   lemmas before compilation.
 - `QueryContext` normalizes query literals, clauses, and cubes before handing
   them to a backend query engine.
@@ -168,9 +176,10 @@ reconstructs a PySMT formula.
 ### SDD: PySDD
 
 `SddCompiler` uses `SddWalker` to build an SDD through recursive Boolean apply.
-It creates a balanced vtree by default, enables automatic garbage collection
-and minimization, and existentially quantifies non-projection variables after
-translation.
+`SddCompiler(vtree_type="balanced", auto_gc_and_minimize=True)` explicitly
+constructs the requested native vtree. The Boolean option jointly enables or
+disables native automatic garbage collection and minimization; both are enabled
+by default. It existentially quantifies non-projection variables after translation.
 
 `SddCompiledTarget` retains the `SddNode` root and `SddManager`. It provides DAG
 statistics and reconstructs decision nodes as disjunctions of prime/sub
@@ -243,8 +252,8 @@ base class:
 
 - `PropCompiledTarget` requires `dag_size()`, `save()`, `load()`, and
   `to_pysmt()`;
-- `PropCompiler[T]` requires construction with an `Abstractor` and a
-  `compile(formula, project_on=None)` method; and
+- `PropCompiler[T]` requires a
+  `compile(formula, abstractor, *, project_on=None, computation_logger=None)` method; and
 - `QueryEngine[T]` defines the six query operations listed above.
 
 `DagSize` is the common immutable result for target size metrics, reporting
@@ -260,7 +269,7 @@ input circuit, and running the external compiler.
 
 ```text
 tddnnf/
-├── context.py                  # CompilationContext and QueryContext
+├── context.py                  # TheoryCompilation and QueryContext
 ├── core/
 │   ├── abstraction.py         # Abstractor mapping and serialization
 │   ├── containers.py          # TheoryCompiledTarget
