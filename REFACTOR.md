@@ -538,5 +538,14 @@ merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
   value, without violating the annotated input types.
 - With the same environment and `uv run --no-sync` commands above, the library
   suite passes **500 tests**, 697 existing native/deprecation warnings, 12.51 s;
-  the isolated companion suite also passes. Library lint, affected formatting,
+  the isolated companion suite passes **184 tests**, 5 warnings, 3.68 s.
+  Library lint, affected formatting,
   and whitespace checks pass. No testbench source changes are required.
+- Fresh read-only review at `c7053c2` found no actionable issues and independently
+  passed all **135** normalization, compilation-context, and pipeline tests.
+  Paired feedback-check revisions: library
+  `c7053c2cad2415a99c2549195702138b97a64633`, unchanged companion
+  `97e8aa5b466c05111fb6c6dce636a61a0dda3b68`. Subsequent library changes only
+  record review evidence. Full performance benchmarks and unavailable static
+  type checks were not repeated; inputs violating the documented type/environment
+  preconditions are intentionally outside the supported contract.
