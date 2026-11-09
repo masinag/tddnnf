@@ -319,7 +319,7 @@ Leave the PR open for renewed approval. Do not merge or start the next step.
 ## Completed checks
 
 Record evidence here as steps are implemented; consult GitHub for approvals and
-merges. Steps 1–7 have not started.
+merges. Step 1 establishes the baseline below; steps 2–7 have not started.
 
 ### Step 0 — `refactor/00-design`
 
@@ -343,3 +343,78 @@ merges. Steps 1–7 have not started.
 - Runtime tests and benchmarks were not run: this step changes documentation
   only. Step 1 will establish fresh results; no runtime correctness or performance
   claim is made here.
+
+### Step 1 — `refactor/01-baseline`
+
+- Verified design PR [#7](https://github.com/masinag/tddnnf/pull/7) was merged.
+  Created the library branch from fetched integration commit
+  `df8b22b7ff7adcd7ac795ab27514169ddcee6ecf` and the isolated testbench worktree
+  `/tmp/tddnnf-testbench-01-baseline` from
+  `6bb66fc06086cd902a32c8bd430942d2a86ec39e`. Existing testbench changes were
+  preserved; its branch, pending-file hashes, and status are recorded with the evidence.
+- Reused `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv` without
+  environment recreation or dependency synchronization. Explicit `PYTHONPATH`
+  selects the isolated testbench `scripts`; verified both module paths and the
+  editable local library import. Installed only missing MathSAT bindings and d4.
+- Versions: Python 3.12.15, PySMT 0.9.7.dev431, MathSAT 5.6.16
+  (`412f4b1ef83c`), dd 0.6.0 / CUDD 3.0.0, PySDD 1.0.6, ddnnife 0.10.0,
+  tlemma-enum 0.1.0 (`2eff0ae868939c9e885c9fb6ba5d503f8874acb3`), d4
+  `dda4511f218dd250e5973d7c27271f7228edc210`. The d4 installer encountered
+  CMake 4 policy incompatibility and missing Ninja; only temporary upstream
+  build scripts were adapted to Make and policy 3.5. No compiler logic changed.
+- Ran `uv run --no-sync python -m pytest -q` in each repository with
+  `UV_PROJECT_ENVIRONMENT` pointing to the reused environment and
+  `PYTHONHASHSEED=0`: **375 library tests passed** (554 warnings, 11.44 s),
+  **182 testbench tests passed** (5 warnings, 4.23 s). The pre-install library
+  failures are preserved as environment setup evidence, not behavioral failures.
+  CUDD shutdown reference assertions remain visible in the successful suite's warnings.
+- The fixed subset covers true/false, Boolean and integer-theory fixtures,
+  synthetic `ldd_phi_problems_b10_r10_d4_m20_s1234/02`, and planning
+  `h3/block-grouping/instances_simple/block-grouping-simple-2-1`. The testbench
+  freezes lemma/query inputs and all hashes. Each runs all three backends,
+  `treduced` and `textended-negation`, and `all`/`plans` projection. Extended
+  negation retains the existing harness semantics; its answers are not treated
+  as answers to the same function as T-reduced compilation.
+- The sequential recorder reuses existing compile/query task commands and the
+  harness resource guard. It records one warm-up and three measured runs,
+  fixed hash seed 0, 60-second task deadlines, and inherited 8 GiB address-space
+  limits. Original computation/query logs, wall times, peak RSS, native DAG
+  results/errors, artifact bytes/hashes, machine context, and replay commands
+  are preserved. GNU Time wraps the task deadline so timed-out tasks retain RSS.
+- Native-only reproductions separately show CUDD floating count precision,
+  PySDD global-count overflow, ddnnife buffered/u64-bounded enumeration, and
+  ddnnife's rejection of zero-feature constant files. The latter is exposed by
+  the current DAG adapter; constant queries are handled separately. No native
+  limit is repaired or hidden in Python.
+- Adapter reproductions show SDD contradictory assumptions returning true/zero,
+  and SDD persistence omitting the compiled vtree. A separate native diagnostic
+  loads the planning circuit in under a millisecond with its saved vtree;
+  a default vtree conflicts with 270 circuit literal positions. These defects
+  remain for steps 4 and 5; no production refactoring was performed.
+- Full commands, frozen sources, versions, raw records, compact summaries,
+  native probes, and one measured artifact per combination are in the
+  [testbench baseline evidence](https://github.com/masinag/tddnnf-testbench/blob/refactor/01-baseline/baseline/README.md).
+  Source revisions above identify the measured runtime; the paired PR heads add
+  documentation and baseline instrumentation/evidence only.
+- Stop after publishing the paired PRs. Step 2 requires user approval and merge
+  of both baseline PRs.
+- Completed **288 records**: 72 warm-ups and 216 measured runs. Across all
+  repeats, compilation succeeded 272 times and timed out 16 times. Each query
+  type completed 268 times and timed out on 4 SDD planning reloads. DAG checks
+  recorded 236 successes, 32 native zero-feature errors, 4 reload timeouts,
+  and 16 unavailable results after compilation timeouts. Answers and stage
+  outcomes were stable across repeats; failed/censored timings stay explicit.
+- Fresh independent read-only Standards/Spec reviews of committed baseline
+  instrumentation identified two reporting issues. Both were corrected and
+  reviewed again at testbench commit `f571856`: query statuses and observed
+  versus completed medians are explicit, and mixed outcomes cannot abort the
+  report. Two focused regression checks pass; no review findings remain.
+- Verified all frozen input hashes and every archived measured payload against
+  recorded hashes, all 288 matrix records, documentation links/shell syntax,
+  and unchanged original testbench pending files/status. Production source diffs
+  against the measured revisions are empty in both repositories.
+- Final testbench validation, including both added regression checks: **184
+  passed**, 5 warnings, 3.56 s. The matrix additionally exposes an SDD adapter
+  bookkeeping defect: true over an empty active vocabulary counts as 2 instead
+  of 1 because the dummy native variable is not removed. This remains documented
+  separately from native count overflow.
