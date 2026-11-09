@@ -1,0 +1,273 @@
+# Lean core design
+
+**Status: agreed future design, implemented through the steps in
+[REFACTOR.md](REFACTOR.md).** This is not a description of the current API.
+[ARCHITECTURE.md](ARCHITECTURE.md) and [README.md](README.md) describe the
+implementation until the public migration lands. Follow-up work is in
+[TODO.md](TODO.md).
+
+## Public interface and compilation
+
+The public concepts are `TheoryCompilation`, one `TheoryCompiledTarget`,
+configured compiler instances, and configured reasoner instances. The intended
+workflow is:
+
+```python
+with TheoryCompilation(phi, project_on=atoms, env=env) as compilation:
+    enumerator.check_all_sat(compilation.phi, atoms=compilation.project_on)
+    lemmas = enumerator.get_theory_lemmas()
+    target = compilation.compile_treduced(D4Compiler(), lemmas)
+
+with target.queries(DdnnifeReasoner()) as queries:
+    satisfiable = queries.is_satisfiable()
+    count = queries.count_truth_assignments()
+```
+
+Theory-lemma enumeration remains external. T-reduced compilation uses lemmas
+enumerated over normalized `phi`; T-extended compilation uses lemmas enumerated
+over `Not(compilation.phi)`, with the same projection vocabulary, then calls
+`compile_textended(compiler, lemmas)`.
+
+The methods differ only in the formula they construct:
+
+- T-reduced: `phi AND AND(lemmas)`.
+- T-extended: `phi OR OR(NOT(lemma) for lemma in lemmas)`.
+
+Both use one private pipeline for normalization, validation, abstraction,
+projection, compilation, target construction, and computation logging.
+Compilers receive the PySMT DAG and prepared abstraction. Retain separate
+native translators where their APIs differ; a custom Boolean AST or generic
+visitor framework is unnecessary.
+
+Pass instances such as `D4Compiler()`, `SddCompiler()`, and `BddCompiler()`.
+Backend options belong in their constructors. Passing a string or a compiler
+class is an API error. Reasoner selection follows the same rule, with
+`DdnnifeReasoner()`, `SddReasoner()`, and `CuddReasoner()`.
+
+`D4Compiler` retains the d4 CLI, BC-S1.2 circuit translation, projected
+compilation, subprocess error handling, temporary-file cleanup, and computation
+logging. Replacing it with a Python binding is deferred until that binding
+provides projected circuit compilation. Preserve the effective PySDD and CUDD
+translation, projection, minimization, and reordering settings unless a focused
+acceptance check exposes an adapter defect.
+
+## Atoms, environment, and stable IDs
+
+`TheoryCompilation(phi, project_on=None, env=None)` selects the supplied PySMT
+environment or the active environment when omitted. Stored formula nodes must
+belong to that environment. Normalize the formula, supplied projection entries,
+and later the lemmas there; reject incompatible input rather than mixing nodes
+from different formula managers.
+
+Projection entries normalize to positive Boolean symbols or theory atoms;
+strip a normalized top-level negation and reject arbitrary Boolean formulas.
+Deduplicate after normalization, retaining explicit first-occurrence order.
+When projection is omitted, sort normalized formula atoms by stable canonical
+serialization. An explicit empty projection remains empty.
+
+**Projection atoms may be absent from both the formula and the lemmas.** Register
+them anyway: they are unconstrained variables in the represented propositional
+function. The caller supplies theory lemmas appropriate to the requested
+vocabulary; compilation does not run an additional enumerator.
+
+Allocate one abstraction per compilation, in this order:
+
+1. All active projection atoms, in their declared order.
+2. Remaining atoms of the combined normalized formula, in stable serialization
+   order.
+
+IDs must be independent of set iteration, hash randomization, and backend
+traversal. Existentially eliminate every non-projection atom and encoding
+auxiliary. Keep abstraction IDs distinct from native variable IDs, NNF IDs,
+and OBDD levels; explicit mappings connect them. A backend may renumber or
+reorder without changing the public vocabulary. Migrated artifacts retain
+their existing IDs instead of applying the new allocation order.
+
+## Target and resource ownership
+
+`TheoryCompiledTarget` binds a private representation, abstraction, ordered
+active vocabulary (`projection_atoms`), and owning PySMT environment. It is the
+only public target type. Backend-specific public target classes are removed
+at the final migration.
+
+| Owner | Owned state and responsibilities |
+| --- | --- |
+| Compilation session | Normalized inputs, one pipeline, normalizer and its solver resources |
+| Public target | Bound environment, stable abstraction, immutable ordered active vocabulary, private representation |
+| Private d-DNNF representation | NNF text, variable count, abstraction-to-NNF remapping, codec metadata |
+| Private SDD representation | Root references, manager, final vtree, codec metadata |
+| Private OBDD representation | Root references, manager, final variable order, codec metadata |
+| Query session | Independent normalizer, transient atom index, reasoner resources and temporary files |
+
+Native roots retain their managers for as long as needed. A target survives
+closure of the compilation session; closing one query session leaves the target
+and other sessions usable. Targets own no normalizers, live solvers, or
+normalization configuration. Private representation objects encapsulate native
+ownership and codecs without becoming another public target hierarchy.
+
+Immutability is semantic: the represented Boolean function, abstraction
+correspondence, environment, and ordered active vocabulary remain unchanged.
+Native reordering or minimization is allowed, so node identity, shape, and DAG
+size need not stay fixed. Do not expose mutable vocabulary or mapping state
+that lets callers violate these invariants.
+
+Compilation and query sessions support `with` and explicit, idempotent
+`close()`. Release owned resources on normal exit, exceptions, and partial
+initialization failure; reject operations on closed sessions. Enumeration
+iterators depend on their open session. Finalizers are only a fallback.
+
+Retain `to_pysmt()` reconstruction into the target's environment, `DagSize`
+metrics (reachable vertices and child-reference edges), and computation
+logging through the existing `StatsCollector` conventions. Reconstruction
+restores the represented propositional function over the stored theory atoms;
+it need not recover the original source syntax. Backend metrics describe their
+native DAGs and are not promises of identical sizes across representations.
+
+## Query sessions and backend authority
+
+`target.queries(reasoner)` validates representation compatibility and returns a
+shared session that exposes all six unary queries:
+
+| Operation | Meaning over the active vocabulary |
+| --- | --- |
+| `is_satisfiable(assumptions=None)` | Some model satisfies the target and assumptions |
+| `count_truth_assignments(assumptions=None)` | Count total assignments satisfying the target and assumptions |
+| `is_valid()` | Every assignment satisfies the target |
+| `entails_clause(clause)` | Every target model satisfies the clause |
+| `is_implicant(cube)` | Every assignment satisfying the cube satisfies the target |
+| `enumerate_truth_assignments()` | Enumerate satisfying total assignments keyed by exact stored atoms |
+
+The session normalizes the stored vocabulary with its own normalizer and builds
+a transient canonical atom index, preserving each stored atom's polarity.
+Normalize incoming literals, clauses, and cubes with that same normalizer and
+align them to the exact stored atoms before encoding native literals. Reject
+ambiguous canonical matches, malformed inputs, and atoms outside the active
+scope. An inactive atom is not queryable merely because it has an abstraction
+ID. Normalization accepts equivalent syntax when it produces the same canonical
+atom; it is not a general SMT equivalence check.
+
+Deduplicate assumptions after alignment. Contradictory assumptions return
+`False` for satisfiability and `0` for counting, without asking the backend.
+Handle contradiction introduced by normalization as well as explicit `a` and
+`Not(a)`. A tautological clause is entailed; a contradictory cube is an
+implicant. Empty clause and cube cases follow their usual Boolean semantics.
+Assumptions restrict a query; they do not change the target or its vocabulary.
+
+Counting and enumeration include every active atom, even when absent from the
+DAG. Projection bookkeeping translates IDs, removes irrelevant native counting
+dimensions, accounts for unconstrained active atoms, and expands partial native
+models into total assignments in projection order. Fixed assumptions must not
+be counted as free dimensions. Keep this bookkeeping distinct from evaluating
+the represented function.
+
+The selected backend supplies the answers. Share input handling and elementary
+query derivations in the session, but use native primitives for reasoning. Do
+not implement a Python model counter, silently substitute another backend, or
+repair native numerical limits with a second reasoning implementation.
+Precision, overflow, and enumeration buffering limits remain visible and are
+documented with the installed versions and reproductions established in step 1.
+Derived answers inherit the limitations of the native primitive they use.
+Unsupported representation/reasoner combinations fail explicitly.
+
+## Explicit d-DNNF conversion
+
+`target.to_ddnnf()` returns the same object for an existing d-DNNF target. For
+SDD and OBDD targets it converts the native DAG to NNF without compiling a
+reconstructed PySMT formula or invoking d4.
+
+Traverse with memoization so shared subgraphs stay shared. OBDD decisions use
+their Shannon expansion; SDD decisions use the disjunction of prime/sub pairs.
+Preserve constants, literal signs, complemented roots and edges, decomposability,
+and determinism. Memoization must distinguish polarity where the native API
+uses complemented references. Conversion operates on the reachable DAG without
+enumerating satisfying assignments or expanding it into a tree.
+
+The result is another `TheoryCompiledTarget` with an owned NNF representation.
+Preserve its abstraction correspondence, owning environment, and exact ordered
+active vocabulary, including atoms absent from the DAG. Record any new NNF
+remapping and a codec that the d-DNNF reasoner and persistence layer understand.
+The result must remain usable independently of source-session lifetimes. This
+conversion is explicit; query selection never converts a target implicitly.
+
+## Persistence and migration
+
+Use `target.save(path)` and `TheoryCompiledTarget.load(path, env=...)`. Loading
+infers the representation from versioned metadata; callers supply no target
+subclass, compiler, or reasoner. Keep the existing artifact layout:
+
+- `abstraction.json`: SMT-LIB atom serialization and ordered active IDs.
+- `metadata.json`: schema version, representation family, codec, declared
+  payload files, and representation metadata.
+- `circuit.nnf`, or `circuit.sdd` with `circuit.vtree`, or `circuit.dddmp`.
+
+Record d-DNNF variable counts and remapping, the actual saved SDD vtree, and the
+complete OBDD variable-to-level order after reordering. An NNF codec identifies
+its text dialect; d4 output and converted DAGs must not be confused. Metadata
+describes artifacts, not compiler/reasoner configuration or a normalizer.
+
+Parse atoms into the requested environment, or the active environment by
+default. Validate schema and codec, IDs, active vocabulary, support, mappings,
+and native structural metadata before returning a target. Unknown versions,
+corrupt payloads, and **missing declared files are errors**, including a missing
+declared SDD vtree. Load saved vtrees and OBDD orders before importing roots.
+
+Only an explicitly identified legacy SDD artifact that never saved a vtree may
+use the balanced-vtree fallback. If migration produces versioned metadata for
+one, it must record that legacy exception explicitly instead of declaring a
+nonexistent file. Never silently apply the fallback to a damaged current
+artifact. An unsaved original vtree cannot be recovered: validate loadability
+and report this limitation without claiming recovery of its original shape or
+guaranteeing semantics for an unknown incompatible original vtree.
+
+Write complete artifacts through a temporary sibling destination and publish
+only after validation. Refuse accidental source or destination overwrites;
+failure leaves the source and any existing valid destination intact. Clean up
+temporary writes deterministically.
+
+The legacy migration command belongs in `tddnnf-testbench`. Support individual
+artifacts, recursive discovery, and dry runs. Preserve abstraction IDs,
+projection order, logs, and native payload bytes; upgrade metadata without
+theory or propositional recompilation. Retain an existing SDD vtree, identify
+the legacy missing-vtree case, and recover OBDD order from DDDMP. Validate
+remapping and codec round trips, and report failures per artifact. Update
+library and benchmark consumers through linked companion PRs in step 5 (or
+earlier when an interface change requires it).
+
+## Reserved operation semantics
+
+Transformations and relational queries are follow-up work, not acceptance
+requirements for this refactor. Preserve these contracts for that work:
+
+- Operations have propositional semantics over the compiled abstraction. They
+  do not enumerate fresh theory lemmas or re-establish a different theory
+  compilation construction.
+- `condition(mu)` restricts the function and removes assigned atoms from the
+  active vocabulary; `condition_and_conjoin(mu)` also retains the evidence and
+  the original vocabulary. `forget(atoms)` existentially removes those atoms;
+  `negate()` preserves vocabulary.
+- Keep `simplify()` explicit and separate from conditioning. Its future d-DNNF
+  implementation preserves semantics and vocabulary and is idempotent; do not
+  hide it inside another transformation.
+- Future `conjoin`, `disjoin`, `entails`, and `is_equivalent` require compatible
+  representation structures, identical ordered active vocabularies, and
+  initially the same PySMT environment. Match atoms and align native IDs
+  internally; equal integer IDs alone do not establish correspondence.
+- Different native managers are allowed when a compatible import is possible.
+  Validate SDD vtrees and OBDD orders after atom alignment. Incompatibility is
+  an error, not permission for implicit recompilation or vocabulary changes.
+- Transformations return new targets and preserve operand semantics; unsupported
+  native operations fail explicitly. Detailed support and contradictory-evidence
+  behavior must be settled in the separate transformation work.
+
+## Scope and verification
+
+Retain existing runtime dependencies, MathSAT normalization, reconstruction,
+DAG metrics, and computation logging. Additional reasoners and a d4 Python
+binding are deferred. No public registry, generic capability framework, or
+new abstraction hierarchy is required.
+
+Use small pytest functions, explicit backend parameterization, useful existing
+helpers, and focused native tests. Test tddnnf's normalization, mapping,
+ownership, projection, and persistence obligations. Record upstream precision
+and buffering limitations separately from adapter defects. Step-by-step
+acceptance checks and benchmark comparisons are defined in [REFACTOR.md](REFACTOR.md).
