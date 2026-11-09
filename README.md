@@ -177,7 +177,9 @@ compilation fail after closure. `CompilationContext` remains an alias during
 migration. Inputs must be Boolean nodes from the selected PySMT environment,
 including every descendant; type hints and environment membership are caller
 preconditions, without repeated runtime validation. Projection entries normalize
-to positive Boolean symbols or theory atoms; constants and compound Boolean entries are rejected.
+to positive Boolean symbols or theory atoms. Atoms that normalize to constants,
+including negated atoms, are discarded; explicitly supplied constants and
+compound Boolean entries are rejected.
 Omitted projection uses normalized formula atoms in SMT-LIB serialization order;
 explicit projection preserves first occurrence, including an empty list or atoms
 absent from the formula and lemmas. Each compile call assigns IDs to projection

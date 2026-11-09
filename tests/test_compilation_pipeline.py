@@ -67,6 +67,25 @@ def test_projected_semantics(mgr, backend, strategy, projection, constant):
 
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("strategy", STRATEGIES)
+@pytest.mark.parametrize("negated", [False, True])
+def test_constant_normalizing_projection_atoms(mgr, backend, strategy, negated):
+    p = mgr.Symbol("p")
+    x = mgr.Symbol("x", INT)
+    atoms = [mgr.GE(x, x), mgr.LT(x, x)]
+    entries = [mgr.Not(atom) for atom in atoms] if negated else atoms
+    with TheoryCompilation(p, [*entries, p], env=mgr.env) as compilation:
+        assert [compilation.normalize(atom) for atom in atoms] == [mgr.TRUE(), mgr.FALSE()]
+        assert compilation.project_on == [p]
+        target = getattr(compilation, strategy)(backend(), [])
+        assert target.projection_atoms == [p]
+        assert target.abstr.var_count == 1
+        assert target.abstr.get_atom(1) == p
+        assert all(atom not in target.abstr for atom in [*entries, mgr.TRUE(), mgr.FALSE()])
+        equivalent(mgr, target.to_pysmt(mgr), p)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+@pytest.mark.parametrize("strategy", STRATEGIES)
 def test_normalized_projection_and_compiler_reuse(mgr, backend, strategy):
     p, absent = mgr.Symbol("p"), mgr.Symbol("absent")
     x = mgr.Symbol("x", INT)
@@ -141,9 +160,11 @@ def test_invalid_compiler(mgr, bad):
 
 
 @pytest.mark.parametrize("entry", ["true", "false", "and", "or"])
-def test_rejects_compound_and_constant_projection(mgr, entry):
+@pytest.mark.parametrize("negated", [False, True])
+def test_rejects_compound_and_constant_projection(mgr, entry, negated):
     a, b = mgr.Symbol("a"), mgr.Symbol("b")
     value = {"true": mgr.TRUE(), "false": mgr.FALSE(), "and": mgr.And(a, b), "or": mgr.Or(a, b)}[entry]
+    value = mgr.Not(value) if negated else value
     with pytest.raises(ValueError, match="Projection entries"):
         TheoryCompilation(a, [value], env=mgr.env)
 

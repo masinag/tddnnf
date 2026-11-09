@@ -549,3 +549,24 @@ merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
   record review evidence. Full performance benchmarks and unavailable static
   type checks were not repeated; inputs violating the documented type/environment
   preconditions are intentionally outside the supported contract.
+
+## Remove preliminary testbench normalization
+
+- Compilation now selects `plans` from original formula atoms and includes original
+  query atoms before creating one `TheoryCompilation`. Formula/projection counts
+  come from that context; lemma/query counts use its normalizer while open.
+- The library discards valid projection atoms that normalize to constants,
+  including negated atoms. Explicit constants and compound entries remain invalid.
+  A code comment explains why constant atoms add no projection dimension.
+- Regression checks cover both constructions/all three backends without assigning
+  abstraction IDs to discarded atoms; normalized duplicate counts, all CLI modes,
+  context cleanup, and original-variable selection after cancellation are covered.
+- Using the existing testbench environment and isolated sources: library **516
+  tests pass**, testbench **191 tests pass**. Existing MathSAT deprecation and CUDD
+  shutdown warnings remain. Affected Ruff lint/format and whitespace checks pass.
+- Small synthetic smoke: **12 compilations and 36 CT/CE/IM query tasks pass**;
+  query answers agree across backends within each construction/projection.
+  Exact commands and logs: `/tmp/tddnnf-no-preliminary-normalization-smoke/commands.json`.
+  Original testbench pending files/status still match `baseline/preserved-checkout.json`.
+- No timer changes or full performance rerun. `plans` selection intentionally can
+  differ when normalization cancels original variables. Both PRs stay open.

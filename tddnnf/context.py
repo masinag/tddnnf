@@ -42,7 +42,9 @@ class TheoryCompilation:
                 if project_on is None
                 else project_on
             )
-            self.project_on = list(dict.fromkeys(self._normalize_atom(atom) for atom in atoms))
+            self.project_on = list(
+                dict.fromkeys(normalized for atom in atoms if (normalized := self._normalize_atom(atom)) is not None)
+            )
         except BaseException:
             self.close()
             raise
@@ -120,10 +122,16 @@ class TheoryCompilation:
         stats.log("n_projection_atoms", len(self.project_on))
         return TheoryCompiledTarget(artifact, abstractor, projection_atoms=list(self.project_on))
 
-    def _normalize_atom(self, atom: FNode) -> FNode:
+    def _normalize_atom(self, atom: FNode) -> FNode | None:
+        positive = atom.arg(0) if atom.is_not() else atom
+        if positive.is_bool_constant() or not is_atom(positive):
+            raise ValueError("Projection entries must be Boolean symbols or theory atoms, optionally negated")
         normalized = self.normalize(atom)
         positive = normalized.arg(0) if normalized.is_not() else normalized
-        if positive.is_bool_constant() or not is_atom(positive):
+        # Valid atoms (including negated ones) that normalize to constants add no projection dimension.
+        if positive.is_bool_constant():
+            return None
+        if not is_atom(positive):
             raise ValueError("Projection entries must normalize to Boolean symbols or theory atoms")
         return positive
 
