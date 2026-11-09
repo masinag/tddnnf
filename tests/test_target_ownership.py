@@ -1,17 +1,22 @@
-"""Targets retain frozen context bindings after compilation ends."""
+"""Targets retain read-only context bindings after compilation ends."""
 
 import gc
-from dataclasses import FrozenInstanceError
 
+import ddnnife
 import pytest
 from pysmt.environment import Environment
 
 from tddnnf import TheoryCompilation
+from tddnnf.builders.extended import TExtendedBuilder
+from tddnnf.builders.reduced import TReducedBuilder
 from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler, _BddRepresentation
 from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler, _D4Representation
 from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler, _SddRepresentation
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
+from tddnnf.queries.bdd_engine import BddEngine
+from tddnnf.queries.d4_engine import D4Engine
+from tddnnf.queries.sdd_engine import SddEngine
 from tests.test_compilation_pipeline import equivalent
 
 
@@ -32,8 +37,6 @@ def test_bound_target_survives_compilation_and_gc(mgr, backend, shape):
     assert target.env is mgr.env
     if backend is D4Compiler and shape != "shared":
         # ddnnife 0.10 rejects zero-feature files; delegation preserves that limitation.
-        import ddnnife
-
         with pytest.raises(ddnnife.InternalError, match="fixedbitset size 0"):
             target.dag_size()
     else:
@@ -54,7 +57,7 @@ def test_constructor_inputs_are_copied_and_state_is_read_only(mgr, backend):
     assert abstr.get_atom(3) is a
     assert dict(abstr.atom_to_id) == {a: 3}
     for field, value in [("target", representation), ("abstr", abstr), ("env", mgr.env), ("projection_atoms", ())]:
-        with pytest.raises(FrozenInstanceError):
+        with pytest.raises(AttributeError):
             setattr(target, field, value)
     with pytest.raises(TypeError):
         abstr.id_to_atom[3] = b
@@ -99,12 +102,6 @@ def test_transitional_backend_aliases():
 @pytest.mark.parametrize("backend", [BddCompiler, SddCompiler, D4Compiler])
 @pytest.mark.parametrize("builder_name", ["reduced", "extended"])
 def test_shared_abstraction_growth_preserves_earlier_target(mgr, backend, builder_name):
-    from tddnnf.builders.extended import TExtendedBuilder
-    from tddnnf.builders.reduced import TReducedBuilder
-    from tddnnf.queries.bdd_engine import BddEngine
-    from tddnnf.queries.d4_engine import D4Engine
-    from tddnnf.queries.sdd_engine import SddEngine
-
     a, b, c, d = [mgr.Symbol(name) for name in ("a", "b", "c", "d")]
     abstr = Abstractor()
     builder_cls = TReducedBuilder if builder_name == "reduced" else TExtendedBuilder

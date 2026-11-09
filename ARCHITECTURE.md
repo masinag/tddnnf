@@ -121,7 +121,8 @@ There is no public deletion or reassignment API.
 Compilation extends a supplied abstractor in stable order and passes that same
 object to the compiler and target. Append-only sharing preserves callers' IDs
 and lets later compilations register atoms without invalidating earlier targets.
-Targets freeze their bindings and projection tuples, not the shared abstractor.
+Targets expose bindings through getter properties and keep projection tuples;
+the shared abstractor remains append-only.
 SDD counting derives forgotten dimensions from the target's native manager,
 not the growing map; BDD and d4 retain their existing native counting dimensions.
 Concurrent mutation is unsupported. Saving a target serializes the current map,

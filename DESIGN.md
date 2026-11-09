@@ -93,8 +93,8 @@ active vocabulary (`projection_atoms`), and owning PySMT environment. It is the
 only public target type. Backend-specific public target classes are removed
 at the final migration.
 
-Target bindings are frozen; the shared abstraction remains append-only. Its
-constructor copies input mappings and its public views are read-only, with no
+Target bindings use read-only properties; the shared abstraction remains
+append-only. Its constructor copies input mappings and its public views are read-only, with no
 deletion or reassignment API. Compilers and targets receive the same abstractor.
 SDD counting uses the native manager's variable count so later registrations,
 sparse IDs, and the minimum one-variable constant manager cannot change query

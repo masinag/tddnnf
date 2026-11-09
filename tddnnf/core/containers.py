@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Generic
 
@@ -13,14 +12,8 @@ from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, T_Target
 
 
-@dataclass(frozen=True, init=False)
 class TheoryCompiledTarget(Generic[T_Target]):
     """A representation bound to its abstraction, vocabulary, and SMT environment."""
-
-    target: T_Target
-    abstr: Abstractor
-    projection_atoms: tuple[FNode, ...]
-    env: Environment
 
     def __init__(
         self,
@@ -29,10 +22,26 @@ class TheoryCompiledTarget(Generic[T_Target]):
         projection_atoms: Sequence[FNode],
         env: Environment | None = None,
     ) -> None:
-        object.__setattr__(self, "target", target)
-        object.__setattr__(self, "abstr", abstr)
-        object.__setattr__(self, "projection_atoms", tuple(projection_atoms))
-        object.__setattr__(self, "env", env if env is not None else get_env())
+        self._target = target
+        self._abstr = abstr
+        self._projection_atoms = tuple(projection_atoms)
+        self._env = env if env is not None else get_env()
+
+    @property
+    def target(self) -> T_Target:
+        return self._target
+
+    @property
+    def abstr(self) -> Abstractor:
+        return self._abstr
+
+    @property
+    def projection_atoms(self) -> tuple[FNode, ...]:
+        return self._projection_atoms
+
+    @property
+    def env(self) -> Environment:
+        return self._env
 
     def dag_size(self) -> DagSize:
         return self.target.dag_size()

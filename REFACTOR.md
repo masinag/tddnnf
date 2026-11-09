@@ -89,7 +89,7 @@ acceptance details below extend the table rather than introducing extra stages.
 | 0 | `refactor/00-design` | Design, execution plan, deferred-work list | None |
 | 1 | `refactor/01-baseline` | Reproducible test and benchmark baseline | 0 |
 | 2 | `refactor/02-compilation` | One pipeline and configured compiler instances | 1 |
-| 3 | `refactor/03-target-ownership` | Private representations, frozen target bindings, append-only abstraction reuse | 2 |
+| 3 | `refactor/03-target-ownership` | Private representations, read-only target bindings, append-only abstraction reuse | 2 |
 | 4 | `refactor/04-query-sessions` | Query composition, input handling, native delegation, cleanup | 3 |
 | 5 | `refactor/05-persistence` | Versioned persistence and paired consumer migration | 4 |
 | 6 | `refactor/06-ddnnf-conversion` | Explicit SDD/OBDD DAG conversion | 5 |
@@ -583,9 +583,9 @@ merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
 - Abstractor copies constructor input and exposes read-only bidirectional views.
   Compilation reuses supplied abstractions with append-only registration in
   stable order, preserving sparse IDs and allocating above the maximum. Targets
-  freeze bindings to the representation, abstraction, tuple vocabulary, and
-  environment. Reconstruction binds to that environment; metrics delegate. Backend aliases and `.target`
-  remain available. Artifact formats, native settings, and logs are unchanged.
+  expose read-only bindings to the representation, abstraction, tuple vocabulary,
+  and environment. Reconstruction binds to that environment; metrics delegate.
+  Backend aliases and `.target` remain available. Artifact formats, native settings, and logs are unchanged.
 - PySDD's installed `SddNode.wrap` retains the manager and calls `ref()`; native
   roots/managers remain together without additional manual reference counting.
 - Environment: Python 3.12.15, PySMT 0.9.7.dev431, PySDD 1.0.6, dd 0.6.0,
@@ -633,7 +633,7 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   IDs; there is no public deletion or reassignment API. Supplied abstractors are
   extended in deterministic order and shared by compiler and target; absent
   abstractors are created fresh. Backend preparation assertions remain.
-- Target bindings remain frozen, projection vocabularies remain tuples, and
+- Target bindings remain read-only, projection vocabularies remain tuples, and
   environment ownership is unchanged. SDD forgotten dimensions now use
   `manager.var_count() - len(projection_atoms)`; BDD and d4 counting are unchanged.
 - **Reproduced before the SDD fix**, after restoring shared registration:
@@ -648,7 +648,7 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   passes **552 tests**, 751 existing native/deprecation warnings, 14.78 s.
   The four affected suites pass **245 tests**, 290 warnings, 5.27 s.
   These cover registration, stable sparse IDs, copied inputs, read-only views,
-  supplied-object reuse, frozen target bindings, and both builders across all
+  supplied-object reuse, read-only target bindings, and both builders across all
   three backends. Earlier targets preserve counts, assumptions, enumeration,
   reconstruction, and query scope after growth, with both existing and new
   engines. SDD counts cover sparse IDs, empty projections, and true/false constants.
@@ -662,3 +662,21 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   later compilations. Existing native shutdown/deprecation warnings and ddnnife
   zero-feature constant metric errors remain. Persistence migration and query
   sessions remain later steps.
+
+
+### PR #10 review updates
+
+- Applied the [target class review](https://github.com/masinag/tddnnf/pull/10#discussion_r4514843237):
+  replaced the frozen dataclass with private fields and getter properties, using
+  the same pattern as the backend representations. Public target bindings remain
+  read-only; assignment tests now expect `AttributeError`. Tuple projection,
+  environment ownership, and append-only abstraction sharing are preserved.
+- Applied both [import](https://github.com/masinag/tddnnf/pull/10#discussion_r4514920470)
+  [comments](https://github.com/masinag/tddnnf/pull/10#discussion_r4514930806):
+  all imports in `tests/test_target_ownership.py` are now top-level, verified
+  with an AST check.
+- Using the same existing virtual environment, `python -m pytest -q` passes
+  **552 tests**, 747 existing native/deprecation warnings, 13.80 s.
+  Log: `/tmp/tddnnf-pr10-review-full.log`. Ruff lint across `tddnnf tests examples`,
+  affected-file formatting, and `git diff --check` pass. No benchmark, external
+  testbench, or static type checks were rerun.

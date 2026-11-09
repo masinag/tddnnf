@@ -112,7 +112,7 @@ Compile the formula and its lemmas with the T-reduced strategy and d4 backend.
 target = compilation.compile_treduced(D4Compiler(), lemmas)
 ```
 
-The target retains frozen bindings to its environment, abstraction, and tuple
+The target retains read-only bindings to its environment, abstraction, and tuple
 vocabulary after compilation closes. Reconstruct with `target.to_pysmt()` and
 inspect DAG metrics with `target.dag_size()`. `Abstractor.get_id()` registers new
 atoms above the current maximum ID and preserves existing IDs. Constructor
