@@ -1,8 +1,5 @@
-from unittest.mock import Mock
-
 import pytest
 
-import tddnnf.queries.ddnnife_engine as ddnnife_module
 from tddnnf.compilers.d4 import D4_BIN, D4CompiledTarget, D4Compiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
@@ -51,8 +48,6 @@ def test_projection_cleanup(mgr, a, b, c, monkeypatch, tmp_path, injected):
     assert loaded.nnf_text == native.nnf_text
     assert loaded.var_count == native.var_count
     assert loaded.remapping == native.remapping
-    # Nonconstant enumeration must get absent dimensions from ddnnife itself.
-    monkeypatch.setattr(ddnnife_module, "product", Mock(side_effect=AssertionError("Python expansion")))
     for target in (native, loaded):
         reconstructed = target.to_pysmt(abstr, mgr)
         with mgr.env.factory.Solver() as solver:

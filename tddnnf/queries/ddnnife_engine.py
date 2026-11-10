@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import tempfile
 from collections.abc import Iterator
-from itertools import product
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -35,30 +34,22 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         self._mut = None
         self._ddnnf = None
         nnf_text = container.target.nnf_text
-        if nnf_text == "t 1\n":
-            self._const_true = True
-            self._tmpdir = None
-            self._mut = None
-        elif nnf_text == "f 1\n":
-            self._const_true = False
-            self._tmpdir = None
-            self._mut = None
-        else:
+        if nnf_text not in ("t 1\n", "f 1\n"):
             # Every projected dimension is mapped, even when absent from the DAG.
             ids = {self._abstr.get_id(a) for a in self._projection_atoms}
             assert set(self._remapping) == ids, "D4 mapping must cover exactly the projection"
             assert len(self._remapping) == self._var_count == len(self._projection_atoms)
             assert set(self._remapping.values()) == set(range(1, self._var_count + 1))
-            self._const_true = False
-            self._tmpdir = tempfile.TemporaryDirectory(prefix="ddnnife_engine_")
-            try:
-                nnf_path = Path(self._tmpdir.name) / "circuit.nnf"
-                nnf_path.write_text(nnf_text)
-                self._ddnnf = ddnnife.Ddnnf.from_file(str(nnf_path), features=self._var_count)
-                self._mut = self._ddnnf.as_mut()
-            except BaseException:
-                self.close()
-                raise
+        self._tmpdir = tempfile.TemporaryDirectory(prefix="ddnnife_engine_")
+        try:
+            nnf_path = Path(self._tmpdir.name) / "circuit.nnf"
+            nnf_path.write_text(nnf_text)
+            # ddnnife errors for unsupported constant circuits intentionally propagate.
+            self._ddnnf = ddnnife.Ddnnf.from_file(str(nnf_path), features=self._var_count)
+            self._mut = self._ddnnf.as_mut()
+        except BaseException:
+            self.close()
+            raise
 
     def __del__(self) -> None:
         self.close()
@@ -82,29 +73,14 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
             result.append(-nnf_id if lit.is_not() else nnf_id)
         return result
 
-    @property
-    def _formula_is_constant(self) -> bool:
-        return self._mut is None
-
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
         unique = normalize_assumptions(assumptions or [])
         if unique is None:
             return False
-        if self._formula_is_constant:
-            return self._const_true
         assert self._mut is not None
         return self._mut.is_sat(self._lits_to_ddnnf(unique))
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        if self._formula_is_constant:  # true/false constant
-            if assumptions:
-                if not self._const_true:
-                    return 0
-                unique = normalize_assumptions(assumptions)
-                if unique is None:
-                    return 0
-                return 1 << (len(self._projection_atoms) - len(unique))
-            return (1 << len(self._projection_atoms)) if self._const_true else 0
         if assumptions:
             unique = normalize_assumptions(assumptions)
             if unique is None:
@@ -129,8 +105,6 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         lits = cube_lits(query_cube)
         if lits is None:
             return True
-        if self._formula_is_constant:
-            return self._const_true
         assert self._mut is not None
         ddnnf_lits = self._lits_to_ddnnf(lits)
         count = int(self._mut.count(ddnnf_lits))
@@ -138,15 +112,8 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         return count == (1 << remaining)
 
     def enumerate_truth_assignments(self) -> Iterator[dict[FNode, bool]]:
-        if self._formula_is_constant:
-            if self._const_true:
-                for bits in product([True, False], repeat=len(self._projection_atoms)):
-                    yield dict(zip(self._projection_atoms, bits))
-            return
         assert self._mut is not None
         total = int(self._mut.count([]))
-        if total == 0:
-            return
         raw = self._mut.enumerate([], total)
         for model_lits in raw:
             assignment = {abs(lit): lit > 0 for lit in model_lits}

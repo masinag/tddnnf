@@ -86,6 +86,10 @@ def test_literals_constants_and_validation(mgr, a, b, c, pairing):
 @pytest.mark.parametrize("truth,active", list(product([False, True], [False, True])))
 def test_constant_targets(mgr, a, pairing, truth, active):
     target = compile_target(mgr, pairing, mgr.Bool(truth), [a] if active else [])
+    if pairing[1] is DdnnifeEngine and (not truth or not active):
+        with pytest.raises(ddnnife.InternalError):
+            target.queries(pairing[1])
+        return
     with target.queries(pairing[1]) as q:
         assert q.is_satisfiable() == truth
         assert q.is_valid() == truth
