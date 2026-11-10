@@ -807,3 +807,8 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   pass; Ruff lint, all 11 affected Python-file formatting checks, and
   `git diff --check` also pass. No benchmark or static type checks were run.
   The documented native limitations remain. No step-5 work was performed.
+- Delivery: pushed implementation and review corrections through `6606a6a` on
+  `refactor/04-query-sessions`; opened
+  [PR #11](https://github.com/masinag/tddnnf/pull/11) targeting
+  `refactor/lean-core`. Left open for user review, without auto-merge or step-5
+  work. This final entry only records delivery.
