@@ -341,33 +341,26 @@ def test_canonical_contradictions_and_constants(mgr, pairing):
 
 
 @pytest.mark.parametrize("truth", [True, False])
-def test_stored_atoms_normalizing_to_constants(mgr, pairing, truth):
+@pytest.mark.parametrize("session", [True, False], ids=["session", "context"])
+def test_rejects_stored_atoms_normalizing_to_constants(mgr, pairing, truth, session, monkeypatch):
     x = mgr.Symbol("stored_constant_x", INT)
     atom = mgr.Equals(x, x if truth else mgr.Plus(x, mgr.Int(1)))
     abstr = Abstractor({1: atom})
     native = pairing[0]().compile(atom, abstr, project_on=[atom])
     target = TheoryCompiledTarget(native, abstr, [atom], env=mgr.env)
-    with target.queries(pairing[1]()) as q:
-        assert q.count_truth_assignments() == 1
-        assert q.is_satisfiable([atom])
-        assert not q.is_satisfiable([mgr.Not(atom)])
-        assert q.count_truth_assignments([atom]) == 1
-        assert q.count_truth_assignments([mgr.Not(atom)]) == 0
-        assert q.is_implicant(atom)
-        assert not q.is_implicant(mgr.Not(atom))
-        assert q.entails_clause(atom)
-        assert not q.entails_clause(mgr.Not(atom))
-        assert q.is_satisfiable([mgr.TRUE()])
-        assert not q.is_satisfiable([mgr.FALSE()])
-        assert not q.is_implicant(mgr.TRUE())
-        assert q.is_implicant(mgr.FALSE())
-        assert list(q.enumerate_truth_assignments()) == [{atom: True}]
-    context = QueryContext(target, env=mgr.env)
-    try:
-        assert context.align_assumptions([atom, mgr.Not(atom)]) == [atom, mgr.Not(atom)]
-        assert context.align_formula(atom) is atom
-        assert context.align_formula(mgr.Not(atom)) is mgr.Not(atom)
-        assert context.align_formula(mgr.TRUE()).is_true()
-        assert context.align_formula(mgr.FALSE()).is_false()
-    finally:
-        context.close()
+    contexts = []
+    original = QueryContext._index_atoms
+
+    def record(context, atoms):
+        contexts.append(context)
+        return original(context, atoms)
+
+    monkeypatch.setattr(QueryContext, "_index_atoms", record)
+    with pytest.raises(AssertionError, match="Projection atoms must not normalize to constants"):
+        if session:
+            target.queries(pairing[1]())
+        else:
+            QueryContext(target, env=mgr.env)
+    assert len(contexts) == 1
+    assert contexts[0]._atom_index == {}
+    assert contexts[0]._normalizer._closed

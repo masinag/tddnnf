@@ -149,6 +149,7 @@ class QueryContext:
             env: PySMT environment used for query normalization.
 
         Raises:
+            AssertionError: If a projection atom normalizes to a constant.
             ValueError: If distinct projection atoms have one canonical form.
         """
         self._normalizer = NormalizerWalker(env)
@@ -172,6 +173,7 @@ class QueryContext:
         index: dict[FNode, tuple[FNode, bool]] = {}
         for target_atom in atoms:
             canonical, target_negated = self._normalize_with_polarity(target_atom)
+            assert not canonical.is_bool_constant(), "Projection atoms must not normalize to constants"
             previous = index.get(canonical)
             if previous is not None and previous[0] != target_atom:
                 raise ValueError(f"Ambiguous normalized atom {canonical}: {previous[0]}, {target_atom}")
@@ -195,7 +197,7 @@ class QueryContext:
         atom = literal.arg(0) if literal.is_not() else literal
         canonical, atom_negated = self._normalize_with_polarity(atom)
         query_negated = literal.is_not() ^ atom_negated
-        if atom.is_bool_constant() or (canonical.is_bool_constant() and canonical not in self._atom_index):
+        if canonical.is_bool_constant():
             return self._normalizer.mgr.Bool(canonical.is_true() ^ query_negated)
         target_atom, target_negated = self._lookup_atom(canonical, literal)
         aligned_negated = query_negated ^ target_negated

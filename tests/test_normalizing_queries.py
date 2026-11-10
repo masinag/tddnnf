@@ -118,6 +118,20 @@ def test_context_preserves_none_assumptions(mgr: FormulaManager) -> None:
     assert _context(mgr, compiled_atom).align_assumptions(None) is None
 
 
+@pytest.mark.parametrize("truth", [True, False])
+def test_context_aligns_query_constants(mgr: FormulaManager, truth: bool) -> None:
+    x = mgr.Symbol("normalizing_constant_x", INT)
+    atom = mgr.Equals(x, x if truth else mgr.Plus(x, mgr.Int(1)))
+    context = _context(mgr)
+    try:
+        for literal in (mgr.Bool(truth), atom):
+            assert context.align_assumptions([literal, mgr.Not(literal)]) == [mgr.Bool(truth), mgr.Bool(not truth)]
+            assert mgr.env.simplifier.simplify(context.align_formula(literal)) == mgr.Bool(truth)
+            assert mgr.env.simplifier.simplify(context.align_formula(mgr.Not(literal))) == mgr.Bool(not truth)
+    finally:
+        context.close()
+
+
 def test_wrapper_aligns_query_inputs(mgr: FormulaManager) -> None:
     _, _, compiled_atom, equivalent_atom = _relations(mgr)
     p = mgr.Symbol("normalizing_query_p", BOOL)

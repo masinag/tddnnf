@@ -812,3 +812,31 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   [PR #11](https://github.com/masinag/tddnnf/pull/11) targeting
   `refactor/lean-core`. Left open for user review, without auto-merge or step-5
   work. This final entry only records delivery.
+
+### Step 4 projection invariant correction (2026-11-10)
+
+- Supersedes the stored-constant compatibility behavior in the independent
+  review corrections above: projection construction already discards atoms
+  that normalize to Boolean constants. `QueryContext._index_atoms()` now
+  asserts this invariant with `Projection atoms must not normalize to constants`.
+  Manually constructed targets that violate it raise `AssertionError` during
+  query-context/session initialization, and the normalizer is closed on failure.
+- `_align_literal()` handles any canonical Boolean constant directly; its
+  target-index compatibility branch is removed. Normalization polarity handling
+  remains because valid theory atoms can normalize to negated atoms.
+- Replaced stored-constant compatibility tests with true/false-normalizing
+  invalid-vocabulary tests for direct contexts and sessions on all three native
+  pairings, including index clearing and normalizer cleanup. Retained existing
+  polarity/session query-constant regressions and added direct-context checks
+  for explicit and normalized constants, including negation and formula alignment.
+- Verification using the existing testbench environment (no installs): library
+  `python -m pytest -q` passes **789 tests**, 1128 existing native/deprecation
+  warnings, 25.80 s (`/tmp/tddnnf-projection-invariant-final-library.log`).
+  The same isolated companion checkout and explicit library `PYTHONPATH` recorded
+  above pass **191 tests**, 5 warnings, 4.06 s
+  (`/tmp/tddnnf-projection-invariant-companion.log`); verified both import paths.
+  All three examples pass (`/tmp/tddnnf-projection-invariant-example-*.log`).
+  `ruff check tddnnf tests examples`, formatting checks for the three changed
+  Python files, and `git diff --check` pass. No benchmark or static type checks
+  were run; existing native limitations remain. This correction updates PR #11
+  on `refactor/04-query-sessions` and leaves it open for review.
