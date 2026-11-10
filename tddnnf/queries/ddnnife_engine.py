@@ -148,22 +148,6 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         if total == 0:
             return
         raw = self._mut.enumerate([], total)
-        projection_ids = {self._abstr.get_id(a) for a in self._projection_atoms}
-        nnf_to_abstr = {v: k for k, v in self._remapping.items()}
         for model_lits in raw:
-            partial: dict[int, bool] = {}
-            for lit in model_lits:
-                nnf_var_id = abs(lit)
-                abstr_id = nnf_to_abstr.get(nnf_var_id)
-                if abstr_id is not None and abstr_id in projection_ids:
-                    partial[abstr_id] = lit > 0
-            present = set(partial)
-            missing = [a for a in self._projection_atoms if self._abstr.get_id(a) not in present]
-            if not missing:
-                yield {a: partial[self._abstr.get_id(a)] for a in self._projection_atoms}
-            else:
-                for bits in product([True, False], repeat=len(missing)):
-                    full = dict(partial)
-                    for atom, val in zip(missing, bits):
-                        full[self._abstr.get_id(atom)] = val
-                    yield {a: full[self._abstr.get_id(a)] for a in self._projection_atoms}
+            assignment = {abs(lit): lit > 0 for lit in model_lits}
+            yield {a: assignment[self._remapping[self._abstr.get_id(a)]] for a in self._projection_atoms}

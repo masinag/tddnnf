@@ -931,3 +931,45 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   Native limitations remain. Updates ship on the existing query-session branches
   and PRs [#11](https://github.com/masinag/tddnnf/pull/11) and
   [#14](https://github.com/masinag/tddnnf-testbench/pull/14), left open.
+
+### Clean d4 compilation output and native total enumeration (2026-11-10)
+
+- New `D4Compiler.compile()` results retain only signed edge literals with IDs
+  in `1..len(projected_ids)`, preserving nodes, edge endpoints, terminating zeros,
+  and edges that become literal-free. The supported d4 circuit parser assigns
+  sorted `P` variables first: raw NNF IDs already match the existing dense
+  abstraction remapping and are not renumbered. This cleanup relies on d4's
+  projection contract; it is not general existential projection of arbitrary
+  d-DNNFs. Constant and empty-projection paths are unchanged.
+- Metadata still maps every projected dimension, including dimensions absent
+  from the DAG. `DdnnifeEngine` maps total native assignments directly into
+  dictionaries in `projection_atoms` order, removing unmapped-literal filtering
+  and Python missing-dimension expansion. Constant enumeration, zero-count
+  handling, exact mapping assertions, and resource cleanup remain.
+- Parameterized compiler regression exercises real d4 and injected output with
+  positive/negative leftover literals, ID gaps, and an emptied edge. Sparse
+  abstraction IDs and reordered projection atoms verify reconstruction, unique
+  total enumeration, counts and assumptions before/after save/load. Python
+  expansion is disabled in this regression, proving absent dimensions come
+  from ddnnife. Loading a legacy artifact preserves its original text; only new
+  compilations are cleaned. Persistence formats and public APIs are unchanged.
+- Existing testbench environment Python
+  `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python`
+  ran `-m pytest -q`: **789 passed**, 1124 existing native/deprecation warnings,
+  31.47 s (`/tmp/d4-clean-library.log`). Focused compiler/engine/session tests:
+  **354 passed**, 554 warnings (`/tmp/d4-clean-focused.log`).
+- Companion checkout `/tmp/tddnnf-testbench-04-sessions` ran
+  `uv run --no-sync python -m pytest -q` with the existing environment,
+  `UV_CACHE_DIR=/tmp/uv-cache`, and explicit
+  `PYTHONPATH=/tmp/tddnnf-testbench-04-sessions/scripts:/home/gabriele/Documents/theorykc/tddnnf`:
+  **191 passed**, 5 warnings, 5.38 s (`/tmp/d4-clean-companion.log`). Verified
+  library and companion import paths; no companion source changes were needed.
+- All three examples pass (`/tmp/d4-clean-example-{abstr,tred,text}.log`).
+  `.venv/bin/ruff check tddnnf tests examples`, changed-file formatting and
+  `git diff --check` pass. Focused session/container and generic inference checks
+  pass with `/tmp/merged-pyright.json` and `/tmp/merged-typing.py`; the invalid
+  pairing in `/tmp/merged-typing-invalid.py` produces exactly the expected
+  argument-type error. No benchmarks, full-project type analysis, or unrelated
+  cleanup; existing native counting and enumeration limits remain.
+- Delivered on `refactor/04-query-sessions` through library PR #11; companion
+  PR #14 records the matching verification. Both remain open.

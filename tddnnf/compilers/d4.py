@@ -238,7 +238,9 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
     """PropCompiler that compiles an SMT formula into a d-DNNF via d4v2.
 
     The formula is first translated to BC-S1.2 circuit format, then compiled
-    by the d4 binary. The resulting NNF is packaged into a D4CompiledTarget.
+    by the d4 binary. Edge literals are restricted to the dense projection IDs;
+    metadata retains every projected dimension, including those absent from the DAG.
+    This relies on the supported d4 circuit parser assigning sorted P variables first.
     """
 
     def _write_circuit(
@@ -341,6 +343,14 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
                     return D4CompiledTarget("f 1\n", 0, remapping={})
 
             var_count = len(projected_ids)
+            cleaned_lines = []
+            for line in nnf_text.splitlines():
+                parts = line.split()
+                if parts and parts[0] not in ("t", "f", "o", "a"):
+                    literals = [lit for lit in parts[2:-1] if 1 <= abs(int(lit)) <= var_count]
+                    line = " ".join([*parts[:2], *literals, "0"])
+                cleaned_lines.append(line)
+            nnf_text = "\n".join(cleaned_lines) + "\n"
             remapping = {aid: i + 1 for i, aid in enumerate(sorted(projected_ids))}
             stats.log("n_atoms", len(all_atoms))
             stats.log("n_proj_vars", len(projected_ids))
