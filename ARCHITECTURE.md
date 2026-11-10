@@ -148,10 +148,10 @@ constructor input lists.
 Its `to_pysmt()` method delegates DAG reconstruction to the backend target while
 supplying the stored abstraction and its bound environment’s formula manager.
 Public reconstruction is argument-free: `target.to_pysmt()`. `target.dag_size()`
-delegates metrics to the representation. Backend class names remain transitional
-aliases for private representations, and `.target` remains available until the
-public migration. Native roots and managers stay together, using the bindings’
-reference ownership. d4 remapping is copied and exposed read-only.
+delegates metrics to the backend target. `BddCompiledTarget`, `SddCompiledTarget`,
+and `D4CompiledTarget` are public backend classes, exposed through the supported
+read-only `.target` property. Native roots and managers stay together, using the
+bindings’ reference ownership. d4 remapping is copied and exposed read-only.
 
 ## Compilation strategies
 

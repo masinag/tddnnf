@@ -8,7 +8,8 @@ implementation until the public migration lands. Follow-up work is in
 
 ## Public interface and compilation
 
-The public concepts are `TheoryCompilation`, one `TheoryCompiledTarget`,
+The public concepts are `TheoryCompilation`, `TheoryCompiledTarget`, the backend
+classes `BddCompiledTarget`, `SddCompiledTarget`, and `D4CompiledTarget`,
 configured compiler instances, and configured reasoner instances. The intended
 workflow is:
 
@@ -88,10 +89,10 @@ their existing IDs instead of applying the new allocation order.
 
 ## Target and resource ownership
 
-`TheoryCompiledTarget` binds a private representation, abstraction, ordered
-active vocabulary (`projection_atoms`), and owning PySMT environment. It is the
-only public target type. Backend-specific public target classes are removed
-at the final migration.
+`TheoryCompiledTarget` binds a public backend compiled target, abstraction,
+ordered active vocabulary (`projection_atoms`), and owning PySMT environment.
+`BddCompiledTarget`, `SddCompiledTarget`, and `D4CompiledTarget` remain public
+classes, available through the supported read-only `.target` property.
 
 Target bindings use read-only properties; the shared abstraction remains
 append-only. Its constructor copies input mappings and its public views are read-only, with no
@@ -104,17 +105,17 @@ is unsupported; saving may include atoms registered by later compilations.
 | Owner | Owned state and responsibilities |
 | --- | --- |
 | Compilation session | Normalized inputs, one pipeline, normalizer and its solver resources |
-| Public target | Bound environment, stable abstraction, immutable ordered active vocabulary, private representation |
-| Private d-DNNF representation | NNF text, variable count, abstraction-to-NNF remapping, codec metadata |
-| Private SDD representation | Root references, manager, final vtree, codec metadata |
-| Private OBDD representation | Root references, manager, final variable order, codec metadata |
+| TheoryCompiledTarget | Bound environment, stable abstraction, immutable ordered active vocabulary, backend target |
+| D4CompiledTarget | NNF text, variable count, abstraction-to-NNF remapping, codec metadata |
+| SddCompiledTarget | Root references, manager, final vtree, codec metadata |
+| BddCompiledTarget | Root references, manager, final variable order, codec metadata |
 | Query session | Independent normalizer, transient atom index, reasoner resources and temporary files |
 
 Native roots retain their managers for as long as needed. A target survives
 closure of the compilation session; closing one query session leaves the target
 and other sessions usable. Targets own no normalizers, live solvers, or
-normalization configuration. Private representation objects encapsulate native
-ownership and codecs without becoming another public target hierarchy.
+normalization configuration. Public backend compiled targets encapsulate native
+ownership and codecs.
 
 Immutability is semantic: the represented Boolean function, abstraction
 correspondence, environment, and ordered active vocabulary remain unchanged.

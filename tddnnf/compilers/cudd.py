@@ -17,7 +17,7 @@ from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.stats_collector import StatsCollector
 
 
-class _BddRepresentation(PropCompiledTarget):
+class BddCompiledTarget(PropCompiledTarget):
     """A propositionally compiled OBDD target backed by CUDD."""
 
     def __init__(self, root: Function, manager: BDD) -> None:
@@ -157,7 +157,7 @@ class BddWalker(DagWalker):
         return result
 
 
-class BddCompiler(PropCompiler[_BddRepresentation]):
+class BddCompiler(PropCompiler[BddCompiledTarget]):
     """PropCompiler that compiles an SMT formula into a BDD via CUDD.
 
     Accepts the original (non-abstracted) SMT formula. All atoms -- both
@@ -172,7 +172,7 @@ class BddCompiler(PropCompiler[_BddRepresentation]):
         *,
         project_on: Sequence[FNode] | None = None,
         computation_logger: dict[str, object] | None = None,
-    ) -> _BddRepresentation:
+    ) -> BddCompiledTarget:
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
             atoms = set(formula.get_atoms())
@@ -198,8 +198,4 @@ class BddCompiler(PropCompiler[_BddRepresentation]):
                 n_proj_vars = len(atoms)
             stats.log("n_atoms", len(atoms))
             stats.log("n_proj_vars", n_proj_vars)
-            return _BddRepresentation(root, mgr)
-
-
-# Transitional alias until the public API migration.
-BddCompiledTarget = _BddRepresentation
+            return BddCompiledTarget(root, mgr)

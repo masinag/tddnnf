@@ -61,7 +61,7 @@ class _D4Node:
         return self.memo
 
 
-class _D4Representation(PropCompiledTarget):
+class D4CompiledTarget(PropCompiledTarget):
     """A compiled d-DNNF target backed by a d4 NNF file."""
 
     def __init__(self, nnf_text: str, var_count: int, remapping: Mapping[int, int] | None = None) -> None:
@@ -234,11 +234,11 @@ class BCS12Walker(DagWalker):
         return result
 
 
-class D4Compiler(PropCompiler[_D4Representation]):
+class D4Compiler(PropCompiler[D4CompiledTarget]):
     """PropCompiler that compiles an SMT formula into a d-DNNF via d4v2.
 
     The formula is first translated to BC-S1.2 circuit format, then compiled
-    by the d4 binary. The resulting NNF is packaged into a _D4Representation.
+    by the d4 binary. The resulting NNF is packaged into a D4CompiledTarget.
     """
 
     def _write_circuit(
@@ -289,7 +289,7 @@ class D4Compiler(PropCompiler[_D4Representation]):
         *,
         project_on: Sequence[FNode] | None = None,
         computation_logger: dict[str, object] | None = None,
-    ) -> _D4Representation:
+    ) -> D4CompiledTarget:
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
             atoms = list(formula.get_atoms())
@@ -297,11 +297,11 @@ class D4Compiler(PropCompiler[_D4Representation]):
                 if formula.is_true():
                     stats.log("n_atoms", 0)
                     stats.log("n_proj_vars", 0)
-                    return _D4Representation("t 1\n", 0)
+                    return D4CompiledTarget("t 1\n", 0)
                 if formula.is_false():
                     stats.log("n_atoms", 0)
                     stats.log("n_proj_vars", 0)
-                    return _D4Representation("f 1\n", 0)
+                    return D4CompiledTarget("f 1\n", 0)
 
             with stats.track_time("register_atoms_time"):
                 proj_set = set(atoms if project_on is None else project_on)
@@ -329,23 +329,19 @@ class D4Compiler(PropCompiler[_D4Representation]):
                     if nnf_raw.startswith("f"):
                         stats.log("n_atoms", len(all_atoms))
                         stats.log("n_proj_vars", 0)
-                        return _D4Representation("f 1\n", 0, remapping={})
+                        return D4CompiledTarget("f 1\n", 0, remapping={})
                     stats.log("n_atoms", len(all_atoms))
                     stats.log("n_proj_vars", 0)
-                    return _D4Representation("t 1\n", 0, remapping={})
+                    return D4CompiledTarget("t 1\n", 0, remapping={})
 
                 nnf_text = out_path.read_text()
                 if nnf_text.startswith("f"):
                     stats.log("n_atoms", len(all_atoms))
                     stats.log("n_proj_vars", len(projected_ids))
-                    return _D4Representation("f 1\n", 0, remapping={})
+                    return D4CompiledTarget("f 1\n", 0, remapping={})
 
             var_count = len(projected_ids)
             remapping = {aid: i + 1 for i, aid in enumerate(sorted(projected_ids))}
             stats.log("n_atoms", len(all_atoms))
             stats.log("n_proj_vars", len(projected_ids))
-            return _D4Representation(nnf_text, var_count, remapping=remapping)
-
-
-# Transitional alias until the public API migration.
-D4CompiledTarget = _D4Representation
+            return D4CompiledTarget(nnf_text, var_count, remapping=remapping)

@@ -18,7 +18,7 @@ from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.stats_collector import StatsCollector
 
 
-class _SddRepresentation(PropCompiledTarget):
+class SddCompiledTarget(PropCompiledTarget):
     """A propositionally compiled SDD target backed by PySDD."""
 
     def __init__(self, root: SddNode, manager: SddManager) -> None:
@@ -162,7 +162,7 @@ class SddWalker(DagWalker):
         return result
 
 
-class SddCompiler(PropCompiler[_SddRepresentation]):
+class SddCompiler(PropCompiler[SddCompiledTarget]):
     """PropCompiler that compiles an SMT formula into an SDD via PySDD.
 
     Accepts the original (non-abstracted) SMT formula. All atoms – both
@@ -194,7 +194,7 @@ class SddCompiler(PropCompiler[_SddRepresentation]):
         *,
         project_on: Sequence[FNode] | None = None,
         computation_logger: dict[str, object] | None = None,
-    ) -> _SddRepresentation:
+    ) -> SddCompiledTarget:
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
             atoms = set(formula.get_atoms())
@@ -226,8 +226,4 @@ class SddCompiler(PropCompiler[_SddRepresentation]):
                 n_proj_vars = len(atoms)
             stats.log("n_atoms", len(atoms))
             stats.log("n_proj_vars", n_proj_vars)
-            return _SddRepresentation(root, mgr)
-
-
-# Transitional alias until the public API migration.
-SddCompiledTarget = _SddRepresentation
+            return SddCompiledTarget(root, mgr)

@@ -9,9 +9,9 @@ from pysmt.environment import Environment
 from tddnnf import TheoryCompilation
 from tddnnf.builders.extended import TExtendedBuilder
 from tddnnf.builders.reduced import TReducedBuilder
-from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler, _BddRepresentation
-from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler, _D4Representation
-from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler, _SddRepresentation
+from tddnnf.compilers.cudd import BddCompiler
+from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
+from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries.bdd_engine import BddEngine
@@ -91,12 +91,6 @@ def test_native_reorganization_preserves_retained_root(mgr, backend):
         manager.minimize()
         manager.garbage_collect()
     equivalent(mgr, target.to_pysmt(), phi)
-
-
-def test_transitional_backend_aliases():
-    assert BddCompiledTarget is _BddRepresentation
-    assert SddCompiledTarget is _SddRepresentation
-    assert D4CompiledTarget is _D4Representation
 
 
 @pytest.mark.parametrize("backend", [BddCompiler, SddCompiler, D4Compiler])
