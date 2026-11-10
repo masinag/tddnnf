@@ -108,6 +108,19 @@ class BaseTestEngine(Generic[T_Target]):
             solver.add_assertion(mgr.And(mgr.Not(bank_case.expected_formula), mgr.Not(neg_disjunction)))
             assert not solver.solve(), "Engine counter-model state coverage is incomplete!"
 
+    @pytest.mark.parametrize("reverse", [False, True])
+    def test_enumeration_projection_order(self, mgr, compiler, a, b, reverse):
+        projection = [b, a] if reverse else [a, b]
+        abstr = Abstractor({1: a, 2: b})
+        native = compiler.compile(mgr.Or(a, b), abstr, project_on=projection)
+        engine = self.engine_cls(TheoryCompiledTarget(native, abstr, projection, env=mgr.env))
+        try:
+            models = list(engine.enumerate_truth_assignments())
+            assert len(models) == 3
+            assert all(tuple(model) == tuple(projection) for model in models)
+        finally:
+            engine.close()
+
     def test_queries_with_assumptions(
         self,
         mgr: FormulaManager,

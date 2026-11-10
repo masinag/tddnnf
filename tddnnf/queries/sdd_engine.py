@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from typing import TYPE_CHECKING
 
 from pysmt.fnode import FNode
@@ -74,7 +74,7 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
             return True
         return bool(self._condition_chain(lits).is_true())
 
-    def enumerate_truth_assignments(self) -> Iterator[dict[FNode, bool]]:
+    def enumerate_truth_assignments(self) -> Generator[dict[FNode, bool], None, None]:
         root = self._target.root
         if root.is_false():
             return

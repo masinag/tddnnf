@@ -427,3 +427,43 @@ def test_closed_unstarted_generators_are_not_retained(mgr, a, pairing):
             iterator.close()
         assert not q._iterators
         assert q.is_satisfiable()
+
+
+def test_independent_enumerations_and_explicit_close(mgr, a, b, pairing):
+    target = compile_target(mgr, pairing, mgr.Or(a, b), [b, a])
+    with target.queries(pairing[1]) as q:
+        first = q.enumerate_truth_assignments()
+        second = q.enumerate_truth_assignments()
+        assert next(first) == next(second)
+        assert q._iterators == {first.gi_yieldfrom, second.gi_yieldfrom}
+        first.close()
+        assert q._iterators == {second.gi_yieldfrom}
+        assert len(list(second)) == 2
+        assert not q._iterators
+        assert q.count_truth_assignments() == 3
+        first = q.enumerate_truth_assignments()
+        second = q.enumerate_truth_assignments()
+        next(first)
+        next(second)
+        q.close()
+        assert list(first) == list(second) == []
+
+
+def test_engine_close_failure_still_closes_normalizer(mgr, a, monkeypatch):
+    target = compile_target(mgr, PAIRINGS[0], a, [a])
+    q = target.queries(BddEngine)
+    iterator = q.enumerate_truth_assignments()
+    next(iterator)
+    engine_iterator = iterator.gi_yieldfrom
+
+    def fail():
+        assert engine_iterator.gi_frame is None
+        raise ValueError("engine close failed")
+
+    monkeypatch.setattr(q._inner, "close", fail)
+    with pytest.raises(ValueError, match="engine close failed"):
+        q.close()
+    assert q._normalizer._closed
+    assert not q._iterators
+    assert list(iterator) == []
+    q.close()

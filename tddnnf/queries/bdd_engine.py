@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from typing import TYPE_CHECKING
 
 from pysmt.fnode import FNode
@@ -78,11 +78,11 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         mgr = self._target.manager
         return self._restrict_chain(lits) == mgr.true
 
-    def enumerate_truth_assignments(self) -> Iterator[dict[FNode, bool]]:
+    def enumerate_truth_assignments(self) -> Generator[dict[FNode, bool], None, None]:
         root = self._target.root
         if root == self._target.manager.false:
             return
         mgr = self._target.manager
         projection_ids = {f"b{self._abstr.get_id(atom)}": atom for atom in self._projection_atoms}
         for assignment in mgr.pick_iter(root, care_vars=set(projection_ids)):
-            yield {projection_ids[name]: value for name, value in assignment.items()}
+            yield {atom: assignment[name] for name, atom in projection_ids.items()}

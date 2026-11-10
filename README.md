@@ -222,8 +222,10 @@ All query sessions expose the same operations.
 
 Sessions accept engine classes; strings, engine instances, and incompatible
 backend pairings raise `TypeError`. Use `with target.queries(BddEngine)` or call
-idempotent `close()`. Closure releases the normalizer, native query resources,
-and active generators. Query methods then raise `RuntimeError`; closed generators
+idempotent `close()`. Each enumeration call creates an independent generator.
+The session owns active enumerations and stops them before releasing native query
+resources and the normalizer, even if cleanup raises. An enumeration can also be
+closed explicitly with its own `close()` method. Query methods then raise `RuntimeError`; closed generators
 raise `StopIteration`. The target and other sessions remain usable. Direct engines
 and builders remain available. The former `QueryContext.wrap_queries()` API is
 replaced by `target.queries(Engine)`.

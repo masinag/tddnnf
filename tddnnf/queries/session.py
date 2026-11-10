@@ -61,9 +61,7 @@ class QuerySession(Generic[T_Target]):
                 cleanup.callback(self._normalizer.close)
             self._atom_index.clear()
             if self._inner is not None:
-                close = getattr(self._inner, "close", None)
-                if close is not None:
-                    cleanup.callback(close)
+                cleanup.callback(self._inner.close)
             self._inner = None
             iterators = tuple(self._iterators)
             self._iterators.clear()
@@ -121,26 +119,20 @@ class QuerySession(Generic[T_Target]):
         return self._inner.is_implicant(self._mgr.And(lits))
 
     def enumerate_truth_assignments(self) -> Generator[dict[FNode, bool], None, None]:
+        """Create an independent enumeration, stopped automatically when the session closes."""
         self._ensure_open()
+        return self._enumerate_truth_assignments()
 
-        def assignments():
-            if self._closed:
-                return
-            self._iterators.add(iterator)
-            inner = None
-            try:
-                assert self._inner is not None
-                inner = self._inner.enumerate_truth_assignments()
-                for assignment in inner:
-                    yield {atom: assignment[atom] for atom in self._atoms}
-            finally:
-                self._iterators.discard(iterator)
-                close = getattr(inner, "close", None)
-                if close is not None:
-                    close()
-
-        iterator = assignments()
-        return iterator
+    def _enumerate_truth_assignments(self) -> Generator[dict[FNode, bool], None, None]:
+        if self._closed:
+            return
+        assert self._inner is not None
+        iterator = self._inner.enumerate_truth_assignments()
+        self._iterators.add(iterator)
+        try:
+            yield from iterator
+        finally:
+            self._iterators.discard(iterator)
 
     def _index_atoms(self, atoms: Iterable[FNode]) -> dict[FNode, tuple[FNode, bool]]:
         """Index normalized atoms by exact target atom and polarity."""

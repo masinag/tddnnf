@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Generator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -109,7 +109,7 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         remaining = len(self._projection_atoms) - len(lits)
         return count == (1 << remaining)
 
-    def enumerate_truth_assignments(self) -> Iterator[dict[FNode, bool]]:
+    def enumerate_truth_assignments(self) -> Generator[dict[FNode, bool], None, None]:
         assert self._mut is not None
         total = int(self._mut.count([]))
         raw = self._mut.enumerate([], total)

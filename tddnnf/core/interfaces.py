@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, Self, TypeVar, runtime_checkable
@@ -62,6 +62,9 @@ class QueryEngine(Protocol[T_Target_co]):
 
     def __init__(self, container: TheoryCompiledTarget[T_Target_co]) -> None: ...
 
+    def close(self) -> None:
+        """Release engine resources; repeated calls are safe. Defaults to no-op."""
+
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
         """True iff the compiled formula has a satisfying assignment.
 
@@ -90,9 +93,10 @@ class QueryEngine(Protocol[T_Target_co]):
         """True iff the given cube is an implicant of the compiled formula."""
         ...
 
-    def enumerate_truth_assignments(self) -> Iterator[dict[FNode, bool]]:
+    def enumerate_truth_assignments(self) -> Generator[dict[FNode, bool], None, None]:
         """Enumerate all total truth assignments satisfying the compiled formula.
 
-        Each assignment maps every atom known to the compiled target to True or False.
+        Each call returns an independent, closable generator. Assignments map every
+        projection atom to True or False, in projection order.
         """
         ...

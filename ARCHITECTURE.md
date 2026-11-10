@@ -249,10 +249,20 @@ dimensions. Nonconstant D4 artifacts map exactly the projection to dense native
 IDs, including atoms absent from the DAG; query engines assert this invariant.
 
 Sessions support `with` and idempotent `close()`, including initialization failure
-and exceptions. Closing releases active iterators, the normalizer, and native
-adapter resources (including d-DNNF temporary files). Query methods on a closed session raise `RuntimeError`; closed generators
-raise `StopIteration`. Closing a session preserves
-the target and other sessions; finalizers are a fallback.
+and exceptions. Each enumeration call creates an independent generator. The session
+lazily creates and tracks its engine generator on first iteration, delegates
+assignments without copying, and unregisters it when iteration ends or the caller
+closes the generator. Unstarted enumerations use no engine resources and stop if
+started after session closure. Closing the session stops every active engine
+generator before releasing the native adapter (including d-DNNF temporary files)
+and normalizer, continuing cleanup even if a close raises. Query methods on a
+closed session raise `RuntimeError`; its enumerations raise `StopIteration`.
+Closing a session preserves the target and other sessions; finalizers are a fallback.
+
+`QueryEngine.enumerate_truth_assignments()` must return a closable
+`Generator[dict[FNode, bool], None, None]`, including for structural engines.
+Arbitrary iterators do not satisfy this contract. Engine `close()` must be
+idempotent; subclasses of `QueryEngine` inherit a no-op default.
 
 ## Persistence and reconstruction
 
