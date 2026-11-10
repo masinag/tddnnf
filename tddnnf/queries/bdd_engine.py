@@ -43,23 +43,21 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         return mgr.let(assign, source)
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
-        if not assumptions:
-            return self._target.root != self._target.manager.false
+        unique = normalize_assumptions(assumptions or [])
+        if unique is None:
+            return False
         mgr = self._target.manager
-        return self._restrict_chain(assumptions, negate=False) != mgr.false
+        return self._restrict_chain(unique, negate=False) != mgr.false
 
     def _forgotten_var_count(self) -> int:
         return len(self._target.manager.vars) - len(self._projection_atoms)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        n = len(self._target.manager.vars)
-        forgotten = self._forgotten_var_count()
-        if not assumptions:
-            total = self._target.root.count(n)
-            return int(total) >> forgotten
-        unique = normalize_assumptions(assumptions)
+        unique = normalize_assumptions(assumptions or [])
         if unique is None:
             return 0
+        n = len(self._target.manager.vars)
+        forgotten = self._forgotten_var_count()
         restricted = self._restrict_chain(unique, negate=False)
         total = restricted.count(n)
         return int(total) >> (forgotten + len(unique))

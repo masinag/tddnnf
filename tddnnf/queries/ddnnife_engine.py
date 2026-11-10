@@ -81,15 +81,11 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         return self._mut.is_sat(self._lits_to_ddnnf(unique))
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        if assumptions:
-            unique = normalize_assumptions(assumptions)
-            if unique is None:
-                return 0
-            lits = self._lits_to_ddnnf(unique)
-        else:
-            lits = []
+        unique = normalize_assumptions(assumptions or [])
+        if unique is None:
+            return 0
         assert self._mut is not None
-        return int(self._mut.count(lits))
+        return int(self._mut.count(self._lits_to_ddnnf(unique)))
 
     def is_valid(self) -> bool:
         return self.count_truth_assignments() == (1 << len(self._projection_atoms))

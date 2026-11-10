@@ -163,6 +163,27 @@ class BaseTestEngine(Generic[T_Target]):
                 f"Engine model count under assumptions {assume_dict} failed."
             )
 
+    @pytest.mark.parametrize(
+        ("polarities", "expected_count"),
+        [(None, 3), ([], 3), ([True, True], 2), ([True, False], 0), ([False], 1)],
+        ids=["none", "empty", "duplicate", "contradictory", "negative"],
+    )
+    def test_normalized_assumptions(
+        self,
+        mgr: FormulaManager,
+        compiler: PropCompiler[T_Target],
+        a: FNode,
+        b: FNode,
+        polarities: list[bool] | None,
+        expected_count: int,
+    ) -> None:
+        abstr = Abstractor({1: a, 2: b})
+        target = compiler.compile(mgr.Or(a, b), abstr)
+        engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b], env=mgr.env))
+        assumptions = None if polarities is None else [a if positive else mgr.Not(a) for positive in polarities]
+        assert engine.is_satisfiable(assumptions) == (expected_count > 0)
+        assert engine.count_truth_assignments(assumptions) == expected_count
+
     # --- Error / Validation Tests ---
 
     def test_is_satisfiable_unknown_assumption(self, engine: QueryEngine, c: FNode) -> None:

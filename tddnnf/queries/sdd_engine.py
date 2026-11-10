@@ -45,18 +45,16 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         return temp
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
-        if not assumptions:
-            return not bool(self._target.root.is_false())
-        unique = normalize_assumptions(assumptions)
-        return unique is not None and not bool(self._condition_chain(unique, negate=False).is_false())
+        unique = normalize_assumptions(assumptions or [])
+        if unique is None:
+            return False
+        return not bool(self._condition_chain(unique, negate=False).is_false())
 
     def _forgotten_var_count(self) -> int:
         return self._target.manager.var_count() - len(self._projection_atoms)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        if not assumptions:
-            return self._target.root.global_model_count() >> self._forgotten_var_count()
-        unique = normalize_assumptions(assumptions)
+        unique = normalize_assumptions(assumptions or [])
         if unique is None:
             return 0
         temp = self._condition_chain(unique, negate=False)
