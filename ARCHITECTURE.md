@@ -222,7 +222,7 @@ if-then-else expansion over its SMT atom.
 ## Queries
 
 `target.queries(BddEngine)`, `target.queries(SddEngine)`, and
-`target.queries(D4Engine)` open independent sessions over their matching
+`target.queries(DdnnifeEngine)` open independent sessions over their matching
 public backend target classes. Strings, engine instances, and incompatible pairings raise
 `TypeError`. Engines and `QuerySession` are exported from `tddnnf.queries`.
 
@@ -316,7 +316,7 @@ tddnnf/
 │   └── cudd.py                # CUDD OBDD compiler and target
 └── queries/
     ├── session.py             # Normalization, validation, lifecycle
-    ├── d4_engine.py           # d-DNNF queries through ddnnife
+    ├── ddnnife_engine.py       # d-DNNF queries through ddnnife
     ├── sdd_engine.py          # SDD queries
     └── bdd_engine.py          # OBDD queries
 ```

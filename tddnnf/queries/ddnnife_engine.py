@@ -17,14 +17,14 @@ from tddnnf.core.interfaces import QueryEngine
 from tddnnf.core.pysmt_utils import clause_lits, cube_lits, normalize_assumptions
 
 
-class D4Engine(QueryEngine[D4CompiledTarget]):
+class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
     """Polynomial-time queries over a d-DNNF compiled target via ddnnife."""
 
     def __init__(self, container: TheoryCompiledTarget[D4CompiledTarget]) -> None:
 
         self._tmpdir = None
         if not isinstance(container.target, D4CompiledTarget):
-            raise TypeError("D4Engine requires D4CompiledTarget")
+            raise TypeError("DdnnifeEngine requires D4CompiledTarget")
         self._abstr = container.abstr
         self._projection_atoms: tuple[FNode, ...] = container.projection_atoms
         self._projection_atom_set: set[FNode] = set(container.projection_atoms)
@@ -50,7 +50,7 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
             assert len(self._remapping) == self._var_count == len(self._projection_atoms)
             assert set(self._remapping.values()) == set(range(1, self._var_count + 1))
             self._const_true = False
-            self._tmpdir = tempfile.TemporaryDirectory(prefix="d4_engine_")
+            self._tmpdir = tempfile.TemporaryDirectory(prefix="ddnnife_engine_")
             try:
                 nnf_path = Path(self._tmpdir.name) / "circuit.nnf"
                 nnf_path.write_text(nnf_text)

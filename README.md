@@ -53,7 +53,7 @@ from tlemma_enum.solvers import (
 
 from tddnnf import TheoryCompilation
 from tddnnf.compilers.d4 import D4Compiler
-from tddnnf.queries import D4Engine
+from tddnnf.queries import DdnnifeEngine
 ```
 
 Define the SMT atoms and formula.
@@ -125,7 +125,7 @@ Open a query session with the matching engine. Each session normalizes queries
 in the target’s environment and aligns them with its stored vocabulary.
 
 ```python
-engine = target.queries(D4Engine)
+engine = target.queries(DdnnifeEngine)
 ```
 
 Run queries over that vocabulary.
@@ -159,7 +159,7 @@ matching engine.
 
 | Compiler | Representation | Engine | Requirement |
 | --- | --- | --- | --- |
-| `D4Compiler` | d-DNNF | `D4Engine` | Installed d4 binary |
+| `D4Compiler` | d-DNNF | `DdnnifeEngine` | Installed d4 binary |
 | `SddCompiler` | SDD through PySDD | `SddEngine` | PySDD dependency |
 | `BddCompiler` | OBDD through CUDD | `BddEngine` | `dd` with CUDD support |
 
@@ -299,7 +299,7 @@ loaded_target = TheoryCompiledTarget.load(target_dir, D4CompiledTarget)
 Open a session and query the loaded target.
 
 ```python
-with loaded_target.queries(D4Engine) as queries:
+with loaded_target.queries(DdnnifeEngine) as queries:
     print(queries.count_truth_assignments())
 ```
 

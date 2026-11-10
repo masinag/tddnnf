@@ -15,7 +15,7 @@ from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries.bdd_engine import BddEngine
-from tddnnf.queries.d4_engine import D4Engine
+from tddnnf.queries.ddnnife_engine import DdnnifeEngine
 from tddnnf.queries.sdd_engine import SddEngine
 from tests.test_compilation_pipeline import equivalent
 
@@ -101,7 +101,7 @@ def test_shared_abstraction_growth_preserves_earlier_target(mgr, backend, builde
     builder_cls = TReducedBuilder if builder_name == "reduced" else TExtendedBuilder
     builder = builder_cls(backend(), env=mgr.env)
     first = builder.build(mgr.Or(a, b), [], abstr, [a, b])
-    engine_cls = {BddCompiler: BddEngine, SddCompiler: SddEngine, D4Compiler: D4Engine}[backend]
+    engine_cls = {BddCompiler: BddEngine, SddCompiler: SddEngine, D4Compiler: DdnnifeEngine}[backend]
     engine = engine_cls(first)
 
     def check_first(query):

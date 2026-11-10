@@ -7,22 +7,22 @@ import pytest
 from pysmt.environment import Environment, pop_env, push_env
 from pysmt.typing import BOOL, INT
 
-import tddnnf.queries.d4_engine as d4_module
+import tddnnf.queries.ddnnife_engine as ddnnife_module
 from tddnnf import TheoryCompilation
 from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
 from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
 from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
-from tddnnf.queries import BddEngine, D4Engine, SddEngine
+from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
 from tddnnf.queries.session import QuerySession
 from tests._base_engine_test import BaseTestEngine
 
-PAIRINGS = [(BddCompiler, BddEngine), (SddCompiler, SddEngine), (D4Compiler, D4Engine)]
+PAIRINGS = [(BddCompiler, BddEngine), (SddCompiler, SddEngine), (D4Compiler, DdnnifeEngine)]
 
 
 def open_queries(target):
-    engine_type = {BddCompiledTarget: BddEngine, SddCompiledTarget: SddEngine, D4CompiledTarget: D4Engine}
+    engine_type = {BddCompiledTarget: BddEngine, SddCompiledTarget: SddEngine, D4CompiledTarget: DdnnifeEngine}
     return target.queries(engine_type[type(target.target)])
 
 
@@ -215,17 +215,17 @@ def test_initialization_cleanup(mgr, a, monkeypatch):
         raise ValueError("native load failed")
 
     temporary_dirs = []
-    original_temp = d4_module.tempfile.TemporaryDirectory
+    original_temp = ddnnife_module.tempfile.TemporaryDirectory
 
     def temporary(*args, **kwargs):
         result = original_temp(*args, **kwargs)
         temporary_dirs.append(Path(result.name))
         return result
 
-    monkeypatch.setattr(d4_module.tempfile, "TemporaryDirectory", temporary)
+    monkeypatch.setattr(ddnnife_module.tempfile, "TemporaryDirectory", temporary)
     monkeypatch.setattr(ddnnife.Ddnnf, "from_file", fail)
     with pytest.raises(ValueError, match="native load failed"):
-        target.queries(D4Engine)
+        target.queries(DdnnifeEngine)
     assert contexts[0]._normalizer._closed
     assert all(not path.exists() for path in temporary_dirs)
 
@@ -235,13 +235,13 @@ def test_ddnnife_rejects_partial_mapping(mgr, a, b):
     native = D4CompiledTarget("o 1 0\nt 2 0\n1 2 1 0\n", 2, {3: 1})
     target = TheoryCompiledTarget(native, abstr, [a, b], env=mgr.env)
     with pytest.raises(AssertionError, match="D4 mapping"):
-        D4Engine(target)
+        DdnnifeEngine(target)
 
 
 def test_ddnnife_absent_atom_is_mapped(mgr, a, b):
     target = compile_target(mgr, PAIRINGS[2], a, [a, b])
     assert target.abstr.get_id(b) in target.target.remapping
-    with target.queries(D4Engine) as q:
+    with target.queries(DdnnifeEngine) as q:
         assert q.count_truth_assignments() == 2
         assert q.count_truth_assignments([b]) == 1
         assert not q.is_satisfiable([b, mgr.Not(b)])
@@ -266,7 +266,7 @@ def test_bound_environment(a, mgr, pairing):
 
 def test_cleanup_continues_after_iterator_close_failure(mgr, a):
     target = compile_target(mgr, PAIRINGS[2], a, [a])
-    q = target.queries(D4Engine)
+    q = target.queries(DdnnifeEngine)
     native = q._inner
     path = Path(native._tmpdir.name)
     closed = []

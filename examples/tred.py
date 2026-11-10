@@ -8,7 +8,7 @@ from tddnnf import TheoryCompilation
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
-from tddnnf.queries import BddEngine, D4Engine, SddEngine
+from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
 
 # ---- SMT ATOMS ----
 
@@ -47,7 +47,7 @@ with TheoryCompilation(phi, project_on=atoms) as compilation:
     for name, compiler, engine_type in [
         ("BDD", BddCompiler, BddEngine),
         ("SDD", SddCompiler, SddEngine),
-        ("dDNNF", D4Compiler, D4Engine),
+        ("dDNNF", D4Compiler, DdnnifeEngine),
     ]:
         print(f"=== T-Reduced ({name}) ===")
         target = compilation.compile_treduced(compiler(), lemmas)

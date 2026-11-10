@@ -898,3 +898,36 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   4.15 s (`/tmp/merged-reviewed-companion.log`). Focused type/inference checks,
   formatting and whitespace checks pass again. No benchmarks or full-project
   static analysis; existing native limitations remain.
+
+
+### Engine backend naming correction (2026-11-10)
+
+- Renamed `D4Engine` to `DdnnifeEngine` and `d4_engine.py` to
+  `ddnnife_engine.py`, matching the query backend. Updated exports, imports,
+  error wording, temporary-directory prefix, test module/class, examples,
+  README, architecture, and the companion backend table. The old class/module
+  have no compatibility aliases: callers must update their imports.
+- `D4Compiler`, `D4CompiledTarget`, and the companion `"ddnnf"` backend identifier
+  remain unchanged. Earlier evidence above and frozen baseline logs preserve
+  their historical names.
+- Existing environment Python
+  `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python`
+  ran `-m pytest -q`: **787 passed**, 1121 existing warnings, 23.79 s
+  (`/tmp/ddnnife-rename-library.log`). Companion **191 passed**, 5 warnings,
+  3.89 s (`/tmp/ddnnife-rename-companion.log`), from
+  `/tmp/tddnnf-testbench-04-sessions` with
+  `PYTHONPATH=/tmp/tddnnf-testbench-04-sessions/scripts:/home/gabriele/Documents/theorykc/tddnnf`,
+  `UV_CACHE_DIR=/tmp/uv-cache`, and the existing `UV_PROJECT_ENVIRONMENT`, using
+  `uv run --no-sync python -m pytest -q`.
+- All three examples pass (`/tmp/ddnnife-rename-example-{abstr,tred,text}.log`).
+  Library Ruff lint, companion changed-file lint, changed-file formatting, and
+  both whitespace checks pass. Focused basedpyright checks pass using
+  `/tmp/merged-pyright.json` for session/container and `/tmp/merged-typing.py`
+  for BDD and Ddnnife generic inference. `/tmp/merged-typing-invalid.py` produces
+  exactly the expected engine/target argument-type error.
+- Searches find no old class/module references in executable code or current
+  documentation in either checkout; historical evidence is retained. No new
+  behavioral tests, benchmarks, full-project type checks, or unrelated cleanup.
+  Native limitations remain. Updates ship on the existing query-session branches
+  and PRs [#11](https://github.com/masinag/tddnnf/pull/11) and
+  [#14](https://github.com/masinag/tddnnf-testbench/pull/14), left open.
