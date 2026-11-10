@@ -323,7 +323,7 @@ Leave the PR open for renewed approval. Do not merge or start the next step.
 ## Completed checks
 
 Record evidence here as steps are implemented; consult GitHub for approvals and
-merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
+merges. Steps 1–4 record their checks below; steps 5–7 have not started.
 
 ### Step 0 — `refactor/00-design`
 
@@ -772,3 +772,38 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   ddnnife buffered/u64-limited enumeration, and existing native shutdown warnings
   remain; derived d-DNNF answers inherit native counting limits.
 - Fresh committed-revision read-only review and delivery evidence follow below.
+
+
+### Step 4 independent review and corrections
+
+- Committed implementation `e26d4d9` and formatting correction `51f4c61`.
+  Paused implementation and launched a fresh reviewer with:
+  `codex exec --ephemeral -C /home/gabriele/Documents/theorykc/tddnnf
+  -m gpt-6.1-sol -c 'model_reasoning_effort="high"'
+  -c 'approval_policy="never"' --sandbox read-only
+  --output-last-message /tmp/tddnnf-step4-review.md`.
+  The review inspected `8ac9df0...51f4c61`, the contracts and connected callers;
+  it changed no files or branches and posted no external comments. Full log:
+  `/tmp/tddnnf-step4-review.log`. Independently verified **148 CUDD/SDD tests**
+  and **81 native ddnnife bookkeeping assertions**, bypassing file creation
+  for the read-only sandbox; the reviewer did not rerun full suites or file
+  cleanup tests.
+- Addressed both P2 findings. Stored theory atoms that normalize to constants
+  now retain exact atom/polarity alignment for sessions and legacy wrappers;
+  explicit Boolean constants retain ordinary Boolean semantics. Legacy formula
+  alignment substitutes aligned atoms before they can collapse to constants.
+  Added true/false-normalizing stored-atom regressions across all three pairings.
+  Legacy d4 satisfiability now checks contradictory assumptions before dropping
+  unmapped literals; added that regression to the unmapped-dimension fixture.
+- After corrections, the existing environment's Python command
+  `-m pytest -q tests/test_query_sessions.py tests/test_normalizing_queries.py
+  tests/test_d4_engine.py` passes **298 tests**, 476 warnings, 9.58 s. Log:
+  `/tmp/tddnnf-step4-review-fixes.log`.
+- Final full library rerun: **781 passed**, 1120 existing native/deprecation
+  warnings, 23.16 s (`/tmp/tddnnf-step4-final-full.log`). Final full companion
+  rerun with the same isolated checkout, SHA, and environment command above:
+  **191 passed**, 5 warnings, 3.92 s
+  (`/tmp/tddnnf-step4-final-testbench.log`). All three examples were rerun and
+  pass; Ruff lint, all 11 affected Python-file formatting checks, and
+  `git diff --check` also pass. No benchmark or static type checks were run.
+  The documented native limitations remain. No step-5 work was performed.

@@ -16,6 +16,7 @@ from tddnnf.context import QueryContext
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries import CuddReasoner, DdnnifeReasoner, SddReasoner
+from tddnnf.queries.d4_engine import D4Engine
 from tddnnf.queries.sdd_engine import SddEngine
 from tests._base_engine_test import BaseTestEngine
 
@@ -240,6 +241,12 @@ def test_ddnnife_unmapped_active_and_forgotten_dimensions(mgr, a, b, c):
     abstr = Abstractor({3: a, 7: b, 11: c})
     native = D4CompiledTarget("o 1 0\nt 2 0\n1 2 1 0\n", 2, {3: 1})
     target = TheoryCompiledTarget(native, abstr, [c, a, b], env=mgr.env)
+    legacy = D4Engine(target)
+    try:
+        assert not legacy.is_satisfiable([b, mgr.Not(b)])
+        assert legacy.count_truth_assignments([b, mgr.Not(b)]) == 0
+    finally:
+        legacy.close()
     with target.queries(DdnnifeReasoner()) as q:
         assert q.count_truth_assignments() == 4
         assert q.count_truth_assignments([b]) == 2
@@ -331,3 +338,36 @@ def test_canonical_contradictions_and_constants(mgr, pairing):
         assert q.is_implicant(mgr.And(atom, mgr.Not(equivalent)))
         assert q.is_satisfiable([mgr.Equals(x, x)])
         assert not q.is_satisfiable([mgr.Not(mgr.Equals(x, x))])
+
+
+@pytest.mark.parametrize("truth", [True, False])
+def test_stored_atoms_normalizing_to_constants(mgr, pairing, truth):
+    x = mgr.Symbol("stored_constant_x", INT)
+    atom = mgr.Equals(x, x if truth else mgr.Plus(x, mgr.Int(1)))
+    abstr = Abstractor({1: atom})
+    native = pairing[0]().compile(atom, abstr, project_on=[atom])
+    target = TheoryCompiledTarget(native, abstr, [atom], env=mgr.env)
+    with target.queries(pairing[1]()) as q:
+        assert q.count_truth_assignments() == 1
+        assert q.is_satisfiable([atom])
+        assert not q.is_satisfiable([mgr.Not(atom)])
+        assert q.count_truth_assignments([atom]) == 1
+        assert q.count_truth_assignments([mgr.Not(atom)]) == 0
+        assert q.is_implicant(atom)
+        assert not q.is_implicant(mgr.Not(atom))
+        assert q.entails_clause(atom)
+        assert not q.entails_clause(mgr.Not(atom))
+        assert q.is_satisfiable([mgr.TRUE()])
+        assert not q.is_satisfiable([mgr.FALSE()])
+        assert not q.is_implicant(mgr.TRUE())
+        assert q.is_implicant(mgr.FALSE())
+        assert list(q.enumerate_truth_assignments()) == [{atom: True}]
+    context = QueryContext(target, env=mgr.env)
+    try:
+        assert context.align_assumptions([atom, mgr.Not(atom)]) == [atom, mgr.Not(atom)]
+        assert context.align_formula(atom) is atom
+        assert context.align_formula(mgr.Not(atom)) is mgr.Not(atom)
+        assert context.align_formula(mgr.TRUE()).is_true()
+        assert context.align_formula(mgr.FALSE()).is_false()
+    finally:
+        context.close()

@@ -83,18 +83,13 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
         return (native_count >> (self._var_count - mapped)) << (absent - fixed_absent)
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
+        unique = normalize_assumptions(assumptions or [])
+        if unique is None:
+            return False
         if self._formula_is_constant:
-            if not self._const_true:
-                return False  # it is the false constant
-            # here we know the circuit is the true constant, hence just check
-            # contradicition of assumptions
-            if not assumptions:
-                return True
-            return normalize_assumptions(assumptions) is not None
+            return self._const_true
         assert self._mut is not None
-        if assumptions is None:
-            return self._mut.is_sat([])
-        return self._mut.is_sat(self._lits_to_ddnnf(assumptions))
+        return self._mut.is_sat(self._lits_to_ddnnf(unique))
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
         if self._formula_is_constant:  # true/false constant

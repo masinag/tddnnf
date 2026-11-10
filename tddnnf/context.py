@@ -192,8 +192,10 @@ class QueryContext:
 
     def _align_literal(self, literal: FNode) -> FNode:
         """Normalize one literal and replace its atom with the target atom."""
-        canonical, query_negated = self._normalize_with_polarity(literal)
-        if canonical.is_bool_constant():
+        atom = literal.arg(0) if literal.is_not() else literal
+        canonical, atom_negated = self._normalize_with_polarity(atom)
+        query_negated = literal.is_not() ^ atom_negated
+        if atom.is_bool_constant() or (canonical.is_bool_constant() and canonical not in self._atom_index):
             return self._normalizer.mgr.Bool(canonical.is_true() ^ query_negated)
         target_atom, target_negated = self._lookup_atom(canonical, literal)
         aligned_negated = query_negated ^ target_negated
@@ -229,9 +231,5 @@ class QueryContext:
         Raises:
             ValueError: If an atom is absent from target projection atoms.
         """
-        normalized = self._normalizer.normalize(formula)
-        substitutions: dict[FNode, FNode] = {}
-        for canonical in normalized.get_atoms():
-            target_atom, target_negated = self._lookup_atom(canonical, canonical)
-            substitutions[canonical] = self._normalizer.mgr.Not(target_atom) if target_negated else target_atom
-        return self._normalizer.env.substituter.substitute(normalized, substitutions)
+        substitutions = {atom: self._align_literal(atom) for atom in formula.get_atoms()}
+        return self._normalizer.env.substituter.substitute(formula, substitutions)
