@@ -70,6 +70,7 @@ def shannon_forget(mgr: FormulaManager, formula: FNode, vars_to_forget: list[FNo
 
 class SolverGroundTruth:
     def __init__(self, mgr: FormulaManager, formula: FNode, all_vars: list[FNode], strategy: str) -> None:
+        self.abstr = Abstractor(dict(enumerate(all_vars, 1)))
         self.original_formula = formula
         self.all_vars = all_vars
         n = len(all_vars)
@@ -92,10 +93,8 @@ class SolverGroundTruth:
 
 
 @pytest.fixture(params=FORMULA_BANK)
-def bank_case(request: pytest.FixtureRequest, mgr: FormulaManager, abstr: Abstractor) -> SolverGroundTruth:
+def bank_case(request: pytest.FixtureRequest, mgr: FormulaManager) -> SolverGroundTruth:
     gen_fn, num_vars, strategy = request.param
     v = [mgr.Symbol(f"v{gen_fn.__name__}_{i}", BOOL) for i in range(num_vars)]
-    for var in v:
-        abstr.get_id(var)
     formula = gen_fn(mgr, v)
     return SolverGroundTruth(mgr, formula, v, strategy)

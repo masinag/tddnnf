@@ -20,7 +20,7 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
         import ddnnife
 
         self._abstr = container.abstr
-        self._projection_atoms: list[FNode] = list(container.projection_atoms)
+        self._projection_atoms: tuple[FNode, ...] = container.projection_atoms
         self._projection_atom_set: set[FNode] = set(container.projection_atoms)
         self._var_count = container.target.var_count
         self._remapping = container.target.remapping

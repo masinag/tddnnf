@@ -30,10 +30,9 @@ class BaseTestEngine(Generic[T_Target]):
         a: FNode,
         b: FNode,
     ) -> QueryEngine[T_Target]:
-        for atom in (a, b):
-            abstr.get_id(atom)
+        abstr = Abstractor({1: a, 2: b})
         target = compiler.compile(mgr.And(a, b), abstr)
-        return self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b]))
+        return self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b], env=mgr.env))
 
     def test_exhaustive_engine_and_solver_space(
         self,
@@ -42,8 +41,11 @@ class BaseTestEngine(Generic[T_Target]):
         abstr: Abstractor,
         bank_case: SolverGroundTruth,
     ) -> None:
+        abstr = bank_case.abstr
         target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
-        engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on))
+        engine = self.engine_cls(
+            TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on, env=mgr.env)
+        )
 
         with mgr.env.factory.Solver() as solver:
             solver.add_assertion(bank_case.expected_formula)
@@ -108,8 +110,11 @@ class BaseTestEngine(Generic[T_Target]):
         abstr: Abstractor,
         bank_case: SolverGroundTruth,
     ) -> None:
+        abstr = bank_case.abstr
         target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
-        engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on))
+        engine = self.engine_cls(
+            TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on, env=mgr.env)
+        )
 
         projected_vars = bank_case.project_on
         if not projected_vars:
@@ -181,10 +186,9 @@ class BaseTestEngine(Generic[T_Target]):
         b: FNode,
         c: FNode,
     ) -> None:
-        for atom in (a, b, c):
-            abstr.get_id(atom)
+        abstr = Abstractor({1: a, 2: b, 3: c})
         target = compiler.compile(mgr.And(a, mgr.Or(b, c)), abstr, project_on=[a, b])
-        engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b]))
+        engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b], env=mgr.env))
         with pytest.raises(ValueError, match="not a projection atom"):
             engine.is_satisfiable(assumptions=[c])
         with pytest.raises(ValueError, match="not a projection atom"):

@@ -8,7 +8,8 @@ implementation until the public migration lands. Follow-up work is in
 
 ## Public interface and compilation
 
-The public concepts are `TheoryCompilation`, one `TheoryCompiledTarget`,
+The public concepts are `TheoryCompilation`, `TheoryCompiledTarget`, the backend
+classes `BddCompiledTarget`, `SddCompiledTarget`, and `D4CompiledTarget`,
 configured compiler instances, and configured reasoner instances. The intended
 workflow is:
 
@@ -72,40 +73,49 @@ them anyway: they are unconstrained variables in the represented propositional
 function. The caller supplies theory lemmas appropriate to the requested
 vocabulary; compilation does not run an additional enumerator.
 
-Allocate one abstraction per compilation, in this order:
+Reuse a supplied abstraction or allocate a fresh one when absent. Preserve
+existing IDs and register new atoms above the current maximum, in this order:
 
 1. All active projection atoms, in their declared order.
 2. Remaining atoms of the combined normalized formula, in stable serialization
    order.
 
-IDs must be independent of set iteration, hash randomization, and backend
-traversal. Existentially eliminate every non-projection atom and encoding
-auxiliary. Keep abstraction IDs distinct from native variable IDs, NNF IDs,
+New IDs must be independent of set iteration, hash randomization, and backend
+traversal for a given starting abstraction. Existentially eliminate every
+non-projection atom and encoding auxiliary. Keep abstraction IDs distinct from native variable IDs, NNF IDs,
 and OBDD levels; explicit mappings connect them. A backend may renumber or
 reorder without changing the public vocabulary. Migrated artifacts retain
 their existing IDs instead of applying the new allocation order.
 
 ## Target and resource ownership
 
-`TheoryCompiledTarget` binds a private representation, abstraction, ordered
-active vocabulary (`projection_atoms`), and owning PySMT environment. It is the
-only public target type. Backend-specific public target classes are removed
-at the final migration.
+`TheoryCompiledTarget` binds a public backend compiled target, abstraction,
+ordered active vocabulary (`projection_atoms`), and owning PySMT environment.
+`BddCompiledTarget`, `SddCompiledTarget`, and `D4CompiledTarget` remain public
+classes, available through the supported read-only `.target` property.
+
+Target bindings use read-only properties; the shared abstraction remains
+append-only. Its constructor copies input mappings and its public views are read-only, with no
+deletion or reassignment API. Compilers and targets receive the same abstractor.
+SDD counting uses the native manager's variable count so later registrations,
+sparse IDs, and the minimum one-variable constant manager cannot change query
+dimensions. BDD and d4 keep their existing native dimensions. Concurrent mutation
+is unsupported; saving may include atoms registered by later compilations.
 
 | Owner | Owned state and responsibilities |
 | --- | --- |
 | Compilation session | Normalized inputs, one pipeline, normalizer and its solver resources |
-| Public target | Bound environment, stable abstraction, immutable ordered active vocabulary, private representation |
-| Private d-DNNF representation | NNF text, variable count, abstraction-to-NNF remapping, codec metadata |
-| Private SDD representation | Root references, manager, final vtree, codec metadata |
-| Private OBDD representation | Root references, manager, final variable order, codec metadata |
+| TheoryCompiledTarget | Bound environment, stable abstraction, immutable ordered active vocabulary, backend target |
+| D4CompiledTarget | NNF text, variable count, abstraction-to-NNF remapping, codec metadata |
+| SddCompiledTarget | Root references, manager, final vtree, codec metadata |
+| BddCompiledTarget | Root references, manager, final variable order, codec metadata |
 | Query session | Independent normalizer, transient atom index, reasoner resources and temporary files |
 
 Native roots retain their managers for as long as needed. A target survives
 closure of the compilation session; closing one query session leaves the target
 and other sessions usable. Targets own no normalizers, live solvers, or
-normalization configuration. Private representation objects encapsulate native
-ownership and codecs without becoming another public target hierarchy.
+normalization configuration. Public backend compiled targets encapsulate native
+ownership and codecs.
 
 Immutability is semantic: the represented Boolean function, abstraction
 correspondence, environment, and ordered active vocabulary remain unchanged.

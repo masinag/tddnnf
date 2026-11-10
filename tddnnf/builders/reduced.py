@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Generic
 
 from pysmt.environment import Environment
@@ -30,7 +31,7 @@ class TReducedBuilder(Generic[T_Target]):
         phi: FNode,
         lemmas: list[FNode],
         abstractor: Abstractor,
-        project_on: list[FNode] | None = None,
+        project_on: Sequence[FNode] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
         r"""Compile a T-Reduced Target form of phi as
             sel.compiler($\phi \wedge \bigwedge \ell$).

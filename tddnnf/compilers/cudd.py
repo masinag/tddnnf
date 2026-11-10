@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Self
 
@@ -169,7 +170,7 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        project_on: list[FNode] | None = None,
+        project_on: Sequence[FNode] | None = None,
         computation_logger: dict[str, object] | None = None,
     ) -> BddCompiledTarget:
         stats = StatsCollector(computation_logger)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from array import array
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Self
 
@@ -191,7 +192,7 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        project_on: list[FNode] | None = None,
+        project_on: Sequence[FNode] | None = None,
         computation_logger: dict[str, object] | None = None,
     ) -> SddCompiledTarget:
         stats = StatsCollector(computation_logger)

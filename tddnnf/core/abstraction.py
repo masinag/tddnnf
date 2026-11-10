@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from io import StringIO
+from types import MappingProxyType
 
 from pysmt.environment import Environment, get_env
 from pysmt.fnode import FNode
@@ -11,12 +13,20 @@ from tddnnf.core.pysmt_utils import is_atom
 
 
 class Abstractor:
-    """Bidirectional map between SMT atoms (Bool or theory) and integer IDs."""
+    """Append-only bidirectional map between SMT atoms and integer IDs."""
 
-    def __init__(self, abstraction: dict[int, FNode] | None = None) -> None:
-        self._id_to_atom: dict[int, FNode] = abstraction if abstraction is not None else {}
-        self._atom_to_id: dict[FNode, int] = {atom: idx for idx, atom in self._id_to_atom.items()}
-        self._next_id = self.max_var + 1
+    def __init__(self, abstraction: Mapping[int, FNode] | None = None) -> None:
+        atoms = dict(abstraction) if abstraction is not None else {}
+        self._id_to_atom = atoms
+        self._atom_to_id = {atom: idx for idx, atom in atoms.items()}
+
+    @property
+    def id_to_atom(self) -> Mapping[int, FNode]:
+        return MappingProxyType(self._id_to_atom)
+
+    @property
+    def atom_to_id(self) -> Mapping[FNode, int]:
+        return MappingProxyType(self._atom_to_id)
 
     @property
     def var_count(self) -> int:
@@ -30,14 +40,12 @@ class Abstractor:
         return smt_atom in self._atom_to_id
 
     def get_id(self, smt_atom: FNode) -> int:
-        assert is_atom(smt_atom)
-        idx = self._atom_to_id.get(smt_atom)
-        if idx is None:
-            idx = self._next_id
-            self._next_id += 1
+        assert is_atom(smt_atom), f"expected atom, got {smt_atom}"
+        if smt_atom not in self._atom_to_id:
+            idx = self.max_var + 1
             self._atom_to_id[smt_atom] = idx
             self._id_to_atom[idx] = smt_atom
-        return idx
+        return self._atom_to_id[smt_atom]
 
     def get_atom(self, idx: int) -> FNode:
         if idx <= 0:

@@ -89,7 +89,7 @@ acceptance details below extend the table rather than introducing extra stages.
 | 0 | `refactor/00-design` | Design, execution plan, deferred-work list | None |
 | 1 | `refactor/01-baseline` | Reproducible test and benchmark baseline | 0 |
 | 2 | `refactor/02-compilation` | One pipeline and configured compiler instances | 1 |
-| 3 | `refactor/03-target-ownership` | Private representations and bound immutable target state | 2 |
+| 3 | `refactor/03-target-ownership` | Public backend targets, read-only target bindings, append-only abstraction reuse | 2 |
 | 4 | `refactor/04-query-sessions` | Query composition, input handling, native delegation, cleanup | 3 |
 | 5 | `refactor/05-persistence` | Versioned persistence and paired consumer migration | 4 |
 | 6 | `refactor/06-ddnnf-conversion` | Explicit SDD/OBDD DAG conversion | 5 |
@@ -140,16 +140,19 @@ testbench callers in a companion PR if needed for these checks.
 
 ### Step 3 — target ownership
 
-Introduce private representation objects and one public target bound to its
-environment, abstraction, and immutable active vocabulary. Preserve native
-manager/root lifetimes, reconstruction, and metrics.
+Keep public backend compiled target classes and bind `TheoryCompiledTarget` to
+its environment, abstraction, and immutable active vocabulary. Keep `.target`
+as a supported read-only property. Preserve native manager/root lifetimes,
+reconstruction, and metrics. Reuse supplied abstractions
+with append-only registration and stable IDs; derive SDD counting dimensions
+from the native manager so shared growth does not alter earlier targets.
 
 Check targets after compilation-session closure, constants and shared DAGs,
 mapping/vocabulary mutation attempts, reconstruction in the bound environment,
 and native reordering/minimization without semantic change. Verify resource
 cleanup on exceptions and retained root ownership. Run affected target,
-compiler, reconstruction, and metrics tests. Public removal of transitional
-entry points waits until step 7.
+compiler, reconstruction, and metrics tests. Backend compiled target classes
+and `.target` remain public through step 7.
 
 ### Step 4 — query sessions
 
@@ -201,8 +204,9 @@ conversion errors from the reasoner's already documented native limitations.
 ### Step 7 — public migration
 
 Migrate exports, examples, README, architecture documentation, and testbench
-consumers to the final public interface. Remove obsolete public contexts,
-builders, and backend target entry points after callers have moved. Simplify
+consumers to the final public interface. Remove obsolete public contexts
+and builders after callers have moved. Preserve the public backend compiled
+target classes and read-only `.target` property. Simplify
 affected tests into small functions and straightforward backend parameterization
 while retaining useful helpers and coverage.
 
@@ -570,3 +574,132 @@ merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
   Original testbench pending files/status still match `baseline/preserved-checkout.json`.
 - No timer changes or full performance rerun. `plans` selection intentionally can
   differ when normalization cancels original variables. Both PRs stay open.
+
+
+## Step 3 evidence — target ownership (2026-11-09)
+
+- GitHub confirms library PR #9 and testbench PR #12 merged. Branch
+  `refactor/03-target-ownership` starts at library integration `f54db08`;
+  isolated testbench worktree `/tmp/tddnnf-testbench-03-validation` starts at
+  integration `f3cd841`. The original testbench checkout was not modified.
+- Abstractor copies constructor input and exposes read-only bidirectional views.
+  Compilation reuses supplied abstractions with append-only registration in
+  stable order, preserving sparse IDs and allocating above the maximum. Targets
+  expose read-only bindings to the representation, abstraction, tuple vocabulary,
+  and environment. Reconstruction binds to that environment; metrics delegate.
+  Public backend compiled target classes and the read-only `.target` property
+  remain supported. Artifact formats, native settings, and logs are unchanged.
+- PySDD's installed `SddNode.wrap` retains the manager and calls `ref()`; native
+  roots/managers remain together without additional manual reference counting.
+- Environment: Python 3.12.15, PySMT 0.9.7.dev431, PySDD 1.0.6, dd 0.6.0,
+  ddnnife 0.10.0, tlemma-enum 0.1.0, pytest 9.1.1, ruff 0.15.17. Existing
+  MathSAT/d4 installations from the baseline were reused; no dependencies changed.
+- Commands use `UV_CACHE_DIR=/tmp/uv-cache` and
+  `UV_PROJECT_ENVIRONMENT=/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv`.
+  `uv run --no-sync python -m pytest -q`: **532 passed**, 729 warnings, 15.60 s.
+  Added tests cover session closure + GC, constants/shared DAGs, sparse mappings,
+  read-only state/input copies, bound reconstruction under another active
+  environment, native minimization/GC and OBDD reordering.
+  Existing exception-cleanup tests remain. The loaded-target environment check
+  was added afterward and the abstraction suite rerun successfully.
+- Testbench suite, from its isolated worktree with
+  `PYTHONPATH=/tmp/tddnnf-testbench-03-validation/scripts`, using the same pytest
+  command: **191 passed**, 5 warnings, 3.94 s. Before the companion change three
+  parameterizations failed on list-versus-tuple equality; its only code change
+  updates that assertion. Production consumers require no change.
+- All three `uv run --no-sync python examples/{abstr,tred,text}.py` runs pass.
+  `uv run --no-sync python /tmp/tddnnf-step3-smoke.py` with the isolated testbench
+  PYTHONPATH and `PYTHONHASHSEED=0`: **12 compile + 36 CT/CE/IM tasks passed**,
+  with answers agreeing across backends. Inputs are the existing frozen synthetic
+  baseline sample; exact argv/stdout/stderr are `/tmp/tddnnf-step3-smoke/commands.json`.
+  Other raw logs are `/tmp/tddnnf-step3-*.log`.
+- `ruff check tddnnf tests examples`, affected-file `ruff format --check`, and
+  `git diff --check` pass. Type checkers remain unavailable; no full performance
+  benchmarks, persistence migration, compatibility overloads, or query sessions
+  were added. Existing CUDD shutdown-reference/deprecation warnings remain;
+  ddnnife zero-feature constant metrics still raise its documented native error
+  (covered explicitly), rather than changing metric behavior in this step.
+
+Fresh read-only review of library `148bf20` and companion `3d501dd` reported
+**no actionable findings**. Independent focused checks passed **31 tests**, 20
+existing warnings (`/tmp/tddnnf-step3-independent-review.log`). Review included
+connected ownership, reconstruction, compiler, query, persistence, and metric
+code; no implementation corrections were requested. Original testbench pending
+file SHA-256 hashes still match `baseline/preserved-checkout.json`.
+
+
+### Append-only abstraction reuse correction
+
+- Restored `get_id()` registration with the existing `is_atom` assertion. The
+  ordinary class owns private dictionaries, copies constructor mappings, and
+  exposes read-only live views. New IDs are above the maximum, preserving sparse
+  IDs; there is no public deletion or reassignment API. Supplied abstractors are
+  extended in deterministic order and shared by compiler and target; absent
+  abstractors are created fresh. Backend preparation assertions remain.
+- Target bindings remain read-only, projection vocabularies remain tuples, and
+  environment ownership is unchanged. SDD forgotten dimensions now use
+  `manager.var_count() - len(projection_atoms)`; BDD and d4 counting are unchanged.
+- **Reproduced before the SDD fix**, after restoring shared registration:
+  an earlier `a OR b` target counted **0 instead of 3** after a second compilation
+  added two atoms. Sparse `{7: a}` counted **64 instead of 1**, including under
+  assumption `a`; a fresh true constant with empty projection counted **2 instead
+  of 1**. The new focused regressions had **7 failures, 11 passes**. Log:
+  `/tmp/tddnnf-append-only-before.log`.
+- **Current validation**, using the existing testbench virtual environment's
+  Python and Ruff directly (no dependency changes):
+  `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python -m pytest -q`
+  passes **552 tests**, 751 existing native/deprecation warnings, 14.78 s.
+  The four affected suites pass **245 tests**, 290 warnings, 5.27 s.
+  These cover registration, stable sparse IDs, copied inputs, read-only views,
+  supplied-object reuse, read-only target bindings, and both builders across all
+  three backends. Earlier targets preserve counts, assumptions, enumeration,
+  reconstruction, and query scope after growth, with both existing and new
+  engines. SDD counts cover sparse IDs, empty projections, and true/false constants.
+  Logs: `/tmp/tddnnf-append-only-{focused,full}.log`.
+- `ruff check tddnnf tests examples`, affected Python-file `ruff format --check`,
+  and `git diff --check` pass. Earlier step-3 testbench **191 passed**, examples,
+  smoke **12 compile + 36 query tasks**, and independent review evidence above
+  are historical checks, not rerun for this correction. No external testbench
+  changes, benchmark reruns, or static type checks were performed.
+- Concurrent mutation is unsupported; saved mappings can include atoms from
+  later compilations. Existing native shutdown/deprecation warnings and ddnnife
+  zero-feature constant metric errors remain. Persistence migration and query
+  sessions remain later steps.
+
+
+### PR #10 review updates
+
+- Applied the [target class review](https://github.com/masinag/tddnnf/pull/10#discussion_r4514843237):
+  replaced the frozen dataclass with private fields and getter properties, using
+  the same pattern as the backend representations. Public target bindings remain
+  read-only; assignment tests now expect `AttributeError`. Tuple projection,
+  environment ownership, and append-only abstraction sharing are preserved.
+- Applied both [import](https://github.com/masinag/tddnnf/pull/10#discussion_r4514920470)
+  [comments](https://github.com/masinag/tddnnf/pull/10#discussion_r4514930806):
+  all imports in `tests/test_target_ownership.py` are now top-level, verified
+  with an AST check.
+- Using the same existing virtual environment, `python -m pytest -q` passes
+  **552 tests**, 747 existing native/deprecation warnings, 13.80 s.
+  Log: `/tmp/tddnnf-pr10-review-full.log`. Ruff lint across `tddnnf tests examples`,
+  affected-file formatting, and `git diff --check` pass. No benchmark, external
+  testbench, or static type checks were rerun.
+
+
+### Public backend target classes (2026-11-10)
+
+- Restored `BddCompiledTarget`, `SddCompiledTarget`, and `D4CompiledTarget` as
+  the actual public class names, including compiler annotations, constructors,
+  and docstrings. Removed the alias-identity test and its private imports.
+  The read-only `.target` property remains supported through the final migration.
+- Ownership, getter properties, bound reconstruction, tuple vocabulary,
+  append-only abstraction reuse, persistence, and the SDD counting correction
+  are preserved. Architecture, design, and step-7 wording now agree.
+- Using the existing environment and commands above,
+  `uv run --no-sync python -m pytest -q`: **551 passed**, 748 existing
+  native/deprecation warnings, 13.71 s. One test was removed from the preceding
+  552-test run. Log: `/tmp/tddnnf-public-backend-full.log`.
+- `ruff check tddnnf tests examples`, `ruff format --check` on the three compiler
+  modules and `tests/test_target_ownership.py`, and `git diff --check` pass.
+  Tracked-source searches find no private representation class names or backend
+  alias claims. No benchmark reruns, external testbench changes, or static type
+  checks; existing native limitations remain.

@@ -17,7 +17,7 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
     def __init__(self, container: TheoryCompiledTarget[SddCompiledTarget]) -> None:
         self._target = container.target
         self._abstr = container.abstr
-        self._projection_atoms: list[FNode] = container.projection_atoms
+        self._projection_atoms: tuple[FNode, ...] = container.projection_atoms
         self._projection_atom_set: set[FNode] = set(container.projection_atoms)
 
     def _lit_to_sdd(self, lit: FNode):
@@ -45,7 +45,7 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         return not bool(self._condition_chain(assumptions, negate=False).is_false())
 
     def _forgotten_var_count(self) -> int:
-        return self._abstr.var_count - len(self._projection_atoms)
+        return self._target.manager.var_count() - len(self._projection_atoms)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
         if not assumptions:

@@ -1,24 +1,50 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Generic
 
-from pysmt.environment import Environment
+from pysmt.environment import Environment, get_env
 from pysmt.fnode import FNode
-from pysmt.formula import FormulaManager
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import T_Target
+from tddnnf.core.interfaces import DagSize, T_Target
 
 
 class TheoryCompiledTarget(Generic[T_Target]):
-    """A compiled target paired with its SMT-to-Boolean abstraction."""
+    """A representation bound to its abstraction, vocabulary, and SMT environment."""
 
-    def __init__(self, target: T_Target, abstr: Abstractor, projection_atoms: list[FNode]) -> None:
-        self.target = target
-        self.abstr = abstr
-        self.projection_atoms = projection_atoms
+    def __init__(
+        self,
+        target: T_Target,
+        abstr: Abstractor,
+        projection_atoms: Sequence[FNode],
+        env: Environment | None = None,
+    ) -> None:
+        self._target = target
+        self._abstr = abstr
+        self._projection_atoms = tuple(projection_atoms)
+        self._env = env if env is not None else get_env()
+
+    @property
+    def target(self) -> T_Target:
+        return self._target
+
+    @property
+    def abstr(self) -> Abstractor:
+        return self._abstr
+
+    @property
+    def projection_atoms(self) -> tuple[FNode, ...]:
+        return self._projection_atoms
+
+    @property
+    def env(self) -> Environment:
+        return self._env
+
+    def dag_size(self) -> DagSize:
+        return self.target.dag_size()
 
     def save(self, directory: Path) -> None:
         """Serialize the abstraction and delegate target persistence."""
@@ -30,8 +56,8 @@ class TheoryCompiledTarget(Generic[T_Target]):
         (directory / "abstraction.json").write_text(json.dumps(payload, indent=2))
         self.target.save(directory)
 
-    def to_pysmt(self, mgr: FormulaManager) -> FNode:
-        return self.target.to_pysmt(self.abstr, mgr)
+    def to_pysmt(self) -> FNode:
+        return self.target.to_pysmt(self.abstr, self.env.formula_manager)
 
     @classmethod
     def load(
@@ -41,9 +67,10 @@ class TheoryCompiledTarget(Generic[T_Target]):
         env: Environment | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
         """Reconstruct a container from a directory and the target's load classmethod."""
+        env = env if env is not None else get_env()
         payload = json.loads((directory / "abstraction.json").read_text())
         abstr = Abstractor.from_dict(payload["abstraction"], env=env)
         projection_atom_ids: list[int] = payload["projection_atom_ids"]
         target = target_type.load(directory)
         projection_atoms = [abstr.get_atom(i) for i in projection_atom_ids]
-        return cls(target, abstr, projection_atoms)
+        return cls(target, abstr, projection_atoms, env=env)

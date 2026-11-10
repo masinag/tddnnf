@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any, Self
 
 from pysmt.environment import Environment
@@ -28,7 +28,7 @@ class TheoryCompilation:
     def __init__(
         self,
         phi: FNode,
-        project_on: Iterable[FNode] | None = None,
+        project_on: Sequence[FNode] | None = None,
         env: Environment | None = None,
     ) -> None:
         self._env = env if env is not None else get_env()
@@ -42,7 +42,7 @@ class TheoryCompilation:
                 if project_on is None
                 else project_on
             )
-            self.project_on = list(
+            self.project_on = tuple(
                 dict.fromkeys(normalized for atom in atoms if (normalized := self._normalize_atom(atom)) is not None)
             )
         except BaseException:
@@ -102,7 +102,6 @@ class TheoryCompilation:
         if isinstance(compiler, (str, type)) or not isinstance(compiler, PropCompiler):
             raise TypeError("Expected a configured compiler instance")
         normalized_lemmas = [self.normalize(lemma) for lemma in lemmas]
-        abstractor = abstractor if abstractor is not None else Abstractor()
         stats = StatsCollector(computation_logger)
         with stats.track_time("build_time"):
             mgr = self._env.formula_manager
@@ -111,16 +110,16 @@ class TheoryCompilation:
                 if extended
                 else mgr.And(self.phi, *normalized_lemmas)
             )
-            for atom in self.project_on:
-                abstractor.get_id(atom)
-            for atom in sorted(combined.get_atoms(), key=lambda a: to_smtlib(a, daggify=False)):
+            if abstractor is None:
+                abstractor = Abstractor()
+            for atom in (*self.project_on, *sorted(combined.get_atoms(), key=lambda a: to_smtlib(a, daggify=False))):
                 abstractor.get_id(atom)
             artifact = compiler.compile(
                 combined, abstractor, project_on=self.project_on, computation_logger=computation_logger
             )
         stats.log("n_lemmas", len(normalized_lemmas))
         stats.log("n_projection_atoms", len(self.project_on))
-        return TheoryCompiledTarget(artifact, abstractor, projection_atoms=list(self.project_on))
+        return TheoryCompiledTarget(artifact, abstractor, projection_atoms=self.project_on, env=self._env)
 
     def _normalize_atom(self, atom: FNode) -> FNode | None:
         positive = atom.arg(0) if atom.is_not() else atom

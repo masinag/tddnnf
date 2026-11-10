@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Self
 
 import ddnnife
@@ -62,10 +64,10 @@ class _D4Node:
 class D4CompiledTarget(PropCompiledTarget):
     """A compiled d-DNNF target backed by a d4 NNF file."""
 
-    def __init__(self, nnf_text: str, var_count: int, remapping: dict[int, int] | None = None) -> None:
+    def __init__(self, nnf_text: str, var_count: int, remapping: Mapping[int, int] | None = None) -> None:
         self._nnf_text = nnf_text
         self._var_count = var_count
-        self._remapping = remapping if remapping is not None else {}
+        self._remapping = MappingProxyType(dict(remapping) if remapping is not None else {})
 
     @property
     def nnf_text(self) -> str:
@@ -76,7 +78,7 @@ class D4CompiledTarget(PropCompiledTarget):
         return self._var_count
 
     @property
-    def remapping(self) -> dict[int, int]:
+    def remapping(self) -> Mapping[int, int]:
         return self._remapping
 
     def dag_size(self) -> DagSize:
@@ -285,7 +287,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        project_on: list[FNode] | None = None,
+        project_on: Sequence[FNode] | None = None,
         computation_logger: dict[str, object] | None = None,
     ) -> D4CompiledTarget:
         stats = StatsCollector(computation_logger)
