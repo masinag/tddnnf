@@ -4,13 +4,11 @@ from pysmt.shortcuts import GT, And, Not, Or, Plus, Real, Symbol
 from pysmt.typing import REAL
 from tlemma_enum.solvers.mathsat_total import MathSATTotalEnumerator
 
-from tddnnf import QueryContext, TheoryCompilation
+from tddnnf import TheoryCompilation
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
-from tddnnf.queries.bdd_engine import BddEngine
-from tddnnf.queries.d4_engine import D4Engine
-from tddnnf.queries.sdd_engine import SddEngine
+from tddnnf.queries import CuddReasoner, DdnnifeReasoner, SddReasoner
 
 # ---- SMT ATOMS ----
 
@@ -45,14 +43,13 @@ with TheoryCompilation(phi, project_on=atoms) as compilation:
 
     # ---- BACKEND LOOP ----
 
-    for name, compiler, qengine in [
-        ("BDD", BddCompiler, BddEngine),
-        ("SDD", SddCompiler, SddEngine),
-        ("dDNNF", D4Compiler, D4Engine),
+    for name, compiler, reasoner in [
+        ("BDD", BddCompiler, CuddReasoner),
+        ("SDD", SddCompiler, SddReasoner),
+        ("dDNNF", D4Compiler, DdnnifeReasoner),
     ]:
         print(f"=== T-Extended ({name}) ===")
         target = compilation.compile_textended(compiler(), lemmas)
-        engine = QueryContext(target).wrap_queries(qengine(target))
-
-        print(f"Valid? {engine.is_valid()}")
-        print(f"{cube} is implicant? {engine.is_implicant(cube)}")
+        with target.queries(reasoner()) as engine:
+            print(f"Valid? {engine.is_valid()}")
+            print(f"{cube} is implicant? {engine.is_implicant(cube)}")

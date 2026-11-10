@@ -3,13 +3,16 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Generic
+from typing import TYPE_CHECKING, Any, Generic
 
 from pysmt.environment import Environment, get_env
 from pysmt.fnode import FNode
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, T_Target
+
+if TYPE_CHECKING:
+    from tddnnf.queries import CuddReasoner, DdnnifeReasoner, QuerySession, SddReasoner
 
 
 class TheoryCompiledTarget(Generic[T_Target]):
@@ -42,6 +45,12 @@ class TheoryCompiledTarget(Generic[T_Target]):
     @property
     def env(self) -> Environment:
         return self._env
+
+    def queries(self, reasoner: CuddReasoner | SddReasoner | DdnnifeReasoner) -> QuerySession:
+        """Open an independent query session with a compatible native reasoner."""
+        from tddnnf.queries import QuerySession
+
+        return QuerySession(self, reasoner)
 
     def dag_size(self) -> DagSize:
         return self.target.dag_size()

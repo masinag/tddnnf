@@ -158,19 +158,19 @@ class BaseTestEngine(Generic[T_Target]):
     # --- Error / Validation Tests ---
 
     def test_is_satisfiable_unknown_assumption(self, engine: QueryEngine, c: FNode) -> None:
-        with pytest.raises(ValueError, match="not a projection atom"):
+        with pytest.raises(ValueError, match="not .*projection"):
             engine.is_satisfiable(assumptions=[c])
 
     def test_count_truth_assignments_unknown_assumption(self, engine: QueryEngine, c: FNode) -> None:
-        with pytest.raises(ValueError, match="not a projection atom"):
+        with pytest.raises(ValueError, match="not .*projection"):
             engine.count_truth_assignments(assumptions=[c])
 
     def test_entails_clause_unknown_atom(self, engine: QueryEngine, c: FNode) -> None:
-        with pytest.raises(ValueError, match="not a projection atom"):
+        with pytest.raises(ValueError, match="not .*projection"):
             engine.entails_clause(c)
 
     def test_is_implicant_unknown_atom(self, engine: QueryEngine, c: FNode) -> None:
-        with pytest.raises(ValueError, match="not a projection atom"):
+        with pytest.raises(ValueError, match="not .*projection"):
             engine.is_implicant(c)
 
     def test_is_implicant_invalid_input(self, engine: QueryEngine, mgr: FormulaManager, a: FNode, b: FNode) -> None:
@@ -189,7 +189,7 @@ class BaseTestEngine(Generic[T_Target]):
         abstr = Abstractor({1: a, 2: b, 3: c})
         target = compiler.compile(mgr.And(a, mgr.Or(b, c)), abstr, project_on=[a, b])
         engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b], env=mgr.env))
-        with pytest.raises(ValueError, match="not a projection atom"):
+        with pytest.raises(ValueError, match="not .*projection"):
             engine.is_satisfiable(assumptions=[c])
-        with pytest.raises(ValueError, match="not a projection atom"):
+        with pytest.raises(ValueError, match="not .*projection"):
             engine.count_truth_assignments(assumptions=[c])

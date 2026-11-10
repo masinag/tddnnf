@@ -42,7 +42,8 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
         if not assumptions:
             return not bool(self._target.root.is_false())
-        return not bool(self._condition_chain(assumptions, negate=False).is_false())
+        unique = normalize_assumptions(assumptions)
+        return unique is not None and not bool(self._condition_chain(unique, negate=False).is_false())
 
     def _forgotten_var_count(self) -> int:
         return self._target.manager.var_count() - len(self._projection_atoms)
@@ -81,11 +82,10 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         if root.is_false():
             return
         seen: set[frozenset[tuple[FNode, bool]]] = set()
+        projection_ids = {self._abstr.get_id(a): a for a in self._projection_atoms}
         for assignment in root.models():
             partial = {
-                atom: val == 1
-                for var_id, val in assignment.items()
-                if (atom := self._abstr.get_atom(var_id)) in self._projection_atom_set
+                atom: val == 1 for var_id, val in assignment.items() if (atom := projection_ids.get(var_id)) is not None
             }
             canon = frozenset(partial.items())
             if canon in seen:

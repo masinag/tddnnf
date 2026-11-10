@@ -51,9 +51,9 @@ from tlemma_enum.solvers import (
     MathSATDivideAndConquerEnumerator,
 )
 
-from tddnnf import TheoryCompilation, QueryContext
+from tddnnf import TheoryCompilation
 from tddnnf.compilers.d4 import D4Compiler
-from tddnnf.queries.d4_engine import D4Engine
+from tddnnf.queries import DdnnifeReasoner
 ```
 
 Define the SMT atoms and formula.
@@ -121,11 +121,11 @@ supplied abstractor; later registrations preserve earlier targets’ query
 dimensions. Concurrent mutation is unsupported; saved mappings may include atoms
 registered by later compilations.
 
-Create the matching d4 query engine. `QueryContext.wrap_queries()` normalizes
-query formulas and aligns their atoms with the target's projection vocabulary.
+Open a query session with the matching reasoner. Each session normalizes queries
+in the target’s environment and aligns them with its stored vocabulary.
 
 ```python
-engine = QueryContext(target).wrap_queries(D4Engine(target))
+engine = target.queries(DdnnifeReasoner())
 ```
 
 Run queries over that vocabulary.
@@ -138,6 +138,7 @@ print(engine.is_satisfiable(assumptions))
 print(engine.entails_clause(clause))
 print(engine.count_truth_assignments())
 print(engine.count_truth_assignments(assumptions))
+engine.close()
 ```
 
 The expected output is:
@@ -154,23 +155,24 @@ True
 ### Compilation backends
 
 Each compiler produces a different representation and must be paired with its
-matching query engine.
+matching reasoner.
 
-| Compiler      | Representation    | Query engine | Requirement            |
-| ------------- | ----------------- | ------------ | ---------------------- |
-| `D4Compiler`  | d-DNNF            | `D4Engine`   | Installed d4 binary    |
-| `SddCompiler` | SDD through PySDD | `SddEngine`  | PySDD dependency       |
-| `BddCompiler` | OBDD through CUDD | `BddEngine`  | `dd` with CUDD support |
+| Compiler | Representation | Reasoner | Requirement |
+| --- | --- | --- | --- |
+| `D4Compiler` | d-DNNF | `DdnnifeReasoner()` | Installed d4 binary |
+| `SddCompiler` | SDD through PySDD | `SddReasoner()` | PySDD dependency |
+| `BddCompiler` | OBDD through CUDD | `CuddReasoner()` | `dd` with CUDD support |
 
-To swap backends, change the compiler and engine together. For example, the
+To swap backends, change the compiler and reasoner together. For example, the
 earlier workflow can use SDD as follows:
 
 ```python
 from tddnnf.compilers.pysdd import SddCompiler
-from tddnnf.queries.sdd_engine import SddEngine
+from tddnnf.queries import SddReasoner
 
 target = compilation.compile_treduced(SddCompiler(), lemmas)
-engine = QueryContext(target).wrap_queries(SddEngine(target))
+with target.queries(SddReasoner()) as queries:
+    print(queries.count_truth_assignments())
 ```
 
 Compiler arguments must be instances, for example `D4Compiler()`, rather than
@@ -207,7 +209,7 @@ Use the high-level `TheoryCompilation` methods for compilation.
 
 ### Query operations
 
-All matching query engines expose the same operations.
+All query sessions expose the same operations.
 
 | Operation                                   | Result                                                                          |
 | ------------------------------------------- | ------------------------------------------------------------------------------- |
@@ -217,6 +219,27 @@ All matching query engines expose the same operations.
 | `entails_clause(query_clause)`              | Whether the target entails a clause                                             |
 | `is_implicant(query_cube)`                  | Whether a cube implies the target                                               |
 | `enumerate_truth_assignments()`             | Iterator over satisfying total truth assignments                                |
+
+Sessions accept configured reasoner instances; strings, classes, and incompatible
+backend pairings raise `TypeError`. Use `with target.queries(reasoner)` or call
+idempotent `close()`. Closure releases the normalizer, native query resources,
+and active iterators; queries and iterator advancement then raise `RuntimeError`.
+The target and other sessions remain usable. The legacy engines, `QueryContext`,
+and builders remain available during migration.
+
+Assumptions must be literals; clauses and cubes may nest their respective Boolean
+connective. Every input is validated before a semantic shortcut. Unknown and
+inactive atoms, malformed formulas, and ambiguous canonical vocabularies raise
+`ValueError`. Equivalent theory syntax and reversed polarity are aligned to the
+exact stored atoms. Contradictory assumptions yield `False`/`0`; tautological
+clauses and contradictory cubes yield `True`. Constants and empty inputs follow
+Boolean semantics. Enumerated dictionaries contain every active atom in projection
+order, including unconstrained atoms absent from the DAG.
+
+Reasoning remains native: CUDD counting uses floating point, PySDD global counts
+can overflow, and ddnnife enumeration buffers results and has a u64 size limit.
+Derived validity and implicant answers for d-DNNF inherit native count limits.
+See [REFACTOR.md](REFACTOR.md) for installed versions and baseline reproductions.
 
 ## Saving lemmas and compiled targets
 
@@ -271,11 +294,11 @@ Reload the d4 target without compiling again.
 loaded_target = TheoryCompiledTarget.load(target_dir, D4CompiledTarget)
 ```
 
-Wrap the matching engine and query the loaded target.
+Open a session and query the loaded target.
 
 ```python
-loaded_engine = QueryContext(loaded_target).wrap_queries(D4Engine(loaded_target))
-print(loaded_engine.count_truth_assignments())
+with loaded_target.queries(DdnnifeReasoner()) as queries:
+    print(queries.count_truth_assignments())
 ```
 
 See the [`examples/`](examples/) directory for more examples.

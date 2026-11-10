@@ -703,3 +703,72 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   Tracked-source searches find no private representation class names or backend
   alias claims. No benchmark reruns, external testbench changes, or static type
   checks; existing native limitations remain.
+
+## Step 4 evidence — query sessions (2026-11-10)
+
+- GitHub confirms prerequisite library PRs #9 and #10 and companion PR #13
+  merged. Created `refactor/04-query-sessions` from fetched integration head
+  `8ac9df0e2c2536f6f5ef50c7ddeb125354839a01`.
+- Added configured `CuddReasoner()`, `SddReasoner()`, and `DdnnifeReasoner()`
+  instances and `target.queries(reasoner)`. Sessions share validation,
+  normalization/alignment, deduplication, constant handling, and elementary
+  derivations. Native validity/conditioning and native d-DNNF counts supply
+  reasoning. Each session owns its canonical index, bound normalizer, adapter,
+  active iterators, and temporary query files; closure is idempotent and also
+  handles exceptions and partial initialization. Targets retain no normalizers.
+- Reproduced the integration SDD adapter from `git show
+  origin/refactor/lean-core:tddnnf/queries/sdd_engine.py` against a compiled `a`:
+  assumptions `[a, Not(a)]` yield satisfiable **True**, count **0**. The new
+  session yields **False**, **0**; the legacy SDD adapter also rejects the
+  contradiction. Fixed SDD enumeration of sparse IDs and d-DNNF bookkeeping for
+  unmapped active dimensions, forgotten dimensions, fixed assumptions, and
+  duplicate projected models.
+- Retained legacy engines, `QueryContext`, builders, exports, and persistence.
+  Examples, README, and architecture now present query sessions. Reused the
+  existing exhaustive query/solver tests through sessions on all three native
+  pairings, while preserving their legacy engine runs. Added focused tests for
+  equivalent syntax/polarity, canonical contradictions, constants, empty scopes,
+  full input validation before shortcuts, inactive/unknown atoms, sparse IDs,
+  absent active atoms, append-only abstraction growth, native delegation,
+  incompatible reasoners, independent sessions, closure, exceptions, failed
+  initialization, early-stopped enumeration, and temporary-file cleanup.
+- Environment reused without installs or dependency synchronization:
+  `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python` is
+  Python **3.12.15**; PySMT **0.9.7.dev431**, MathSAT **5.6.16**
+  (`412f4b1ef83c`), PySDD **1.0.6**, dd **0.6.0** (CUDD **3.0.0**, baseline),
+  ddnnife **0.10.0**, tlemma-enum **0.1.0**, pytest **9.1.1**, Ruff **0.15.17**.
+  Bundled d4 binary unchanged from the recorded baseline.
+- Library command: the above Python with `-m pytest -q`: **775 passed**, 1112
+  existing native/deprecation warnings, 23.12 s. Log:
+  `/tmp/tddnnf-step4-full.log`. After retaining the original `QueryContext`
+  error wording and allowing either session or engine wording in the shared
+  validation assertions, `-m pytest -q tests/test_query_sessions.py
+  tests/test_bdd_engine.py tests/test_sdd_engine.py tests/test_d4_engine.py`:
+  **416 passed**, 674 warnings, 14.05 s. Log:
+  `/tmp/tddnnf-step4-acceptance.log`.
+- Companion suite from isolated detached checkout
+  `/tmp/tddnnf-testbench-04-validation`, integration SHA
+  `bd62fcc503c0d63dcd07c5bf4ac7150a71dc1083` (read its `AGENTS.md`):
+  **191 passed**, 5 warnings, 3.90 s. Command:
+  `PYTHONPATH=/tmp/tddnnf-testbench-04-validation/scripts:/home/gabriele/Documents/theorykc/tddnnf
+  UV_CACHE_DIR=/tmp/tddnnf-step4-uv-cache
+  UV_PROJECT_ENVIRONMENT=/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv
+  uv run --no-sync python -m pytest -q`.
+  Verified `tasks.__file__` resolves inside the isolated checkout and
+  `tddnnf.__file__` resolves inside this proposed library checkout. Log:
+  `/tmp/tddnnf-step4-testbench.log`. The initial run exposed an unnecessary
+  change to legacy `QueryContext`'s default environment; restored that default
+  while sessions explicitly supply `target.env`. No consumer migration or
+  companion PR is needed. Existing testbench working changes remain untouched.
+- The same Python ran `examples/abstr.py`, `examples/tred.py`, and
+  `examples/text.py` successfully across all backends. Logs:
+  `/tmp/tddnnf-step4-example-{abstr,tred,text}.log`. T-reduced counts are **3**;
+  T-extended implicant checks are **True** for each backend.
+- `ruff check tddnnf tests examples`, `ruff format --check` on all 11 affected
+  Python files, documentation Python-block syntax/local links/fences, and
+  `git diff --check` pass. No new dependencies, benchmarks, persistence changes,
+  native numerical workarounds, or external testbench migration. No static
+  type check was run. CUDD floating-point counting, PySDD global-count overflow,
+  ddnnife buffered/u64-limited enumeration, and existing native shutdown warnings
+  remain; derived d-DNNF answers inherit native counting limits.
+- Fresh committed-revision read-only review and delivery evidence follow below.

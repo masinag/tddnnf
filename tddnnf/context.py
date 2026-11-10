@@ -152,7 +152,16 @@ class QueryContext:
             ValueError: If distinct projection atoms have one canonical form.
         """
         self._normalizer = NormalizerWalker(env)
-        self._atom_index = self._index_atoms(target.projection_atoms)
+        try:
+            self._atom_index = self._index_atoms(target.projection_atoms)
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self) -> None:
+        """Release the canonical index and normalization solver."""
+        self._atom_index = {}
+        self._normalizer.close()
 
     def wrap_queries(self, engine: QueryEngine[T_Target]) -> QueryEngine[T_Target]:
         """Return an engine that aligns query inputs before delegation."""
@@ -184,6 +193,8 @@ class QueryContext:
     def _align_literal(self, literal: FNode) -> FNode:
         """Normalize one literal and replace its atom with the target atom."""
         canonical, query_negated = self._normalize_with_polarity(literal)
+        if canonical.is_bool_constant():
+            return self._normalizer.mgr.Bool(canonical.is_true() ^ query_negated)
         target_atom, target_negated = self._lookup_atom(canonical, literal)
         aligned_negated = query_negated ^ target_negated
         if aligned_negated:

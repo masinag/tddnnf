@@ -25,6 +25,9 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
         self._var_count = container.target.var_count
         self._remapping = container.target.remapping
 
+        self._tmpdir = None
+        self._mut = None
+        self._ddnnf = None
         nnf_text = container.target.nnf_text
         if nnf_text == "t 1\n":
             self._const_true = True
@@ -37,14 +40,25 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
         else:
             self._const_true = False
             self._tmpdir = tempfile.TemporaryDirectory(prefix="d4_engine_")
-            nnf_path = Path(self._tmpdir.name) / "circuit.nnf"
-            nnf_path.write_text(nnf_text)
-            self._ddnnf = ddnnife.Ddnnf.from_file(str(nnf_path), features=self._var_count)
-            self._mut = self._ddnnf.as_mut()
+            try:
+                nnf_path = Path(self._tmpdir.name) / "circuit.nnf"
+                nnf_path.write_text(nnf_text)
+                self._ddnnf = ddnnife.Ddnnf.from_file(str(nnf_path), features=self._var_count)
+                self._mut = self._ddnnf.as_mut()
+            except BaseException:
+                self.close()
+                raise
 
     def __del__(self) -> None:
-        if self._tmpdir is not None:
-            self._tmpdir.cleanup()
+        self.close()
+
+    def close(self) -> None:
+        """Release the native circuit and temporary file, including on load failure."""
+        self._mut = None
+        self._ddnnf = None
+        tmpdir, self._tmpdir = getattr(self, "_tmpdir", None), None
+        if tmpdir is not None:
+            tmpdir.cleanup()
 
     def _lits_to_ddnnf(self, lits: list[FNode]) -> list[int]:
         result: list[int] = []
@@ -53,16 +67,20 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
             if atom not in self._projection_atom_set:
                 raise ValueError(f"Atom {atom} is not a projection atom")
             var_id = self._abstr.get_id(atom)
-            nnf_id = self._remapping[var_id]
-            result.append(-nnf_id if lit.is_not() else nnf_id)
+            nnf_id = self._remapping.get(var_id)
+            if nnf_id is not None:
+                result.append(-nnf_id if lit.is_not() else nnf_id)
         return result
 
     @property
     def _formula_is_constant(self) -> bool:
         return self._mut is None
 
-    def _gap_shift(self) -> int:
-        return max(0, self._var_count - len(self._projection_atoms))
+    def _projected_count(self, native_count: int, assumptions: list[FNode]) -> int:
+        mapped = sum(self._abstr.get_id(a) in self._remapping for a in self._projection_atoms)
+        absent = len(self._projection_atoms) - mapped
+        fixed_absent = len(assumptions) - len(self._lits_to_ddnnf(assumptions))
+        return (native_count >> (self._var_count - mapped)) << (absent - fixed_absent)
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
         if self._formula_is_constant:
@@ -96,7 +114,7 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
         else:
             lits = []
         assert self._mut is not None
-        return int(self._mut.count(lits)) >> self._gap_shift()
+        return self._projected_count(int(self._mut.count(lits)), unique if assumptions else [])
 
     def is_valid(self) -> bool:
         return self.count_truth_assignments() == (1 << len(self._projection_atoms))
@@ -116,7 +134,7 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
             return self._const_true
         assert self._mut is not None
         ddnnf_lits = self._lits_to_ddnnf(lits)
-        count = int(self._mut.count(ddnnf_lits)) >> self._gap_shift()
+        count = self._projected_count(int(self._mut.count(ddnnf_lits)), lits)
         remaining = len(self._projection_atoms) - len(lits)
         return count == (1 << remaining)
 
@@ -133,6 +151,7 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
         raw = self._mut.enumerate([], total)
         projection_ids = {self._abstr.get_id(a) for a in self._projection_atoms}
         nnf_to_abstr = {v: k for k, v in self._remapping.items()}
+        seen = set()
         for model_lits in raw:
             partial: dict[int, bool] = {}
             for lit in model_lits:
@@ -140,6 +159,10 @@ class D4Engine(QueryEngine[D4CompiledTarget]):
                 abstr_id = nnf_to_abstr.get(nnf_var_id)
                 if abstr_id is not None and abstr_id in projection_ids:
                     partial[abstr_id] = lit > 0
+            key = frozenset(partial.items())
+            if key in seen:
+                continue
+            seen.add(key)
             present = set(partial)
             missing = [a for a in self._projection_atoms if self._abstr.get_id(a) not in present]
             if not missing:
