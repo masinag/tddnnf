@@ -53,7 +53,7 @@ from tlemma_enum.solvers import (
 
 from tddnnf import TheoryCompilation
 from tddnnf.compilers.d4 import D4Compiler
-from tddnnf.queries import DdnnifeReasoner
+from tddnnf.queries import D4Engine
 ```
 
 Define the SMT atoms and formula.
@@ -121,11 +121,11 @@ supplied abstractor; later registrations preserve earlier targets’ query
 dimensions. Concurrent mutation is unsupported; saved mappings may include atoms
 registered by later compilations.
 
-Open a query session with the matching reasoner. Each session normalizes queries
+Open a query session with the matching engine. Each session normalizes queries
 in the target’s environment and aligns them with its stored vocabulary.
 
 ```python
-engine = target.queries(DdnnifeReasoner())
+engine = target.queries(D4Engine)
 ```
 
 Run queries over that vocabulary.
@@ -155,23 +155,23 @@ True
 ### Compilation backends
 
 Each compiler produces a different representation and must be paired with its
-matching reasoner.
+matching engine.
 
-| Compiler | Representation | Reasoner | Requirement |
+| Compiler | Representation | Engine | Requirement |
 | --- | --- | --- | --- |
-| `D4Compiler` | d-DNNF | `DdnnifeReasoner()` | Installed d4 binary |
-| `SddCompiler` | SDD through PySDD | `SddReasoner()` | PySDD dependency |
-| `BddCompiler` | OBDD through CUDD | `CuddReasoner()` | `dd` with CUDD support |
+| `D4Compiler` | d-DNNF | `D4Engine` | Installed d4 binary |
+| `SddCompiler` | SDD through PySDD | `SddEngine` | PySDD dependency |
+| `BddCompiler` | OBDD through CUDD | `BddEngine` | `dd` with CUDD support |
 
-To swap backends, change the compiler and reasoner together. For example, the
+To swap backends, change the compiler and engine together. For example, the
 earlier workflow can use SDD as follows:
 
 ```python
 from tddnnf.compilers.pysdd import SddCompiler
-from tddnnf.queries import SddReasoner
+from tddnnf.queries import SddEngine
 
 target = compilation.compile_treduced(SddCompiler(), lemmas)
-with target.queries(SddReasoner()) as queries:
+with target.queries(SddEngine) as queries:
     print(queries.count_truth_assignments())
 ```
 
@@ -220,12 +220,14 @@ All query sessions expose the same operations.
 | `is_implicant(query_cube)`                  | Whether a cube implies the target                                               |
 | `enumerate_truth_assignments()`             | Iterator over satisfying total truth assignments                                |
 
-Sessions accept configured reasoner instances; strings, classes, and incompatible
-backend pairings raise `TypeError`. Use `with target.queries(reasoner)` or call
+Sessions accept engine classes; strings, engine instances, and incompatible
+backend pairings raise `TypeError`. Use `with target.queries(BddEngine)` or call
 idempotent `close()`. Closure releases the normalizer, native query resources,
-and active iterators; queries and iterator advancement then raise `RuntimeError`.
-The target and other sessions remain usable. The legacy engines, `QueryContext`,
-and builders remain available during migration.
+and active generators. Query methods then raise `RuntimeError`; closed generators
+raise `StopIteration`. The target and other sessions remain usable. Direct engines
+and builders remain available. The former `QueryContext.wrap_queries()` API is
+replaced by `target.queries(Engine)`.
+
 
 Assumptions must be literals; clauses and cubes may nest their respective Boolean
 connective. Every input is validated before a semantic shortcut. Unknown and
@@ -297,7 +299,7 @@ loaded_target = TheoryCompiledTarget.load(target_dir, D4CompiledTarget)
 Open a session and query the loaded target.
 
 ```python
-with loaded_target.queries(DdnnifeReasoner()) as queries:
+with loaded_target.queries(D4Engine) as queries:
     print(queries.count_truth_assignments())
 ```
 

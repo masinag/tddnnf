@@ -840,3 +840,36 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   Python files, and `git diff --check` pass. No benchmark or static type checks
   were run; existing native limitations remain. This correction updates PR #11
   on `refactor/04-query-sessions` and leaves it open for review.
+
+### Step 4 review response — merged query sessions (2026-11-10)
+
+- Supersedes the previous context/Reasoner API: `target.queries(BddEngine)` returns
+  `QuerySession[BddCompiledTarget]`. Sessions now directly own their normalizer,
+  canonical index, validation, engine, and generator cleanup. Removed QueryContext,
+  NormalizingQueryEngine, empty Reasoner classes, and the pairing registry.
+- Engines check compatibility and implement all backend-specific reasoning.
+  Restored whole-literal polarity normalization; absorbing constants return before
+  deduplication, after every input is validated. Imports are top-level, with
+  annotation-only dependencies under TYPE_CHECKING.
+- Nonconstant D4 engines assert exact projection mapping to dense native IDs.
+  Absent DAG atoms remain mapped. Removed partial-mapping count correction and
+  forgotten-dimension enumeration deduplication; invalid manual artifacts fail.
+- Tracked ordinary generators replace the iterator wrapper. Session closure
+  exhausts generators (StopIteration), while closed query methods raise
+  RuntimeError. ExitStack preserves cleanup when another cleanup raises.
+- Companion worktree `/tmp/tddnnf-testbench-04-sessions`, branch
+  `refactor/04-query-sessions`, starts at integration `bd62fcc`. The query task
+  loads one session per batch and closes it on success/failure. Existing main
+  checkout modifications are untouched. No persistence, schema, or CLI migration.
+- Existing environment Python `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python`
+  ran `-m pytest -q`: **784 passed**, 1121 native/deprecation/shutdown warnings,
+  24.18 s (`/tmp/merged-final-library.log`). Companion suite: **191 passed**,
+  5 warnings, 4.20 s (`/tmp/merged-companion.log`), using explicit
+  `PYTHONPATH=/tmp/tddnnf-testbench-04-sessions/scripts:/home/gabriele/Documents/theorykc/tddnnf`.
+  All three examples passed (`/tmp/merged-example-*.log`).
+- Ruff lint, changed-file formatting and whitespace checks pass in both repos.
+  Focused basedpyright checks pass for session/container and a valid inference
+  snippet, with explicit dependency search paths in `/tmp/merged-pyright.json`;
+  a mismatched D4Engine/BDD snippet produces the expected argument-type error.
+  No full-project type check or benchmarks. Native limitations remain.
+- Committed-revision review and linked delivery follow; both PRs stay open.

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from itertools import product
+from typing import TYPE_CHECKING
 
 from pysmt.fnode import FNode
 
 from tddnnf.compilers.cudd import BddCompiledTarget
-from tddnnf.core.containers import TheoryCompiledTarget
+
+if TYPE_CHECKING:
+    from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import QueryEngine
 from tddnnf.core.pysmt_utils import clause_lits, cube_lits, normalize_assumptions
 
@@ -15,6 +18,8 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
     """Polynomial-time queries over a BDD compiled target."""
 
     def __init__(self, container: TheoryCompiledTarget[BddCompiledTarget]) -> None:
+        if not isinstance(container.target, BddCompiledTarget):
+            raise TypeError("BddEngine requires BddCompiledTarget")
         self._target = container.target
         self._abstr = container.abstr
         self._projection_atoms: tuple[FNode, ...] = container.projection_atoms

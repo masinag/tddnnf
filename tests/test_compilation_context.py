@@ -4,7 +4,7 @@ import pytest
 from pysmt.formula import FormulaManager
 from pysmt.typing import BOOL, INT
 
-from tddnnf import QueryContext, TheoryCompilation
+from tddnnf import TheoryCompilation
 from tddnnf.builders.extended import TExtendedBuilder
 from tddnnf.builders.reduced import TReducedBuilder
 from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
@@ -62,7 +62,7 @@ def test_fresh_query_context_handles_direct_and_loaded_targets(
     loaded = TheoryCompiledTarget.load(tmp_path, SddCompiledTarget, env=mgr.env)
 
     for query_target in (target, loaded):
-        engine = QueryContext(query_target, env=mgr.env).wrap_queries(SddEngine(query_target))
+        engine = query_target.queries(SddEngine)
         assert engine.is_satisfiable([equivalent_atom])
         assert not engine.is_satisfiable([mgr.Not(equivalent_atom)])
 

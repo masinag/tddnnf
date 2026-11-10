@@ -8,7 +8,7 @@ from tddnnf import TheoryCompilation
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
-from tddnnf.queries import CuddReasoner, DdnnifeReasoner, SddReasoner
+from tddnnf.queries import BddEngine, D4Engine, SddEngine
 
 # ---- SMT ATOMS ----
 
@@ -44,14 +44,14 @@ with TheoryCompilation(phi, project_on=atoms) as compilation:
 
     # ---- BACKEND LOOP ----
 
-    for name, compiler, reasoner in [
-        ("BDD", BddCompiler, CuddReasoner),
-        ("SDD", SddCompiler, SddReasoner),
-        ("dDNNF", D4Compiler, DdnnifeReasoner),
+    for name, compiler, engine_type in [
+        ("BDD", BddCompiler, BddEngine),
+        ("SDD", SddCompiler, SddEngine),
+        ("dDNNF", D4Compiler, D4Engine),
     ]:
         print(f"=== T-Reduced ({name}) ===")
         target = compilation.compile_treduced(compiler(), lemmas)
-        with target.queries(reasoner()) as engine:
+        with target.queries(engine_type) as engine:
             print(f"Is sat under assumpions {assumptions}? {engine.is_satisfiable(assumptions)}")
             print(f"Entails {clause}? {engine.entails_clause(clause)}")
             print(f"Model count: {engine.count_truth_assignments()}")

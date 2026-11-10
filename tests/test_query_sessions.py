@@ -12,20 +12,18 @@ from tddnnf import TheoryCompilation
 from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
 from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
 from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
-from tddnnf.context import QueryContext
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
-from tddnnf.queries import CuddReasoner, DdnnifeReasoner, SddReasoner
-from tddnnf.queries.d4_engine import D4Engine
-from tddnnf.queries.sdd_engine import SddEngine
+from tddnnf.queries import BddEngine, D4Engine, SddEngine
+from tddnnf.queries.session import QuerySession
 from tests._base_engine_test import BaseTestEngine
 
-PAIRINGS = [(BddCompiler, CuddReasoner), (SddCompiler, SddReasoner), (D4Compiler, DdnnifeReasoner)]
+PAIRINGS = [(BddCompiler, BddEngine), (SddCompiler, SddEngine), (D4Compiler, D4Engine)]
 
 
 def open_queries(target):
-    reasoner = {BddCompiledTarget: CuddReasoner, SddCompiledTarget: SddReasoner, D4CompiledTarget: DdnnifeReasoner}
-    return target.queries(reasoner[type(target.target)]())
+    engine_type = {BddCompiledTarget: BddEngine, SddCompiledTarget: SddEngine, D4CompiledTarget: D4Engine}
+    return target.queries(engine_type[type(target.target)])
 
 
 class TestCuddSessions(BaseTestEngine):
@@ -55,7 +53,7 @@ def compile_target(mgr, pairing, formula, atoms):
 
 def test_literals_constants_and_validation(mgr, a, b, c, pairing):
     target = compile_target(mgr, pairing, mgr.Or(a, b), [b, a])
-    with target.queries(pairing[1]()) as q:
+    with target.queries(pairing[1]) as q:
         assert q.is_satisfiable([])
         assert q.count_truth_assignments([a, a, mgr.TRUE()]) == 2
         assert not q.is_satisfiable([a, mgr.Not(a)])
@@ -88,7 +86,7 @@ def test_literals_constants_and_validation(mgr, a, b, c, pairing):
 @pytest.mark.parametrize("truth,active", list(product([False, True], [False, True])))
 def test_constant_targets(mgr, a, pairing, truth, active):
     target = compile_target(mgr, pairing, mgr.Bool(truth), [a] if active else [])
-    with target.queries(pairing[1]()) as q:
+    with target.queries(pairing[1]) as q:
         assert q.is_satisfiable() == truth
         assert q.is_valid() == truth
         assert q.count_truth_assignments() == (2 ** len(target.projection_atoms) if truth else 0)
@@ -104,7 +102,7 @@ def test_sparse_projection_growth(mgr, a, b, c, pairing):
     abstr = Abstractor({3: a, 7: b, 11: c, 15: forgotten})
     native = pairing[0]().compile(mgr.And(a, forgotten), abstr, project_on=[c, b, a])
     target = TheoryCompiledTarget(native, abstr, [c, b, a], env=mgr.env)
-    with target.queries(pairing[1]()) as q:
+    with target.queries(pairing[1]) as q:
         abstr.get_id(mgr.Symbol("later", BOOL))
         assert q.count_truth_assignments() == 4
         assert q.count_truth_assignments([c, c]) == 2
@@ -124,7 +122,7 @@ def test_equivalent_syntax_polarity_and_ambiguity(mgr, pairing):
     abstr = Abstractor({1: atom})
     native = pairing[0]().compile(atom, abstr, project_on=[atom])
     target = TheoryCompiledTarget(native, abstr, [atom], env=mgr.env)
-    with target.queries(pairing[1]()) as q:
+    with target.queries(pairing[1]) as q:
         assert q.is_satisfiable([scaled])
         assert not q.is_satisfiable([opposite])
         assert q.count_truth_assignments([atom, opposite]) == 0
@@ -133,13 +131,13 @@ def test_equivalent_syntax_polarity_and_ambiguity(mgr, pairing):
         assert list(q.enumerate_truth_assignments()) == [{atom: True}]
     ambiguous = TheoryCompiledTarget(native, abstr, [atom, opposite], env=mgr.env)
     with pytest.raises(ValueError, match="Ambiguous"):
-        ambiguous.queries(pairing[1]())
+        ambiguous.queries(pairing[1])
 
 
 def test_lifecycle_and_independence(mgr, a, b, pairing):
     target = compile_target(mgr, pairing, mgr.Or(a, b), [a, b])
-    first = target.queries(pairing[1]())
-    second = target.queries(pairing[1]())
+    first = target.queries(pairing[1])
+    second = target.queries(pairing[1])
     iterator = first.enumerate_truth_assignments()
     next(iterator)
     tmpdir = getattr(first._inner, "_tmpdir", None)
@@ -155,31 +153,32 @@ def test_lifecycle_and_independence(mgr, a, b, pairing):
         first.enumerate_truth_assignments,
         lambda: first.entails_clause(a),
         lambda: first.is_implicant(a),
-        lambda: next(iterator),
     ):
         with pytest.raises(RuntimeError, match="closed"):
             operation()
+    with pytest.raises(StopIteration):
+        next(iterator)
     assert second.count_truth_assignments() == 3
     second.close()
     with pytest.raises(ZeroDivisionError):
-        with target.queries(pairing[1]()) as third:
+        with target.queries(pairing[1]) as third:
             raise ZeroDivisionError
     with pytest.raises(RuntimeError):
         third.is_valid()
-    with target.queries(pairing[1]()) as fresh:
+    with target.queries(pairing[1]) as fresh:
         assert fresh.count_truth_assignments() == 3
 
 
-def test_invalid_reasoners(mgr, a, pairing):
+def test_invalid_engine_types(mgr, a, pairing):
     target = compile_target(mgr, pairing, a, [a])
-    for invalid in ("cudd", pairing[1], object(), *(r() for _, r in PAIRINGS if r != pairing[1])):
+    for invalid in ("cudd", object(), *(r for _, r in PAIRINGS if r != pairing[1])):
         with pytest.raises(TypeError):
             target.queries(invalid)
 
 
 def test_native_delegation(mgr, a, pairing, monkeypatch):
     target = compile_target(mgr, pairing, a, [a])
-    with target.queries(pairing[1]()) as q:
+    with target.queries(pairing[1]) as q:
         sat = Mock(return_value=True)
         count = Mock(return_value=1)
         monkeypatch.setattr(q._inner, "is_satisfiable", sat)
@@ -191,31 +190,26 @@ def test_native_delegation(mgr, a, pairing, monkeypatch):
         assert q.count_truth_assignments([a, mgr.Not(a)]) == 0
         assert sat.call_count == 2
         assert count.call_count == 1
-        if pairing[1] == DdnnifeReasoner:
-            assert not q.is_valid()
-            assert q.is_implicant(a)
-            assert count.call_count == 3
-        else:
-            valid = Mock(return_value=True)
-            implicant = Mock(return_value=True)
-            monkeypatch.setattr(q._inner, "is_valid", valid)
-            monkeypatch.setattr(q._inner, "is_implicant", implicant)
-            assert q.is_valid()
-            assert q.is_implicant(a)
-            valid.assert_called_once()
-            implicant.assert_called_once()
+        valid = Mock(return_value=True)
+        implicant = Mock(return_value=True)
+        monkeypatch.setattr(q._inner, "is_valid", valid)
+        monkeypatch.setattr(q._inner, "is_implicant", implicant)
+        assert q.is_valid()
+        assert q.is_implicant(a)
+        valid.assert_called_once()
+        implicant.assert_called_once()
 
 
 def test_initialization_cleanup(mgr, a, monkeypatch):
     target = compile_target(mgr, PAIRINGS[2], a, [a])
     contexts = []
-    original = QueryContext._index_atoms
+    original = QuerySession._index_atoms
 
     def record(context, atoms):
         contexts.append(context)
         return original(context, atoms)
 
-    monkeypatch.setattr(QueryContext, "_index_atoms", record)
+    monkeypatch.setattr(QuerySession, "_index_atoms", record)
 
     def fail(*args, **kwargs):
         raise ValueError("native load failed")
@@ -231,29 +225,27 @@ def test_initialization_cleanup(mgr, a, monkeypatch):
     monkeypatch.setattr(d4_module.tempfile, "TemporaryDirectory", temporary)
     monkeypatch.setattr(ddnnife.Ddnnf, "from_file", fail)
     with pytest.raises(ValueError, match="native load failed"):
-        target.queries(DdnnifeReasoner())
+        target.queries(D4Engine)
     assert contexts[0]._normalizer._closed
     assert all(not path.exists() for path in temporary_dirs)
 
 
-def test_ddnnife_unmapped_active_and_forgotten_dimensions(mgr, a, b, c):
-    # Native variable 2 is forgotten; active b/c have no native dimensions.
-    abstr = Abstractor({3: a, 7: b, 11: c})
+def test_ddnnife_rejects_partial_mapping(mgr, a, b):
+    abstr = Abstractor({3: a, 7: b})
     native = D4CompiledTarget("o 1 0\nt 2 0\n1 2 1 0\n", 2, {3: 1})
-    target = TheoryCompiledTarget(native, abstr, [c, a, b], env=mgr.env)
-    legacy = D4Engine(target)
-    try:
-        assert not legacy.is_satisfiable([b, mgr.Not(b)])
-        assert legacy.count_truth_assignments([b, mgr.Not(b)]) == 0
-    finally:
-        legacy.close()
-    with target.queries(DdnnifeReasoner()) as q:
-        assert q.count_truth_assignments() == 4
-        assert q.count_truth_assignments([b]) == 2
-        assert q.count_truth_assignments([a, b, c]) == 1
-        assert q.is_implicant(mgr.And(a, b))
-        models = list(q.enumerate_truth_assignments())
-        assert len(models) == len({frozenset(m.items()) for m in models}) == 4
+    target = TheoryCompiledTarget(native, abstr, [a, b], env=mgr.env)
+    with pytest.raises(AssertionError, match="D4 mapping"):
+        D4Engine(target)
+
+
+def test_ddnnife_absent_atom_is_mapped(mgr, a, b):
+    target = compile_target(mgr, PAIRINGS[2], a, [a, b])
+    assert target.abstr.get_id(b) in target.target.remapping
+    with target.queries(D4Engine) as q:
+        assert q.count_truth_assignments() == 2
+        assert q.count_truth_assignments([b]) == 1
+        assert not q.is_satisfiable([b, mgr.Not(b)])
+        assert len(list(q.enumerate_truth_assignments())) == 2
 
 
 def test_legacy_sdd_contradiction(mgr, a):
@@ -265,8 +257,8 @@ def test_bound_environment(a, mgr, pairing):
     target = compile_target(mgr, pairing, a, [a])
     push_env(Environment())
     try:
-        with target.queries(pairing[1]()) as q:
-            assert q._context._normalizer.env is mgr.env
+        with target.queries(pairing[1]) as q:
+            assert q._normalizer.env is mgr.env
             assert q.is_satisfiable([a])
     finally:
         pop_env()
@@ -274,18 +266,28 @@ def test_bound_environment(a, mgr, pairing):
 
 def test_cleanup_continues_after_iterator_close_failure(mgr, a):
     target = compile_target(mgr, PAIRINGS[2], a, [a])
-    q = target.queries(DdnnifeReasoner())
+    q = target.queries(D4Engine)
     native = q._inner
     path = Path(native._tmpdir.name)
+    closed = []
+
+    def assignments():
+        try:
+            yield {a: True}
+        finally:
+            closed.append(True)
+            if len(closed) == 1:
+                raise ValueError("iterator close failed")
+
+    q._inner.enumerate_truth_assignments = assignments
     broken, other = q.enumerate_truth_assignments(), q.enumerate_truth_assignments()
-    broken._inner = Mock(close=Mock(side_effect=ValueError("iterator close failed")))
-    other_inner = Mock()
-    other._inner = other_inner
+    next(broken)
+    next(other)
     with pytest.raises(ValueError, match="iterator close failed"):
         q.close()
     assert not q._iterators
-    other_inner.close.assert_called_once()
-    assert q._context._normalizer._closed
+    assert len(closed) == 2
+    assert q._normalizer._closed
     assert not path.exists()
     q.close()
 
@@ -298,9 +300,9 @@ def test_atom_index_initialization_failure(mgr, a, monkeypatch):
         contexts.append(context)
         raise ValueError("index failed")
 
-    monkeypatch.setattr(QueryContext, "_index_atoms", fail)
+    monkeypatch.setattr(QuerySession, "_index_atoms", fail)
     with pytest.raises(ValueError, match="index failed"):
-        target.queries(CuddReasoner())
+        target.queries(BddEngine)
     assert contexts[0]._normalizer._closed
 
 
@@ -315,7 +317,7 @@ def test_enumeration_failure_releases_iterator(mgr, a, pairing, monkeypatch):
         finally:
             closed.append(True)
 
-    with target.queries(pairing[1]()) as q:
+    with target.queries(pairing[1]) as q:
         monkeypatch.setattr(q._inner, "enumerate_truth_assignments", fail)
         iterator = q.enumerate_truth_assignments()
         assert next(iterator) == {a: True}
@@ -331,7 +333,7 @@ def test_canonical_contradictions_and_constants(mgr, pairing):
     atom = mgr.GE(x, mgr.Int(2))
     equivalent = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
     target = compile_target(mgr, pairing, atom, [atom])
-    with target.queries(pairing[1]()) as q:
+    with target.queries(pairing[1]) as q:
         assert not q.is_satisfiable([atom, mgr.Not(equivalent)])
         assert q.count_truth_assignments([atom, mgr.Not(equivalent)]) == 0
         assert q.entails_clause(mgr.Or(atom, mgr.Not(equivalent)))
@@ -341,26 +343,42 @@ def test_canonical_contradictions_and_constants(mgr, pairing):
 
 
 @pytest.mark.parametrize("truth", [True, False])
-@pytest.mark.parametrize("session", [True, False], ids=["session", "context"])
-def test_rejects_stored_atoms_normalizing_to_constants(mgr, pairing, truth, session, monkeypatch):
+def test_rejects_stored_atoms_normalizing_to_constants(mgr, pairing, truth, monkeypatch):
     x = mgr.Symbol("stored_constant_x", INT)
     atom = mgr.Equals(x, x if truth else mgr.Plus(x, mgr.Int(1)))
     abstr = Abstractor({1: atom})
     native = pairing[0]().compile(atom, abstr, project_on=[atom])
     target = TheoryCompiledTarget(native, abstr, [atom], env=mgr.env)
     contexts = []
-    original = QueryContext._index_atoms
+    original = QuerySession._index_atoms
 
     def record(context, atoms):
         contexts.append(context)
         return original(context, atoms)
 
-    monkeypatch.setattr(QueryContext, "_index_atoms", record)
+    monkeypatch.setattr(QuerySession, "_index_atoms", record)
     with pytest.raises(AssertionError, match="Projection atoms must not normalize to constants"):
-        if session:
-            target.queries(pairing[1]())
-        else:
-            QueryContext(target, env=mgr.env)
+        target.queries(pairing[1])
     assert len(contexts) == 1
     assert contexts[0]._atom_index == {}
     assert contexts[0]._normalizer._closed
+
+
+def test_unstarted_enumeration_is_closed(mgr, a, pairing):
+    target = compile_target(mgr, pairing, a, [a])
+    q = target.queries(pairing[1])
+    iterator = q.enumerate_truth_assignments()
+    q.close()
+    assert not q._iterators
+    with pytest.raises(StopIteration):
+        next(iterator)
+
+
+def test_enumeration_setup_failure_unregisters(mgr, a, monkeypatch):
+    target = compile_target(mgr, PAIRINGS[0], a, [a])
+    with target.queries(BddEngine) as q:
+        monkeypatch.setattr(q._inner, "enumerate_truth_assignments", Mock(side_effect=ValueError("setup failed")))
+        iterator = q.enumerate_truth_assignments()
+        with pytest.raises(ValueError, match="setup failed"):
+            next(iterator)
+        assert not q._iterators

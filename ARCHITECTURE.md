@@ -86,7 +86,7 @@ Normalization occurs at both boundaries:
 
 - `TheoryCompilation` normalizes the input formula, projection atoms, and
   lemmas before compilation.
-- `target.queries(reasoner)` owns a `QueryContext` and normalizes query literals,
+- `target.queries(Engine)` owns normalization and normalizes query literals,
   clauses, and cubes before handing them to a backend query engine.
 
 Here, the _compiled formula_ is the Boolean abstraction of the
@@ -221,17 +221,16 @@ if-then-else expansion over its SMT atom.
 
 ## Queries
 
-`target.queries(CuddReasoner())`, `target.queries(SddReasoner())`, and
-`target.queries(DdnnifeReasoner())` open independent sessions over their matching
-public backend target classes. Strings, classes, and incompatible pairings raise
-`TypeError`. Reasoners and `QuerySession` are exported from `tddnnf.queries`.
+`target.queries(BddEngine)`, `target.queries(SddEngine)`, and
+`target.queries(D4Engine)` open independent sessions over their matching
+public backend target classes. Strings, engine instances, and incompatible pairings raise
+`TypeError`. Engines and `QuerySession` are exported from `tddnnf.queries`.
 
 Sessions expose the six `QueryEngine` operations: `is_satisfiable`,
 `count_truth_assignments`, `is_valid`, `entails_clause`, `is_implicant`, and
 `enumerate_truth_assignments`. Each session owns a normalizer bound to `target.env`,
-a canonical atom index (through `QueryContext`), and its native adapter. The
-legacy `BddEngine`, `SddEngine`, `D4Engine`, and `QueryContext.wrap_queries()`
-remain available for existing callers.
+a canonical atom index, and its native adapter. Direct engines remain available;
+`QueryContext` and its normalizing wrapper have been removed in favor of sessions.
 
 Validation traverses all input literals before semantic shortcuts, rejects
 compound assumptions, malformed clauses/cubes, and inactive or unknown atoms.
@@ -245,13 +244,14 @@ overflow, and ddnnife buffering/u64 enumeration limits remain visible (see
 
 Adapters account for forgotten native dimensions, fixed assumptions, sparse IDs,
 and unconstrained active atoms. Enumeration returns total assignments keyed by
-the exact stored atoms in projection order. SDD and d-DNNF adapters deduplicate
-native assignments that differ only on forgotten dimensions.
+the exact stored atoms in projection order. The SDD adapter deduplicates native assignments that differ only on forgotten
+dimensions. Nonconstant D4 artifacts map exactly the projection to dense native
+IDs, including atoms absent from the DAG; query engines assert this invariant.
 
 Sessions support `with` and idempotent `close()`, including initialization failure
 and exceptions. Closing releases active iterators, the normalizer, and native
-adapter resources (including d-DNNF temporary files). Queries and iterator
-advancement on a closed session raise `RuntimeError`. Closing a session preserves
+adapter resources (including d-DNNF temporary files). Query methods on a closed session raise `RuntimeError`; closed generators
+raise `StopIteration`. Closing a session preserves
 the target and other sessions; finalizers are a fallback.
 
 ## Persistence and reconstruction
@@ -298,7 +298,7 @@ input circuit, and running the external compiler.
 
 ```text
 tddnnf/
-├── context.py                  # TheoryCompilation and QueryContext
+├── context.py                  # TheoryCompilation
 ├── core/
 │   ├── abstraction.py         # Abstractor mapping and serialization
 │   ├── containers.py          # TheoryCompiledTarget
@@ -315,8 +315,7 @@ tddnnf/
 │   ├── pysdd.py               # PySDD compiler and target
 │   └── cudd.py                # CUDD OBDD compiler and target
 └── queries/
-    ├── session.py             # Configured reasoners, validation, lifecycle
-    ├── normalizing.py         # NormalizingQueryEngine adapter
+    ├── session.py             # Normalization, validation, lifecycle
     ├── d4_engine.py           # d-DNNF queries through ddnnife
     ├── sdd_engine.py          # SDD queries
     └── bdd_engine.py          # OBDD queries
