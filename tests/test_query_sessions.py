@@ -264,6 +264,8 @@ def test_bound_environment(a, mgr, pairing):
         with target.queries(pairing[1]) as q:
             assert q._normalizer.env is mgr.env
             assert q.is_satisfiable([a])
+            assert q.entails_clause(a)
+            assert not q.entails_clause(mgr.Not(a))
     finally:
         pop_env()
 

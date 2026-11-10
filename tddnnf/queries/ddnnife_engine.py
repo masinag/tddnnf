@@ -98,8 +98,10 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         lits = clause_lits(query_clause)
         if lits is None:
             return True
-        negated = [~lit if not lit.is_not() else lit.arg(0) for lit in lits]
-        return not self.is_satisfiable(assumptions=negated)
+        # Negate backend literals to avoid depending on PySMT's active environment.
+        negated = [-lit for lit in self._lits_to_ddnnf(lits)]
+        assert self._mut is not None
+        return not self._mut.is_sat(negated)
 
     def is_implicant(self, query_cube: FNode) -> bool:
         lits = cube_lits(query_cube)

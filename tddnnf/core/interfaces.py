@@ -55,6 +55,7 @@ class PropCompiler(Protocol[T_Target_co]):
     ) -> T_Target_co: ...
 
 
+# QuerySession normalizes queries; engines expect literals aligned to the target projection.
 @runtime_checkable
 class QueryEngine(Protocol[T_Target_co]):
     """Polynomial-time queries over a compiled target."""
