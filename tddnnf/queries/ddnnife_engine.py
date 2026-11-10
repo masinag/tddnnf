@@ -13,7 +13,7 @@ from tddnnf.compilers.d4 import D4CompiledTarget
 if TYPE_CHECKING:
     from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import QueryEngine
-from tddnnf.core.pysmt_utils import clause_lits, cube_lits, normalize_assumptions
+from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 
 
 class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
@@ -74,14 +74,14 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         return result
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
-        unique = normalize_assumptions(assumptions or [])
+        unique = cube_lits(assumptions or [], self._projection_atom_set)
         if unique is None:
             return False
         assert self._mut is not None
         return self._mut.is_sat(self._lits_to_ddnnf(unique))
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        unique = normalize_assumptions(assumptions or [])
+        unique = cube_lits(assumptions or [], self._projection_atom_set)
         if unique is None:
             return 0
         assert self._mut is not None
@@ -90,8 +90,8 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
     def is_valid(self) -> bool:
         return self.count_truth_assignments() == (1 << len(self._projection_atoms))
 
-    def entails_clause(self, query_clause: FNode) -> bool:
-        lits = clause_lits(query_clause)
+    def entails_clause(self, query_clause: list[FNode]) -> bool:
+        lits = clause_lits(query_clause, self._projection_atom_set)
         if lits is None:
             return True
         # Negate backend literals to avoid depending on PySMT's active environment.
@@ -99,8 +99,8 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         assert self._mut is not None
         return not self._mut.is_sat(negated)
 
-    def is_implicant(self, query_cube: FNode) -> bool:
-        lits = cube_lits(query_cube)
+    def is_implicant(self, query_cube: list[FNode]) -> bool:
+        lits = cube_lits(query_cube, self._projection_atom_set)
         if lits is None:
             return True
         assert self._mut is not None

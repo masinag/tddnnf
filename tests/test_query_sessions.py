@@ -53,6 +53,7 @@ def compile_target(mgr, pairing, formula, atoms):
 
 def test_literals_constants_and_validation(mgr, a, b, c, pairing):
     target = compile_target(mgr, pairing, mgr.Or(a, b), [b, a])
+    original_ids = dict(target.abstr.atom_to_id)
     with target.queries(pairing[1]) as q:
         assert q.is_satisfiable([])
         assert q.count_truth_assignments([a, a, mgr.TRUE()]) == 2
@@ -74,13 +75,16 @@ def test_literals_constants_and_validation(mgr, a, b, c, pairing):
                 with pytest.raises(ValueError):
                     operation(assumptions)
         for operation, formula in (
-            (q.entails_clause, mgr.Or(mgr.TRUE(), c)),
+            (q.entails_clause, mgr.Or(mgr.TRUE(), mgr.Or(a, c))),
+            (q.entails_clause, mgr.Or(a, mgr.Or(mgr.Not(a), c))),
             (q.entails_clause, mgr.Or(a, mgr.And(a, b))),
-            (q.is_implicant, mgr.And(mgr.FALSE(), c)),
+            (q.is_implicant, mgr.And(mgr.FALSE(), mgr.And(a, c))),
+            (q.is_implicant, mgr.And(a, mgr.And(mgr.Not(a), c))),
             (q.is_implicant, mgr.And(a, mgr.Or(a, b))),
         ):
             with pytest.raises(ValueError):
                 operation(formula)
+        assert dict(target.abstr.atom_to_id) == original_ids
 
 
 @pytest.mark.parametrize("truth,active", list(product([False, True], [False, True])))
@@ -147,7 +151,7 @@ def test_projected_enumeration(mgr, a, b, c, pairing, sparse, project, shape):
     assert native.root is root
 
 
-def test_equivalent_syntax_polarity_and_ambiguity(mgr, pairing):
+def test_equivalent_syntax_polarity_and_ambiguity(mgr, pairing, monkeypatch):
     x, y = mgr.Symbol("session_x", INT), mgr.Symbol("session_y", INT)
     atom = mgr.LE(y, x)
     opposite = mgr.LT(x, y)
@@ -162,6 +166,14 @@ def test_equivalent_syntax_polarity_and_ambiguity(mgr, pairing):
         assert q.entails_clause(scaled)
         assert q.is_implicant(mgr.Not(opposite))
         assert list(q.enumerate_truth_assignments()) == [{atom: True}]
+        for operation, formula, expected in (
+            ("entails_clause", mgr.Or(scaled, opposite), [atom, mgr.Not(atom)]),
+            ("is_implicant", mgr.And(scaled, mgr.Not(opposite)), [atom, atom]),
+        ):
+            delegate = Mock(return_value=True)
+            monkeypatch.setattr(q._inner, operation, delegate)
+            assert getattr(q, operation)(formula)
+            delegate.assert_called_once_with(expected)
     ambiguous = TheoryCompiledTarget(native, abstr, [atom, opposite], env=mgr.env)
     with pytest.raises(ValueError, match="Ambiguous"):
         ambiguous.queries(pairing[1])
@@ -213,24 +225,27 @@ def test_native_delegation(mgr, a, pairing, monkeypatch):
     target = compile_target(mgr, pairing, a, [a])
     with target.queries(pairing[1]) as q:
         sat = Mock(return_value=True)
-        count = Mock(return_value=1)
-        monkeypatch.setattr(q._inner, "is_satisfiable", sat)
-        monkeypatch.setattr(q._inner, "count_truth_assignments", count)
-        assert q.is_satisfiable([a])
-        assert q.count_truth_assignments([a]) == 1
-        assert not q.entails_clause(mgr.Not(a))
-        assert not q.is_satisfiable([a, mgr.Not(a)])
-        assert q.count_truth_assignments([a, mgr.Not(a)]) == 0
-        assert sat.call_count == 2
-        assert count.call_count == 1
+        count = Mock(return_value=7)
+        clause = Mock(return_value=False)
+        cube = Mock(return_value=True)
         valid = Mock(return_value=True)
-        implicant = Mock(return_value=True)
-        monkeypatch.setattr(q._inner, "is_valid", valid)
-        monkeypatch.setattr(q._inner, "is_implicant", implicant)
+        for operation, mock in (
+            ("is_satisfiable", sat),
+            ("count_truth_assignments", count),
+            ("entails_clause", clause),
+            ("is_implicant", cube),
+            ("is_valid", valid),
+        ):
+            monkeypatch.setattr(q._inner, operation, mock)
+        literals = [a, a, mgr.Not(a), mgr.TRUE(), mgr.FALSE()]
+        assert q.is_satisfiable(literals)
+        assert q.count_truth_assignments(literals) == 7
+        assert not q.entails_clause(mgr.Or(a, mgr.Or(*literals[1:])))
+        assert q.is_implicant(mgr.And(a, mgr.And(*literals[1:])))
         assert q.is_valid()
-        assert q.is_implicant(a)
-        valid.assert_called_once()
-        implicant.assert_called_once()
+        for mock in (sat, count, clause, cube):
+            mock.assert_called_once_with(literals)
+        valid.assert_called_once_with()
 
 
 def test_initialization_cleanup(mgr, a, monkeypatch):

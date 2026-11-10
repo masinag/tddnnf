@@ -10,7 +10,7 @@ from tddnnf.compilers.pysdd import SddCompiledTarget
 if TYPE_CHECKING:
     from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import QueryEngine
-from tddnnf.core.pysmt_utils import clause_lits, cube_lits, normalize_assumptions
+from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 
 
 class SddEngine(QueryEngine[SddCompiledTarget]):
@@ -44,7 +44,7 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         return temp
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
-        unique = normalize_assumptions(assumptions or [])
+        unique = cube_lits(assumptions or [], self._projection_atom_set)
         if unique is None:
             return False
         return not bool(self._condition_chain(unique, negate=False).is_false())
@@ -53,7 +53,7 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         return self._target.manager.var_count() - len(self._projection_atoms)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        unique = normalize_assumptions(assumptions or [])
+        unique = cube_lits(assumptions or [], self._projection_atom_set)
         if unique is None:
             return 0
         temp = self._condition_chain(unique, negate=False)
@@ -62,14 +62,14 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
     def is_valid(self) -> bool:
         return bool(self._target.root.is_true())
 
-    def entails_clause(self, query_clause: FNode) -> bool:
-        lits = clause_lits(query_clause)
+    def entails_clause(self, query_clause: list[FNode]) -> bool:
+        lits = clause_lits(query_clause, self._projection_atom_set)
         if lits is None:
             return True
         return bool(self._condition_chain(lits, negate=True).is_false())
 
-    def is_implicant(self, query_cube: FNode) -> bool:
-        lits = cube_lits(query_cube)
+    def is_implicant(self, query_cube: list[FNode]) -> bool:
+        lits = cube_lits(query_cube, self._projection_atom_set)
         if lits is None:
             return True
         return bool(self._condition_chain(lits).is_true())

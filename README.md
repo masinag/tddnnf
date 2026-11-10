@@ -231,8 +231,17 @@ and builders remain available. The former `QueryContext.wrap_queries()` API is
 replaced by `target.queries(Engine)`.
 
 
-Assumptions must be literals; clauses and cubes may nest their respective Boolean
-connective. Every input is validated before a semantic shortcut. Unknown and
+Session clause/cube methods accept a single `FNode`; clauses and cubes may nest
+their respective Boolean connective. Sessions flatten and align every literal,
+then delegate the list to the matching engine method. Direct engines instead
+require `entails_clause(query_clause: list[FNode])` and
+`is_implicant(query_cube: list[FNode])`, with flat literals using exact stored
+projection atoms. An empty clause is false and an empty cube is true. This breaks
+compatibility for direct engine callers and custom engines using the former
+formula signatures; migrate both methods to lists. Assumption signatures remain
+unchanged, accepting literal lists.
+
+Every input is validated before a semantic shortcut. Unknown and
 inactive atoms, malformed formulas, and ambiguous canonical vocabularies raise
 `ValueError`. Equivalent theory syntax and reversed polarity are aligned to the
 exact stored atoms. Contradictory assumptions yield `False`/`0`; tautological

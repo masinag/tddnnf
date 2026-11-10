@@ -30,8 +30,8 @@ def test_constant_targets(mgr, a, truth, active):
         assert engine.is_valid()
         assert engine.count_truth_assignments() == 2
         assert engine.count_truth_assignments([a]) == 1
-        assert engine.entails_clause(mgr.TRUE())
-        assert engine.is_implicant(mgr.TRUE())
+        assert engine.entails_clause([mgr.TRUE()])
+        assert engine.is_implicant([mgr.TRUE()])
         assert {frozenset(m.items()) for m in engine.enumerate_truth_assignments()} == {
             frozenset({a: True}.items()),
             frozenset({a: False}.items()),

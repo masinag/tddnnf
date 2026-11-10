@@ -235,8 +235,12 @@ a canonical atom index, and its native adapter. Direct engines remain available;
 Validation traverses all input literals before semantic shortcuts, rejects
 compound assumptions, malformed clauses/cubes, and inactive or unknown atoms.
 Canonical alignment preserves stored atoms and polarity and rejects ambiguous
-matches. Constants, deduplication, contradictions, and elementary derivations
-are shared by the session. CUDD/PySDD validity and conditioning remain native;
+matches. Sessions accept clause/cube formulas and flatten and align literals once.
+Engines accept flat `list[FNode]` clauses/cubes and share constant, duplicate, and
+complement handling; assumptions use the same conjunction handling as cubes.
+Direct callers and custom engines must migrate former formula signatures to lists.
+Every engine input is validated before semantic shortcuts. CUDD/PySDD validity
+and conditioning remain native;
 d-DNNF validity and implicants derive from native counts. No alternate counter
 or backend is selected. CUDD floating-point precision, PySDD global-count
 overflow, and ddnnife buffering/u64 enumeration limits remain visible (see

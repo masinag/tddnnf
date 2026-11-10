@@ -10,7 +10,7 @@ from tddnnf.compilers.cudd import BddCompiledTarget
 if TYPE_CHECKING:
     from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import QueryEngine
-from tddnnf.core.pysmt_utils import clause_lits, cube_lits, normalize_assumptions
+from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 
 
 class BddEngine(QueryEngine[BddCompiledTarget]):
@@ -42,7 +42,7 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         return mgr.let(assign, source)
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
-        unique = normalize_assumptions(assumptions or [])
+        unique = cube_lits(assumptions or [], self._projection_atom_set)
         if unique is None:
             return False
         mgr = self._target.manager
@@ -52,7 +52,7 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         return len(self._target.manager.vars) - len(self._projection_atoms)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        unique = normalize_assumptions(assumptions or [])
+        unique = cube_lits(assumptions or [], self._projection_atom_set)
         if unique is None:
             return 0
         n = len(self._target.manager.vars)
@@ -64,15 +64,15 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
     def is_valid(self) -> bool:
         return self._target.root == self._target.manager.true
 
-    def entails_clause(self, query_clause: FNode) -> bool:
-        lits = clause_lits(query_clause)
+    def entails_clause(self, query_clause: list[FNode]) -> bool:
+        lits = clause_lits(query_clause, self._projection_atom_set)
         if lits is None:
             return True
         mgr = self._target.manager
         return self._restrict_chain(lits, negate=True) == mgr.false
 
-    def is_implicant(self, query_cube: FNode) -> bool:
-        lits = cube_lits(query_cube)
+    def is_implicant(self, query_cube: list[FNode]) -> bool:
+        lits = cube_lits(query_cube, self._projection_atom_set)
         if lits is None:
             return True
         mgr = self._target.manager

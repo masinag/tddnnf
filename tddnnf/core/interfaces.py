@@ -58,7 +58,7 @@ class PropCompiler(Protocol[T_Target_co]):
 # QuerySession normalizes queries; engines expect literals aligned to the target projection.
 @runtime_checkable
 class QueryEngine(Protocol[T_Target_co]):
-    """Polynomial-time queries over a compiled target."""
+    """Polynomial-time queries over a compiled target using flat, aligned literal lists."""
 
     def __init__(self, container: TheoryCompiledTarget[T_Target_co]) -> None: ...
 
@@ -85,11 +85,11 @@ class QueryEngine(Protocol[T_Target_co]):
         """True iff the compiled formula is valid (true under all assignments)."""
         ...
 
-    def entails_clause(self, query_clause: FNode) -> bool:
+    def entails_clause(self, query_clause: list[FNode]) -> bool:
         """True iff the compiled formula entails the given clause."""
         ...
 
-    def is_implicant(self, query_cube: FNode) -> bool:
+    def is_implicant(self, query_cube: list[FNode]) -> bool:
         """True iff the given cube is an implicant of the compiled formula."""
         ...
 

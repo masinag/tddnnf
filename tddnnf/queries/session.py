@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Generic, Self
 from pysmt.fnode import FNode
 
 from tddnnf.core.interfaces import QueryEngine, T_Target
-from tddnnf.core.pysmt_utils import is_literal, normalize_assumptions
+from tddnnf.core.pysmt_utils import is_literal
 from tddnnf.normalization.normalizer import NormalizerWalker
 
 if TYPE_CHECKING:
@@ -68,7 +68,7 @@ class QuerySession(Generic[T_Target]):
             for iterator in iterators:
                 cleanup.callback(iterator.close)
 
-    def _literals(self, inputs: Sequence[FNode], connective: str | None = None) -> list[FNode] | None:
+    def _literals(self, inputs: Sequence[FNode], connective: str | None = None) -> list[FNode]:
         self._ensure_open()
         aligned = []
         stack = list(reversed(inputs))
@@ -76,28 +76,23 @@ class QuerySession(Generic[T_Target]):
             literal = stack.pop()
             if not isinstance(literal, FNode):
                 raise ValueError("Expected Boolean literals")
-            if connective is not None and getattr(literal, connective)():
+            if (connective == "is_or" and literal.is_or()) or (connective == "is_and" and literal.is_and()):
                 stack.extend(reversed(literal.args()))
             elif is_literal(literal):
                 aligned.append(self._align_literal(literal))
             else:
                 raise ValueError("Expected literals in assumptions, a clause, or a cube")
-        # Validate every entry before handling constants or contradictions.
-        absorbing = False if connective != "is_or" else True
-        constants = [lit.constant_value() for lit in aligned if lit.is_bool_constant()]
-        if absorbing in constants:
-            return None
-        return normalize_assumptions([lit for lit in aligned if not lit.is_bool_constant()])
+        return aligned
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
         lits = self._literals([] if assumptions is None else assumptions)
         assert self._inner is not None
-        return False if lits is None else self._inner.is_satisfiable(lits)
+        return self._inner.is_satisfiable(lits)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
         lits = self._literals([] if assumptions is None else assumptions)
         assert self._inner is not None
-        return 0 if lits is None else self._inner.count_truth_assignments(lits)
+        return self._inner.count_truth_assignments(lits)
 
     def is_valid(self) -> bool:
         self._ensure_open()
@@ -106,17 +101,13 @@ class QuerySession(Generic[T_Target]):
 
     def entails_clause(self, query_clause: FNode) -> bool:
         lits = self._literals([query_clause], "is_or")
-        if lits is None:
-            return True
         assert self._inner is not None
-        return not self._inner.is_satisfiable([self._mgr.Not(lit) for lit in lits])
+        return self._inner.entails_clause(lits)
 
     def is_implicant(self, query_cube: FNode) -> bool:
         lits = self._literals([query_cube], "is_and")
-        if lits is None:
-            return True
         assert self._inner is not None
-        return self._inner.is_implicant(self._mgr.And(lits))
+        return self._inner.is_implicant(lits)
 
     def enumerate_truth_assignments(self) -> Generator[dict[FNode, bool], None, None]:
         """Create an independent enumeration, stopped automatically when the session closes."""

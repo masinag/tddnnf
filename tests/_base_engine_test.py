@@ -11,6 +11,7 @@ from tddnnf.compilers.d4 import D4CompiledTarget
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import PropCompiler, QueryEngine, T_Target
+from tddnnf.queries.session import QuerySession
 from tests.conftest import SolverGroundTruth
 
 
@@ -18,6 +19,12 @@ class BaseTestEngine(Generic[T_Target]):
     compiler_cls: type[PropCompiler[T_Target]]
     engine_cls: Callable[[TheoryCompiledTarget[T_Target]], QueryEngine[T_Target]]
     _skip_queries: frozenset[str] = frozenset()
+
+    def query_literals(self, engine, mgr, operation, literals):
+        query = literals
+        if isinstance(engine, QuerySession):
+            query = mgr.Or(literals) if operation == "entails_clause" else mgr.And(literals)
+        return getattr(engine, operation)(query)
 
     @pytest.fixture
     def compiler(self) -> PropCompiler[T_Target]:
@@ -72,12 +79,13 @@ class BaseTestEngine(Generic[T_Target]):
             asg = dict(zip(projected_vars, combo))
             asg_frozen = frozenset(asg.items())
 
-            conj = mgr.And([v if val else mgr.Not(v) for v, val in asg.items()])
+            cube = [v if val else mgr.Not(v) for v, val in asg.items()]
+            conj = mgr.And(cube)
 
             if asg_frozen in engine_pos_set:
                 all_pos_conjunctions.append(conj)
 
-                assert engine.is_implicant(conj)
+                assert self.query_literals(engine, mgr, "is_implicant", cube)
 
                 with mgr.env.factory.Solver() as solver:
                     solver.add_assertion(mgr.And(conj, mgr.Not(bank_case.expected_formula)))
@@ -85,14 +93,15 @@ class BaseTestEngine(Generic[T_Target]):
             else:
                 all_neg_conjunctions.append(conj)
 
-                assert not engine.is_implicant(conj)
+                assert not self.query_literals(engine, mgr, "is_implicant", cube)
 
                 with mgr.env.factory.Solver() as solver:
                     solver.add_assertion(mgr.And(conj, bank_case.expected_formula))
                     assert not solver.solve(), f"Engine missed a valid solver assignment: {asg}"
 
-                entailed_clause = mgr.Or(*[mgr.Not(v) if val else v for v, val in asg.items()])
-                assert engine.entails_clause(entailed_clause)
+                clause = [mgr.Not(v) if val else v for v, val in asg.items()]
+                entailed_clause = mgr.Or(clause)
+                assert self.query_literals(engine, mgr, "entails_clause", clause)
 
                 with mgr.env.factory.Solver() as solver:
                     solver.add_assertion(mgr.And(bank_case.expected_formula, mgr.Not(entailed_clause)))
@@ -197,6 +206,35 @@ class BaseTestEngine(Generic[T_Target]):
         assert engine.is_satisfiable(assumptions) == (expected_count > 0)
         assert engine.count_truth_assignments(assumptions) == expected_count
 
+    def test_flat_literal_semantics(self, engine, mgr, a, b):
+        for literals, entailed, implicant, count in (
+            ([], False, False, 1),
+            ([mgr.TRUE()], True, False, 1),
+            ([mgr.FALSE()], False, True, 0),
+            ([mgr.Not(mgr.TRUE())], False, True, 0),
+            ([mgr.Not(mgr.FALSE())], True, False, 1),
+            ([a, a], True, False, 1),
+            ([a, mgr.Not(a)], True, True, 0),
+            ([a, b], True, True, 1),
+            ([mgr.FALSE(), a], True, True, 0),
+            ([mgr.TRUE(), mgr.Not(a)], True, False, 0),
+        ):
+            assert self.query_literals(engine, mgr, "entails_clause", literals) == entailed
+            assert self.query_literals(engine, mgr, "is_implicant", literals) == implicant
+            assert engine.is_satisfiable(literals) == (count > 0)
+            assert engine.count_truth_assignments(literals) == count
+
+    def test_validates_before_shortcuts(self, engine, mgr, a, b, c):
+        for tail in (c, mgr.Iff(a, b)):
+            for prefix in ([mgr.TRUE()], [mgr.FALSE()], [a, mgr.Not(a)]):
+                literals = [*prefix, tail]
+                for operation in ("entails_clause", "is_implicant"):
+                    with pytest.raises(ValueError):
+                        self.query_literals(engine, mgr, operation, literals)
+                for operation in (engine.is_satisfiable, engine.count_truth_assignments):
+                    with pytest.raises(ValueError):
+                        operation(literals)
+
     # --- Error / Validation Tests ---
 
     def test_is_satisfiable_unknown_assumption(self, engine: QueryEngine, c: FNode) -> None:
@@ -207,17 +245,17 @@ class BaseTestEngine(Generic[T_Target]):
         with pytest.raises(ValueError, match="not .*projection"):
             engine.count_truth_assignments(assumptions=[c])
 
-    def test_entails_clause_unknown_atom(self, engine: QueryEngine, c: FNode) -> None:
+    def test_entails_clause_unknown_atom(self, engine: QueryEngine, c: FNode, mgr: FormulaManager) -> None:
         with pytest.raises(ValueError, match="not .*projection"):
-            engine.entails_clause(c)
+            self.query_literals(engine, mgr, "entails_clause", [c])
 
-    def test_is_implicant_unknown_atom(self, engine: QueryEngine, c: FNode) -> None:
+    def test_is_implicant_unknown_atom(self, engine: QueryEngine, c: FNode, mgr: FormulaManager) -> None:
         with pytest.raises(ValueError, match="not .*projection"):
-            engine.is_implicant(c)
+            self.query_literals(engine, mgr, "is_implicant", [c])
 
     def test_is_implicant_invalid_input(self, engine: QueryEngine, mgr: FormulaManager, a: FNode, b: FNode) -> None:
         with pytest.raises(ValueError):
-            engine.is_implicant(mgr.Or(a, b))
+            self.query_literals(engine, mgr, "is_implicant", [mgr.Or(a, b)])
 
     def test_projected_assumption_on_forgotten_var_raises(
         self,
