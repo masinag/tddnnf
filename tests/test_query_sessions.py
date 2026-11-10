@@ -215,6 +215,7 @@ def test_initialization_cleanup(mgr, a, monkeypatch):
         return original(context, atoms)
 
     monkeypatch.setattr(QueryContext, "_index_atoms", record)
+
     def fail(*args, **kwargs):
         raise ValueError("native load failed")
 
