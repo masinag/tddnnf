@@ -382,3 +382,13 @@ def test_enumeration_setup_failure_unregisters(mgr, a, monkeypatch):
         with pytest.raises(ValueError, match="setup failed"):
             next(iterator)
         assert not q._iterators
+
+
+def test_closed_unstarted_generators_are_not_retained(mgr, a, pairing):
+    target = compile_target(mgr, pairing, a, [a])
+    with target.queries(pairing[1]) as q:
+        for _ in range(1000):
+            iterator = q.enumerate_truth_assignments()
+            iterator.close()
+        assert not q._iterators
+        assert q.is_satisfiable()

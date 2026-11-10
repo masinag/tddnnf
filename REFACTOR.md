@@ -873,3 +873,28 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   a mismatched D4Engine/BDD snippet produces the expected argument-type error.
   No full-project type check or benchmarks. Native limitations remain.
 - Committed-revision review and linked delivery follow; both PRs stay open.
+
+### Merged-session committed review and delivery
+
+- Fresh ephemeral read-only review inspected library `491de46639c03de619bd8fc7734be4a19949c13d`
+  and companion `1d91cac0090b3f50a8ae605d441fac22c937af55`. Report:
+  `/tmp/merged-review.md`; full log `/tmp/merged-review.log`. Reviewer passed
+  285 tests and 480 native D4 assertions using existing files; its sandbox could
+  not run file-creating tests. Full file-based validation was run separately.
+- One P2 finding: closing an unstarted generator retained it in the session's
+  tracking set. Corrected by registering only when iteration starts; unstarted
+  generators advanced after session closure immediately stop. A regression
+  creates/closes 1,000 unstarted generators per backend and checks no retention.
+- Native saved targets were also loaded through the migrated companion caller
+  for all three backends: equivalent-atom counts, entailment, implicant checks,
+  and normalizer closure passed. Verified import paths select both proposed
+  checkouts. Main testbench changes remain untouched.
+- Updated [library PR #11](https://github.com/masinag/tddnnf/pull/11) and opened
+  [companion PR #14](https://github.com/masinag/tddnnf-testbench/pull/14), both
+  targeting their own `refactor/lean-core`. Both remain open; no merge or step-5
+  work. This entry supersedes the previous no-companion-needed delivery notes.
+- After review correction: full library **787 passed**, 1121 warnings, 26.33 s
+  (`/tmp/merged-reviewed-library.log`); full companion **191 passed**, 5 warnings,
+  4.15 s (`/tmp/merged-reviewed-companion.log`). Focused type/inference checks,
+  formatting and whitespace checks pass again. No benchmarks or full-project
+  static analysis; existing native limitations remain.

@@ -124,6 +124,9 @@ class QuerySession(Generic[T_Target]):
         self._ensure_open()
 
         def assignments():
+            if self._closed:
+                return
+            self._iterators.add(iterator)
             inner = None
             try:
                 assert self._inner is not None
@@ -137,7 +140,6 @@ class QuerySession(Generic[T_Target]):
                     close()
 
         iterator = assignments()
-        self._iterators.add(iterator)
         return iterator
 
     def _index_atoms(self, atoms: Iterable[FNode]) -> dict[FNode, tuple[FNode, bool]]:
