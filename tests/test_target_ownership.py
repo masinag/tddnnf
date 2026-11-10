@@ -112,8 +112,8 @@ def test_shared_abstraction_growth_preserves_earlier_target(mgr, backend, builde
         assert query.count_truth_assignments([a, mgr.Not(a)]) == 0
         assert not query.is_satisfiable([mgr.Not(a), mgr.Not(b)])
         assert query.is_satisfiable([a])
-        assert query.entails_clause(mgr.Or(a, b))
-        assert query.is_implicant(a)
+        assert query.entails_clause([a, b])
+        assert query.is_implicant([a])
         models = list(query.enumerate_truth_assignments())
         assert len(models) == 3
         assert {frozenset(model.items()) for model in models} == {
