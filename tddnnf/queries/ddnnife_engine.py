@@ -62,15 +62,19 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         if tmpdir is not None:
             tmpdir.cleanup()
 
-    def _lits_to_ddnnf(self, lits: list[FNode]) -> list[int]:
+    def _lits_to_ddnnf(self, lits: list[FNode], negate: bool = False) -> list[int]:
+        """Convert validated literals, flipping each sign when negate is True.
+
+        Callers must first use clause_lits or cube_lits with the exact projection
+        atoms and handle None. Inputs must be constant-free, deduplicated literals
+        over those atoms, with no complementary pair.
+        """
         result: list[int] = []
         for lit in lits:
             atom = lit.arg(0) if lit.is_not() else lit
-            if atom not in self._projection_atom_set:
-                raise ValueError(f"Atom {atom} is not a projection atom")
             var_id = self._abstr.get_id(atom)
             nnf_id = self._remapping[var_id]
-            result.append(-nnf_id if lit.is_not() else nnf_id)
+            result.append(-nnf_id if lit.is_not() ^ negate else nnf_id)
         return result
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
@@ -94,10 +98,8 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         lits = clause_lits(query_clause, self._projection_atom_set)
         if lits is None:
             return True
-        # Negate backend literals to avoid depending on PySMT's active environment.
-        negated = [-lit for lit in self._lits_to_ddnnf(lits)]
         assert self._mut is not None
-        return not self._mut.is_sat(negated)
+        return not self._mut.is_sat(self._lits_to_ddnnf(lits, negate=True))
 
     def is_implicant(self, query_cube: list[FNode]) -> bool:
         lits = cube_lits(query_cube, self._projection_atom_set)

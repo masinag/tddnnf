@@ -24,20 +24,18 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         self._projection_atoms: tuple[FNode, ...] = container.projection_atoms
         self._projection_atom_set: set[FNode] = set(container.projection_atoms)
 
-    def _lit_to_sdd(self, lit: FNode):
-        atom = lit.arg(0) if lit.is_not() else lit
-        if atom not in self._projection_atom_set:
-            raise ValueError(f"Atom {atom} is not a projection atom")
-        var_id = self._abstr.get_id(atom)
-        node = self._target.manager.literal(var_id)
-        return ~node if lit.is_not() else node
-
     def _condition_chain(self, lits: list[FNode], negate: bool = False, root=None):
+        """Condition on validated literals, flipping each sign when negate is True.
+
+        Callers must first use clause_lits or cube_lits with the exact projection
+        atoms and handle None. Inputs must be constant-free, deduplicated literals
+        over those atoms, with no complementary pair.
+        """
         temp = self._target.root if root is None else root
         for lit in lits:
-            sdd_lit = self._lit_to_sdd(lit)
-            if negate:
-                sdd_lit = ~sdd_lit
+            atom = lit.arg(0) if lit.is_not() else lit
+            var_id = self._abstr.get_id(atom)
+            sdd_lit = self._target.manager.literal(-var_id if lit.is_not() ^ negate else var_id)
             temp = temp.condition(sdd_lit)
             if temp.is_false():
                 break

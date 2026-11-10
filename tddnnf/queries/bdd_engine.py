@@ -25,15 +25,17 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         self._projection_atom_set: set[FNode] = set(container.projection_atoms)
 
     def _restrict_chain(self, lits: list[FNode], negate: bool = False, root=None):
+        """Restrict by validated literals, flipping each sign when negate is True.
+
+        Callers must first use clause_lits or cube_lits with the exact projection
+        atoms and handle None. Inputs must be constant-free, deduplicated literals
+        over those atoms, with no complementary pair.
+        """
         assign: dict[str, bool] = {}
         for lit in lits:
             atom = lit.arg(0) if lit.is_not() else lit
-            if atom not in self._projection_atom_set:
-                raise ValueError(f"Atom {atom} is not a projection atom")
             val = (not lit.is_not()) if not negate else lit.is_not()
             name = f"b{self._abstr.get_id(atom)}"
-            if name in assign and assign[name] != val:
-                return self._target.manager.false
             assign[name] = val
         source = self._target.root if root is None else root
         if not assign:
