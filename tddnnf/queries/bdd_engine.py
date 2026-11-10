@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from itertools import product
 from typing import TYPE_CHECKING
 
 from pysmt.fnode import FNode
@@ -84,15 +83,6 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         if root == self._target.manager.false:
             return
         mgr = self._target.manager
-        projection_names = [f"b{self._abstr.get_id(a)}" for a in self._projection_atoms]
-        for partial in mgr.pick_iter(root):
-            support = set(partial)
-            unused = [v for v in projection_names if v not in support]
-            if not unused:
-                yield {self._abstr.get_atom(int(k[1:])): v for k, v in partial.items()}
-            else:
-                for bits in product([True, False], repeat=len(unused)):
-                    full = dict(partial)
-                    for var_name, val in zip(unused, bits):
-                        full[var_name] = val
-                    yield {self._abstr.get_atom(int(k[1:])): v for k, v in full.items()}
+        projection_ids = {f"b{self._abstr.get_id(atom)}": atom for atom in self._projection_atoms}
+        for assignment in mgr.pick_iter(root, care_vars=set(projection_ids)):
+            yield {projection_ids[name]: value for name, value in assignment.items()}

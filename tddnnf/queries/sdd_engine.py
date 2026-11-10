@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from itertools import product
 from typing import TYPE_CHECKING
 
 from pysmt.fnode import FNode
@@ -76,31 +75,14 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         return bool(self._condition_chain(lits).is_true())
 
     def enumerate_truth_assignments(self) -> Iterator[dict[FNode, bool]]:
-        # PySDD's models() walks the full vtree (incl. forgotten vars) and
-        # gap-fills with Cartesian products, emitting duplicate projection-atom
-        # assignments. We dedup by canonical key. The proper fix is
-        # migrate_to_care_manager (rebuild SDD in a smaller manager with only
-        # projection atoms), which would eliminate duplicates at the source.
         root = self._target.root
         if root.is_false():
             return
-        seen: set[frozenset[tuple[FNode, bool]]] = set()
+        mgr = self._target.manager
         projection_ids = {self._abstr.get_id(a): a for a in self._projection_atoms}
-        for assignment in root.models():
-            partial = {
-                atom: val == 1 for var_id, val in assignment.items() if (atom := projection_ids.get(var_id)) is not None
-            }
-            canon = frozenset(partial.items())
-            if canon in seen:
-                continue
-            seen.add(canon)
-            present = set(partial)
-            missing = [a for a in self._projection_atoms if a not in present]
-            if not missing:
-                yield partial
-            else:
-                for bits in product([True, False], repeat=len(missing)):
-                    full = dict(partial)
-                    for atom, val in zip(missing, bits):
-                        full[atom] = val
-                    yield full
+        # Forgotten variables are unconstrained; fix them to false to avoid duplicate projected models.
+        for var_id in range(1, mgr.var_count() + 1):
+            if var_id not in projection_ids:
+                root = root & mgr.literal(-var_id)
+        for assignment in root.models(vtree=mgr.vtree()):
+            yield {atom: assignment[var_id] == 1 for var_id, atom in projection_ids.items()}
