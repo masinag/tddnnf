@@ -22,6 +22,23 @@ from tddnnf.core.stats_collector import StatsCollector
 D4_BIN = Path(__file__).resolve().parent.parent / "bin" / "d4.bin"
 
 
+def _clean_nnf(nnf_text: str, var_count: int) -> str:
+    """Remove nonprojected edge literals that d4 can leave despite the declared projection.
+
+    This ensures the compiled circuit respects its projection universe.
+    Projected variables occupy IDs 1..var_count; preserve nodes, edge endpoints,
+    and terminating zeros, including edges emptied by filtering.
+    """
+    cleaned_lines = []
+    for line in nnf_text.splitlines():
+        parts = line.split()
+        if parts and parts[0] not in ("t", "f", "o", "a"):
+            literals = [lit for lit in parts[2:-1] if 1 <= abs(int(lit)) <= var_count]
+            line = " ".join([*parts[:2], *literals, "0"])
+        cleaned_lines.append(line)
+    return "\n".join(cleaned_lines) + "\n"
+
+
 @dataclass
 class _D4Node:
     node_type: str
@@ -343,14 +360,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
                     return D4CompiledTarget("f 1\n", 0, remapping={})
 
             var_count = len(projected_ids)
-            cleaned_lines = []
-            for line in nnf_text.splitlines():
-                parts = line.split()
-                if parts and parts[0] not in ("t", "f", "o", "a"):
-                    literals = [lit for lit in parts[2:-1] if 1 <= abs(int(lit)) <= var_count]
-                    line = " ".join([*parts[:2], *literals, "0"])
-                cleaned_lines.append(line)
-            nnf_text = "\n".join(cleaned_lines) + "\n"
+            nnf_text = _clean_nnf(nnf_text, var_count)
             remapping = {aid: i + 1 for i, aid in enumerate(sorted(projected_ids))}
             stats.log("n_atoms", len(all_atoms))
             stats.log("n_proj_vars", len(projected_ids))
