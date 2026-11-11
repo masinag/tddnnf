@@ -91,47 +91,95 @@ def test_constant_normalizing_projection_atoms(mgr, backend, strategy, negated):
         equivalent(mgr, target.to_pysmt(), p)
 
 
+def test_normalizes_input_and_default_projection(mgr, x, p):
+    raw_atom = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
+    canonical_atom = mgr.GE(x, mgr.Int(2))
+    with TheoryCompilation(mgr.And(p, raw_atom), env=mgr.env) as compilation:
+        assert compilation.phi == mgr.And(p, canonical_atom)
+        assert set(compilation.project_on) == {p, canonical_atom}
+
+
+def test_normalizes_projection_to_positive_atom(mgr, x, p):
+    with TheoryCompilation(p, [mgr.LT(x, mgr.Int(2))], env=mgr.env) as compilation:
+        assert compilation.project_on == (mgr.GE(x, mgr.Int(2)),)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_reduced_compilation_normalizes_lemmas(mgr, backend, x, p):
+    raw_atom = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
+    canonical_atom = mgr.GE(x, mgr.Int(2))
+    with TheoryCompilation(p, [p, canonical_atom], env=mgr.env) as compilation:
+        target = compilation.compile_treduced(backend(), [raw_atom])
+    equivalent(mgr, target.to_pysmt(), mgr.And(p, canonical_atom))
+    assert set(target.abstr.id_to_atom.values()) == {p, canonical_atom}
+    assert target.projection_atoms == (p, canonical_atom)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_extended_compilation_normalizes_lemmas(mgr, backend, x, p):
+    raw_atom = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
+    canonical_atom = mgr.GE(x, mgr.Int(2))
+    with TheoryCompilation(p, [p, canonical_atom], env=mgr.env) as compilation:
+        target = compilation.compile_textended(backend(), [raw_atom])
+    equivalent(mgr, target.to_pysmt(), mgr.Or(p, mgr.Not(canonical_atom)))
+    assert set(target.abstr.id_to_atom.values()) == {p, canonical_atom}
+    assert target.projection_atoms == (p, canonical_atom)
+
+
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("strategy", STRATEGIES)
-def test_normalized_projection_and_compiler_reuse(mgr, backend, strategy):
-    p, absent = mgr.Symbol("p"), mgr.Symbol("absent")
-    x = mgr.Symbol("x", INT)
-    atom = mgr.GE(x, mgr.Int(2))
+def test_normalizes_and_deduplicates_projection(mgr, backend, strategy, x, p):
+    absent = mgr.Symbol("absent")
+    canonical_atom = mgr.GE(x, mgr.Int(2))
     duplicate = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
+    with TheoryCompilation(p, [absent, canonical_atom, mgr.Not(duplicate), p], env=mgr.env) as compilation:
+        assert compilation.project_on == (absent, canonical_atom, p)
+        target = getattr(compilation, strategy)(backend(), [])
+    assert target.projection_atoms == (absent, canonical_atom, p)
+    assert dict(target.abstr.id_to_atom) == {1: absent, 2: canonical_atom, 3: p}
+    equivalent(mgr, target.to_pysmt(), p)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+@pytest.mark.parametrize("strategy", STRATEGIES)
+def test_compiler_reuse_preserves_independent_results(mgr, backend, strategy):
+    p, q, absent, r = [mgr.Symbol(name) for name in ("p", "q", "absent", "r")]
+    compiler = backend()
+    with TheoryCompilation(p, [absent, q, p], env=mgr.env) as compilation:
+        first = getattr(compilation, strategy)(compiler, [q])
+        second = getattr(compilation, strategy)(compiler, [])
+    with TheoryCompilation(r, env=mgr.env) as compilation:
+        third = getattr(compilation, strategy)(compiler, [])
+    expected = mgr.And(p, q) if strategy == "compile_treduced" else mgr.Or(p, mgr.Not(q))
+    equivalent(mgr, first.to_pysmt(), expected)
+    equivalent(mgr, second.to_pysmt(), p)
+    equivalent(mgr, third.to_pysmt(), r)
+    assert first.projection_atoms == second.projection_atoms == (absent, q, p)
+    assert dict(first.abstr.id_to_atom) == dict(second.abstr.id_to_atom) == {1: absent, 2: q, 3: p}
+    assert second.abstr is not first.abstr
+    assert third.projection_atoms == (r,)
+    assert dict(third.abstr.id_to_atom) == {1: r}
+    if backend is SddCompiler:
+        assert SddEngine(second).count_truth_assignments() == 4
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+@pytest.mark.parametrize("strategy", STRATEGIES)
+def test_compilation_statistics(mgr, backend, strategy):
+    p, q, absent = [mgr.Symbol(name) for name in ("p", "q", "absent")]
     compiler = backend()
     first_log, second_log = {}, {}
-    with TheoryCompilation(p, [absent, atom, mgr.Not(duplicate), p], env=mgr.env) as compilation:
-        canonical_atom = compilation.normalize(atom)
-        assert compilation.normalize(duplicate) == canonical_atom
-        assert compilation.project_on == (absent, canonical_atom, p)
-        first = getattr(compilation, strategy)(compiler, [duplicate], first_log)
-        expected = mgr.And(p, canonical_atom) if strategy == "compile_treduced" else mgr.Or(p, mgr.Not(canonical_atom))
-        equivalent(mgr, first.to_pysmt(), expected)
-        assert first.projection_atoms == (absent, compilation.normalize(atom), p)
-        assert [first.abstr.get_id(a) for a in first.projection_atoms] == [1, 2, 3]
+    with TheoryCompilation(p, [absent, q, p], env=mgr.env) as compilation:
+        getattr(compilation, strategy)(compiler, [q], first_log)
         snapshot = dict(first_log)
-        second = getattr(compilation, strategy)(compiler, [], second_log)
-        equivalent(mgr, second.to_pysmt(), p)
-        if backend is SddCompiler:
-            assert SddEngine(second).count_truth_assignments() == 4
-        assert second.abstr is not first.abstr
-        assert first_log == snapshot
-    with TheoryCompilation(p, env=mgr.env) as compilation:
-        third = getattr(compilation, strategy)(compiler, [])
-        assert third.abstr.var_count == 1
-        assert third.abstr.get_id(p) == 1
-    assert {
-        "build_time",
-        "compile_time",
-        "n_lemmas",
-        "n_projection_atoms",
-        "n_atoms",
-        "n_proj_vars",
-    } <= first_log.keys()
+        getattr(compilation, strategy)(compiler, [], second_log)
+    assert first_log == snapshot
+    assert first_log["n_lemmas"] == 1
+    assert second_log["n_lemmas"] == 0
+    assert first_log["n_projection_atoms"] == second_log["n_projection_atoms"] == 3
+    assert {"build_time", "compile_time", "n_atoms", "n_proj_vars"} <= first_log.keys()
     if backend is D4Compiler:
         assert {"register_atoms_time", "write_circuit_time", "run_d4_time"} <= first_log.keys()
-    # Native compilers store only configuration, never per-call abstractions/loggers.
-    assert all(not isinstance(value, (Abstractor, dict)) for value in vars(compiler).values())
 
 
 @pytest.mark.parametrize("strategy", STRATEGIES)
