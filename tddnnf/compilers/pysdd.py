@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from array import array
 from collections.abc import Sequence
 from pathlib import Path
@@ -24,6 +23,7 @@ class SddCompiledTarget(PropCompiledTarget):
     def __init__(self, root: SddNode, manager: SddManager) -> None:
         self._root = root
         self._manager = manager
+        self._legacy_missing_vtree = False
 
     @property
     def root(self) -> SddNode:
@@ -80,20 +80,15 @@ class SddCompiledTarget(PropCompiledTarget):
         return convert(self._root)
 
     def save(self, directory: Path) -> None:
-        directory.mkdir(parents=True, exist_ok=True)
-        sdd_path = directory / "circuit.sdd"
-        self._manager.save(str(sdd_path).encode(), self._root)
-        metadata = {"var_count": self._manager.var_count()}
-        (directory / "metadata.json").write_text(json.dumps(metadata))
+        from tddnnf.core.persistence import save_native
+
+        save_native(self, directory)
 
     @classmethod
     def load(cls, directory: Path) -> Self:
-        sdd_path = directory / "circuit.sdd"
-        metadata = json.loads((directory / "metadata.json").read_text())
-        var_count = metadata["var_count"]
-        mgr = SddManager(var_count)
-        root = mgr.read_sdd_file(str(sdd_path).encode())
-        return cls(root, mgr)
+        from tddnnf.core.persistence import load_native
+
+        return load_native(directory, cls)
 
 
 class SddWalker(DagWalker):

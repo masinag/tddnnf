@@ -973,3 +973,48 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   cleanup; existing native counting and enumeration limits remain.
 - Delivered on `refactor/04-query-sessions` through library PR #11; companion
   PR #14 records the matching verification. Both remain open.
+
+### Step 5 — persistence implementation and independent review (2026-11-11)
+
+- Branch `refactor/05-persistence` starts at the fetched integration head
+  `fc8a541` (companion: `f5d3c48`). Implementation uses isolated worktrees
+  `/tmp/tddnnf-05-persistence` and `/tmp/tddnnf-testbench-05-persistence`.
+  The original testbench's modified `pyproject.toml`, `uv.lock`, and untracked
+  `scripts/migrate_compiled_metadata.py` are untouched.
+- Shared version 1 codecs handle standalone and container saves. Metadata
+  dispatches representation/codec and declares files, counts, dense d4 remapping,
+  complete OBDD order, and the actual SDD vtree. Save validation occurs in a
+  temporary sibling before publication; existing destinations are refused.
+- Loading validates IDs, ordered projection, active support, mapping coverage,
+  native record structure, and declared files. It binds the selected PySMT
+  environment. Legacy artifacts require migration. Explicit missing-original-vtree
+  exceptions retain their provenance through load/save and cannot certify an SDD.
+- The companion adds only the standalone `scripts/migrate_compiled_targets.py`,
+  with single/recursive/dry-run execution, unchanged native/log/auxiliary bytes,
+  DDDMP order recovery, projection aliases/conflict rejection, isolated validation,
+  continuing per-artifact errors, and separate artifact/timing CSV flags.
+  Compile/query/plot consumers use inferred loading, and compilation no longer
+  creates the artifact destination prematurely. The query helper now flattens
+  literals for the existing flat-list API.
+- Verification: library **953 passed**, 1159 existing warnings, 27.74 s;
+  companion **219 passed**, 5 warnings, 12.89 s. Commands used `uv run --no-sync
+  python -m pytest -q --disable-warnings`, `UV_CACHE_DIR=/tmp/uv-step05-cache`,
+  explicit paired source `PYTHONPATH`, and existing library/testbench environments.
+  The library worktree uses a copy of the existing ignored d4 binary; no binary
+  or dependency lock was changed. Library Ruff (`tddnnf tests examples`), companion
+  Ruff (`scripts tests`), formatting checks, and `git diff --check` pass.
+- Independent agent review found native reader crash cases, incomplete d4 mapping
+  coverage, lost missing-vtree provenance on resave, and output-error classification
+  issues. All were fixed with regressions. DDDMP IDs/ranks/permutations and native
+  ASCII records are checked before C import. SDD roots are rebuilt using public
+  operations after disjoint/exhaustive/compressed partition validation, avoiding
+  the unsafe raw reader. Migration native validation runs in a subprocess so a
+  native failure leaves a report row and processing continues. Source health is
+  checked separately from destination I/O failures; report output opens before
+  publication and each row is flushed to disk. Final independent review reported
+  **no outstanding findings**, independently passing 78 persistence and 28 migration
+  tests. Native probes were targeted, not exhaustive.
+- Original missing SDD vtrees cannot be recovered. Historical timing logs remain
+  unchanged; every processed historical result requires a fresh timed compilation.
+  Format migration alone does not require recompilation when all data validates.
+  No benchmark compilation/query reruns were performed for this step.

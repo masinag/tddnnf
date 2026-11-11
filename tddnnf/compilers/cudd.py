@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Self
@@ -52,11 +51,9 @@ class BddCompiledTarget(PropCompiledTarget):
         return DagSize(vertices=int(self._root.dag_size), edges=edges)
 
     def save(self, directory: Path) -> None:
-        directory.mkdir(parents=True, exist_ok=True)
-        bdd_path = directory / "circuit.dddmp"
-        self._manager.dump(str(bdd_path), [self._root])
-        var_count = len(self._manager.vars)
-        (directory / "metadata.json").write_text(json.dumps({"var_count": var_count}))
+        from tddnnf.core.persistence import save_native
+
+        save_native(self, directory)
 
     def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
         _memo: dict[Function, FNode] = {}
@@ -81,14 +78,9 @@ class BddCompiledTarget(PropCompiledTarget):
 
     @classmethod
     def load(cls, directory: Path) -> Self:
-        bdd_path = directory / "circuit.dddmp"
-        metadata = json.loads((directory / "metadata.json").read_text())
-        var_count = metadata["var_count"]
-        mgr = BDD()
-        for i in range(1, var_count + 1):
-            mgr.declare(f"b{i}")
-        roots = mgr.load(str(bdd_path))
-        return cls(roots[0], mgr)
+        from tddnnf.core.persistence import load_native
+
+        return load_native(directory, cls)
 
 
 class BddWalker(DagWalker):

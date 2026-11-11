@@ -270,23 +270,37 @@ idempotent; subclasses of `QueryEngine` inherit a no-op default.
 
 ## Persistence and reconstruction
 
-`TheoryCompiledTarget.save(directory)` creates a directory and writes
-`abstraction.json`, containing the SMT-LIB abstraction map and the ordered list
-of projection atom IDs. It then delegates backend persistence to `target.save()`.
+`TheoryCompiledTarget.save(directory)` writes a versioned artifact containing
+`abstraction.json` (SMT-LIB atom scripts, original IDs, and ordered
+`projection_atom_ids`), `metadata.json`, and the native payload. Standalone backend
+`save()` and `load()` use the same internal codecs without the abstraction file.
 
-Backend files are:
+| Representation | Codec | Native files | Structural metadata |
+| --- | --- | --- | --- |
+| OBDD | `dddmp-2.0` | `circuit.dddmp` | complete `variable_order`, `var_count` |
+| SDD | `pysdd` | `circuit.sdd`, `circuit.vtree` | actual manager vtree, `var_count` |
+| d-DNNF | `d4` | `circuit.nnf` | `var_count`, abstraction-to-native `remapping` |
 
-| Target              | Circuit file    | `metadata.json` contents                       |
-| ------------------- | --------------- | ---------------------------------------------- |
-| `D4CompiledTarget`  | `circuit.nnf`   | variable count and abstraction-to-d4 remapping |
-| `SddCompiledTarget` | `circuit.sdd`   | PySDD manager variable count                   |
-| `BddCompiledTarget` | `circuit.dddmp` | CUDD manager variable count                    |
+All metadata declares `schema_version: 1`, `representation` (`obdd`, `sdd`, or
+`ddnnf`), `codec`, and required `files`. Saves validate a temporary sibling artifact,
+refuse existing destinations, and clean up failed writes before publication.
 
-`TheoryCompiledTarget.load(directory, target_type, env=None)` reverses this
-process: it reconstructs the `Abstractor`, asks `target_type.load()` to restore
-the backend artifact, resolves projection IDs back to SMT atoms, and returns the
-complete container. Supplying the intended PySMT environment keeps restored
-atoms in the same formula manager as the caller.
+`TheoryCompiledTarget.load(directory, env=None)` infers its backend from metadata,
+validates the abstraction, projection, native support, mappings, file declarations,
+and structural records, and binds restored atoms to the supplied PySMT environment.
+Vtrees and OBDD order are restored before root reconstruction; CUDD's importer can
+change order, so the recorded order is also reapplied after import. SDD partitions
+are checked and reconstructed through public operations because the raw native
+reader trusts partition invariants that malformed files can violate.
+
+Unversioned artifacts require the standalone testbench migration script. Migration
+preserves native payload bytes and historical logs, recovers complete OBDD order
+from DDDMP, and retains original SDD vtrees. Only explicitly recorded
+`legacy_missing_vtree: true` permits a balanced-vtree fallback. That exception
+survives load/save: successful fallback loading cannot certify the original SDD,
+and its original vtree cannot be recovered. It always requires recompilation.
+Format migration with complete validated data does not itself require recompilation.
+Historical compilation timings are retained unchanged and need fresh timed runs.
 
 ## Protocols and instrumentation
 

@@ -301,10 +301,14 @@ target_dir = artifact_dir / "ddnnf"
 target.save(target_dir)
 ```
 
-Reload the d4 target without compiling again.
+Reload the target without compiling again; versioned metadata selects its backend.
+The destination passed to `save()` must not already exist. Standalone backend
+save/load methods use the same versioned codecs. Unversioned artifacts require the
+companion testbench's `scripts/migrate_compiled_targets.py`; they are never guessed
+by the library loader.
 
 ```python
-loaded_target = TheoryCompiledTarget.load(target_dir, D4CompiledTarget)
+loaded_target = TheoryCompiledTarget.load(target_dir)
 ```
 
 Open a session and query the loaded target.

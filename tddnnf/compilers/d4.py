@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 import tempfile
 from collections.abc import Mapping, Sequence
@@ -129,23 +128,15 @@ class D4CompiledTarget(PropCompiledTarget):
         return graph[1].to_pysmt(graph, abstr, mgr, inv_remap)
 
     def save(self, directory: Path) -> None:
-        directory.mkdir(parents=True, exist_ok=True)
-        (directory / "circuit.nnf").write_text(self._nnf_text)
-        (directory / "metadata.json").write_text(
-            json.dumps(
-                {
-                    "var_count": self._var_count,
-                    "remapping": {str(k): v for k, v in self._remapping.items()},
-                }
-            )
-        )
+        from tddnnf.core.persistence import save_native
+
+        save_native(self, directory)
 
     @classmethod
     def load(cls, directory: Path) -> Self:
-        nnf_text = (directory / "circuit.nnf").read_text()
-        metadata = json.loads((directory / "metadata.json").read_text())
-        remapping = {int(k): v for k, v in metadata.get("remapping", {}).items()}
-        return cls(nnf_text, metadata["var_count"], remapping=remapping)
+        from tddnnf.core.persistence import load_native
+
+        return load_native(directory, cls)
 
 
 class BCS12Walker(DagWalker):
