@@ -132,7 +132,9 @@ enumeration, the d4 CLI, existing logging, and native compiler defaults.
 Check both constructions across all three compilers, configured options,
 constants, empty/default/partial projection, normalized duplicate atoms, and
 projection atoms absent from both formula and lemmas. Verify elimination of
-non-projection variables, deterministic IDs across hash seeds, environment
+non-projection variables, normalized-atom node-ID ordering (reproducible for the
+same node creation history in the environment and starting abstraction), IDs
+across hash seeds for a fixed creation sequence, environment
 validation, subprocess errors, and temporary cleanup. Run affected compiler,
 abstraction, normalization, and compilation-context tests. Update broken
 testbench callers in a companion PR if needed for these checks.
@@ -1115,3 +1117,47 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
 - Historical evidence and CSV files are unchanged. Recompilation jobs, dataset scans,
   benchmarks, and historical report regeneration were skipped. Previously migrated SDD
   artifacts without vtrees are unsupported and require recompilation.
+
+
+### Node-ID atom ordering
+
+- Branch `perf/node-id-atom-order` starts at integration revision `9dc7cfe`.
+  Both `TheoryCompilation` sorts now use normalized atoms’ `FNode.node_id()`;
+  explicit projection order, normalization/deduplication, supplied abstraction
+  IDs, sequential append-only allocation, public signatures, and persistence
+  formats are unchanged. Creation history in the environment determines order;
+  node IDs are sorting keys, never abstraction IDs. Historical evidence above
+  records the former serialization-order contract and remains unchanged.
+- Regression coverage uses nonalphabetical Boolean creation order and theory
+  atoms whose canonical node creation order differs from their raw nodes.
+  It covers default and explicit projection, remaining-atom allocation, both
+  constructions, all three backends, and sparse abstraction reuse without
+  renumbering. The existing subprocess test retains three hash seeds and all
+  backends for a fixed creation sequence. Running the 30 new/extended cases
+  against the integration revision’s in-memory pipeline gives **30 failed**;
+  the changed pipeline suite gives **165 passed**, 183 warnings, 3.08 s.
+- Environment: existing `.venv`, Python **3.12.15**, PySMT **0.9.7.dev431**,
+  dd **0.6.0**, PySDD **1.0.6**, ddnnife **0.10.0**, tlemma-enum **0.1.0**,
+  pytest **9.0.3**, Ruff **0.15.17**; Linux x86_64. No dependency changes.
+- `.venv/bin/python -m pytest -q --disable-warnings`: **953 passed**, 1187
+  native/deprecation warnings, **23.72 s** (`/tmp/node-id-full-suite.log`).
+  `.venv/bin/python examples/abstr.py`, `examples/tred.py`, and
+  `examples/text.py` all exit successfully across their backend loops (logs
+  `/tmp/node-id-example-{abstr,tred,text}.log`). Ruff lint for `tddnnf tests
+  examples`, changed Python-file formatting, relative documentation links, and
+  `git diff --check` pass. The link check also found a pre-existing README DOI
+  link missing `https://`; its URL is corrected.
+- Temporary benchmark `/tmp/node-id-sort-benchmark.py` constructs 1,000 distinct
+  normalized linear real arithmetic atoms over 20 variables, with inequalities
+  `x[i % 20] + (i % 13 + 1) * x[(i + 1) % 20] <= i + 1` for `i=0..999`.
+  Both keys sort the same atom tuple: `to_smtlib(atom, daggify=False)` versus
+  `FNode.node_id`. Seven repeats of 30 sorts give median **23.4613 ms/sort**
+  for serialization and **0.03461 ms/sort** for node IDs (minimum **23.2792**
+  and **0.03189 ms/sort**). Run with `PYTHONPATH=. .venv/bin/python
+  /tmp/node-id-sort-benchmark.py`; results are in
+  `/tmp/node-id-sort-benchmark.json`. These are sorting timings only; no total
+  compilation speedup is established.
+- No testbench changes, full benchmark campaign, or static type checks. Native
+  variable order, circuit size, and total compilation time may change; ordering
+  is not canonical across different node creation histories. Existing saved
+  artifacts retain their recorded abstraction IDs.

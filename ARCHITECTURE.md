@@ -46,9 +46,13 @@ Both constructions use one private pipeline to normalize lemmas,
 combine them with the formula, prepare an abstraction, compile, and log
 counts and durations. Supplied abstractions are reused; otherwise a fresh one is
 created. New projection atoms receive IDs first; remaining new atoms follow
-SMT-LIB serialization order without DAG aliases. Omitted projection sorts the
-normalized formula atoms; explicit empty projection remains empty. Requested
-atoms absent from the formula and lemmas are registered as unconstrained atoms.
+normalized atoms’ `FNode.node_id()` order. Omitted projection sorts the
+normalized formula atoms by the same key; explicit empty projection remains
+empty. Requested atoms absent from the formula and lemmas are registered as
+unconstrained atoms.
+Node IDs only determine sorting; abstraction IDs are allocated sequentially above
+the existing maximum. Ordering is reproducible given the same node creation
+history in the environment and starting abstraction.
 
 Compilers are configured instances. Their `compile` methods receive the PySMT
 formula, prepared abstraction, projection, and logger for each call; native

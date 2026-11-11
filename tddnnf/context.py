@@ -6,7 +6,6 @@ from typing import Self
 from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.shortcuts import get_env
-from pysmt.smtlib.printers import to_smtlib
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
@@ -36,11 +35,7 @@ class TheoryCompilation:
         try:
             self._normalizer = NormalizerWalker(self._env)
             self.phi = self.normalize(phi)
-            atoms = (
-                sorted(self.phi.get_atoms(), key=lambda a: to_smtlib(a, daggify=False))
-                if project_on is None
-                else project_on
-            )
+            atoms = sorted(self.phi.get_atoms(), key=FNode.node_id) if project_on is None else project_on
             self.project_on = tuple(
                 dict.fromkeys(normalized for atom in atoms if (normalized := self._normalize_atom(atom)) is not None)
             )
@@ -111,7 +106,7 @@ class TheoryCompilation:
             )
             if abstractor is None:
                 abstractor = Abstractor()
-            for atom in (*self.project_on, *sorted(combined.get_atoms(), key=lambda a: to_smtlib(a, daggify=False))):
+            for atom in (*self.project_on, *sorted(combined.get_atoms(), key=FNode.node_id)):
                 abstractor.get_id(atom)
             artifact = compiler.compile(
                 combined, abstractor, project_on=self.project_on, computation_logger=computation_logger

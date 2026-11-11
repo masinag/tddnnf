@@ -10,7 +10,7 @@ using [PySMT](https://github.com/pysmt/pysmt).
 The framework implements the following paper:
 
 [1] [G. Masina, E. Civini, M. Michelutti, G. Spallitta, and R. Sebastiani,
-"d-DNNF Modulo Theories: A General Framework for Polytime SMT Queries," in SAT 2026](doi.org/10.4230/LIPIcs.SAT.2026.25).
+"d-DNNF Modulo Theories: A General Framework for Polytime SMT Queries," in SAT 2026](https://doi.org/10.4230/LIPIcs.SAT.2026.25).
 
 Theory-lemma enumeration is done using the [tlemma_enum package](https://github.com/ecivini/tlemmas-enumeration/tree/develop) implementing the paper:
 
@@ -191,11 +191,15 @@ preconditions, without repeated runtime validation. Projection entries normalize
 to positive Boolean symbols or theory atoms. Atoms that normalize to constants,
 including negated atoms, are discarded; explicitly supplied constants and
 compound Boolean entries are rejected.
-Omitted projection uses normalized formula atoms in SMT-LIB serialization order;
+Omitted projection uses normalized formula atoms in `FNode.node_id()` order;
 explicit projection preserves first occurrence, including an empty list or atoms
 absent from the formula and lemmas. Each compile call registers new projection
-atoms first, then the remaining new combined-formula atoms in serialization order,
-preserving any IDs in a supplied abstraction.
+atoms first, then the remaining new combined-formula atoms in normalized atoms’
+node-ID order,
+preserving any IDs in a supplied abstraction. Node IDs serve only as sorting
+keys; new abstraction IDs remain sequential above the existing maximum. Ordering
+is reproducible given the same node creation history in the environment and
+starting abstraction.
 Non-projection atoms and encoding auxiliaries are existentially eliminated.
 
 ### Compilation strategies
