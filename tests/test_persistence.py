@@ -30,7 +30,7 @@ def artifact(request, mgr, tmp_path):
         tree = Vtree(var_count=11, vtree_type="left")
         manager = SddManager.from_vtree(tree)
         manager.auto_gc_and_minimize_off()
-        native = SddCompiledTarget(manager.literal(3), manager)
+        native = SddCompiledTarget(manager.literal(3), manager, {i: i for i in range(1, 12)})
     else:
         native = D4CompiledTarget("o 1 0\nt 2 0\n1 2 1 0\n", 2, {3: 1, 11: 2})
     container = TheoryCompiledTarget(native, abstr, [absent, a], env=mgr.env)
@@ -71,7 +71,7 @@ def test_constants(tmp_path, mgr, value, rep):
         native = BddCompiledTarget(manager.true if value else manager.false, manager)
     elif rep == "sdd":
         manager = SddManager(var_count=1)
-        native = SddCompiledTarget(manager.true() if value else manager.false(), manager)
+        native = SddCompiledTarget(manager.true() if value else manager.false(), manager, {})
     else:
         native = D4CompiledTarget("t 1\n" if value else "f 1\n", 0)
     target = TheoryCompiledTarget(native, Abstractor(), [], mgr.env)
@@ -126,7 +126,7 @@ def test_sdd_minimized_vtree_roundtrip(tmp_path, mgr):
     root = (manager.literal(1) & manager.literal(5)) | (manager.literal(2) & manager.literal(4))
     root.ref()
     manager.minimize()
-    target = SddCompiledTarget(root, manager)
+    target = SddCompiledTarget(root, manager, {i: i for i in range(1, 6)})
     path = tmp_path / "minimized"
     target.save(path)
     loaded = SddCompiledTarget.load(path)
@@ -175,7 +175,7 @@ def test_missing_artifact_file_propagates(tmp_path, mgr, filename):
 def test_missing_sdd_vtree_file_propagates(tmp_path):
     manager = SddManager(var_count=1)
     path = tmp_path / "target"
-    SddCompiledTarget(manager.literal(1), manager).save(path)
+    SddCompiledTarget(manager.literal(1), manager, {1: 1}).save(path)
     (path / "circuit.vtree").unlink()
     with pytest.raises(FileNotFoundError, match="circuit.vtree"):
         SddCompiledTarget.load(path)

@@ -107,7 +107,7 @@ is unsupported; saving may include atoms registered by later compilations.
 | Compilation session | Normalized inputs, one pipeline, normalizer and its solver resources |
 | TheoryCompiledTarget | Bound environment, stable abstraction, immutable ordered active vocabulary, backend target |
 | D4CompiledTarget | NNF text, variable count, abstraction-to-NNF remapping, codec metadata |
-| SddCompiledTarget | Root references, manager, final vtree, codec metadata |
+| SddCompiledTarget | Root references, manager, abstraction-to-native remapping, final vtree, codec metadata |
 | BddCompiledTarget | Root references, manager, final variable order, codec metadata |
 | Query session | Independent normalizer, transient atom index, reasoner resources and temporary files |
 

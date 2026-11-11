@@ -206,7 +206,11 @@ constructs the requested native vtree. The Boolean option jointly enables or
 disables native automatic garbage collection and minimization; both are enabled
 by default. It existentially quantifies non-projection variables after translation.
 
-`SddCompiledTarget` retains the `SddNode` root and `SddManager`. It provides DAG
+`SddCompiledTarget` retains the `SddNode` root, `SddManager`, and a read-only
+abstraction-to-native `remapping`. Compilation allocates dense native IDs in
+ascending abstraction-ID order for formula and projection atoms only. Queries,
+forgetting, reconstruction, and persistence use this correspondence. Constants
+retain a one-variable manager. Forgotten variables remain in the manager. It provides DAG
 statistics and reconstructs decision nodes as disjunctions of prime/sub
 conjunctions.
 
@@ -284,7 +288,7 @@ graph validators.
 | Representation | Codec | Native files | Structural metadata |
 | --- | --- | --- | --- |
 | OBDD | `dddmp-2.0` | `circuit.dddmp` | complete `variable_order`, `var_count` |
-| SDD | `pysdd` | `circuit.sdd`, `circuit.vtree` | actual manager vtree, `var_count` |
+| SDD | `pysdd` | `circuit.sdd`, `circuit.vtree` | actual manager vtree, `var_count`, `remapping` |
 | d-DNNF | `d4` | `circuit.nnf` | `var_count`, abstraction-to-native `remapping` |
 
 All metadata declares `schema_version: 1`, `representation` (built-ins use `obdd`,
@@ -365,3 +369,7 @@ tddnnf/
     ├── sdd_engine.py          # SDD queries
     └── bdd_engine.py          # OBDD queries
 ```
+
+Native allocation preserves shared abstraction IDs. OBDD compilation declares
+only needed `b<ID>` names in ascending ID order. SDD schema v1 artifacts require
+`remapping`; there is no identity fallback for older payloads.

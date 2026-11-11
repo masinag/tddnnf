@@ -380,3 +380,9 @@ payload files. `load` requires a target class and preserves its concrete type;
 representation and codec metadata are descriptive and do not select a backend.
 Applications should check representation metadata before calling native loaders
 when they need to reject a mismatch with their selected backend.
+
+SDD compilation uses dense native IDs for formula and projection atoms, with a
+read-only `target.remapping` from shared abstraction IDs to native IDs. This
+mapping is required in schema v1 SDD artifacts. OBDD compilation declares only
+needed variable names. Neither backend changes shared abstraction IDs. Variables
+used during compilation and later forgotten remain allocated.
