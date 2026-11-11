@@ -65,8 +65,8 @@ memoization without repeated type checks or environment-validation traversals.
 Projection entries normalize to positive Boolean symbols or theory atoms;
 strip a normalized top-level negation and reject arbitrary Boolean formulas.
 Deduplicate after normalization, retaining explicit first-occurrence order.
-When projection is omitted, sort normalized formula atoms by stable canonical
-serialization. An explicit empty projection remains empty.
+When projection is omitted, sort normalized formula atoms by `FNode.node_id()`.
+An explicit empty projection remains empty.
 
 **Projection atoms may be absent from both the formula and the lemmas.** Register
 them anyway: they are unconstrained variables in the represented propositional
@@ -77,11 +77,12 @@ Reuse a supplied abstraction or allocate a fresh one when absent. Preserve
 existing IDs and register new atoms above the current maximum, in this order:
 
 1. All active projection atoms, in their declared order.
-2. Remaining atoms of the combined normalized formula, in stable serialization
-   order.
+2. Remaining atoms of the combined normalized formula, in `FNode.node_id()` order.
 
-New IDs must be independent of set iteration, hash randomization, and backend
-traversal for a given starting abstraction. Existentially eliminate every
+Node IDs are sorting keys only; new abstraction IDs remain sequential above the
+current maximum. Ordering is reproducible given the same node creation history
+in the environment and starting abstraction, independently of set iteration,
+hash randomization, and backend traversal. Existentially eliminate every
 non-projection atom and encoding auxiliary. Keep abstraction IDs distinct from native variable IDs, NNF IDs,
 and OBDD levels; explicit mappings connect them. A backend may renumber or
 reorder without changing the public vocabulary. Migrated artifacts retain

@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
-from pysmt.smtlib.printers import to_smtlib
+from pysmt.fnode import FNode
 from pysmt.typing import INT
 
 from tddnnf import CompilationContext, TheoryCompilation
@@ -51,18 +51,38 @@ def test_projected_semantics(mgr, backend, strategy, projection, constant):
         expected = shannon_forget(mgr, combined, forgotten)
         equivalent(mgr, target.to_pysmt(), expected)
         vocabulary = (
-            list(dict.fromkeys(selected))
-            if selected is not None
-            else sorted(phi.get_atoms(), key=lambda atom: to_smtlib(atom, daggify=False))
+            list(dict.fromkeys(selected)) if selected is not None else sorted(phi.get_atoms(), key=FNode.node_id)
         )
         assert target.projection_atoms == tuple(vocabulary)
         assert target.to_pysmt().get_atoms() <= set(target.projection_atoms)
         ordered = list(target.projection_atoms) + sorted(
-            combined.get_atoms() - set(target.projection_atoms), key=lambda atom: to_smtlib(atom, daggify=False)
+            combined.get_atoms() - set(target.projection_atoms), key=FNode.node_id
         )
         assert [target.abstr.get_atom(i + 1) for i in range(len(ordered))] == ordered
     # Closing compilation must not invalidate the result.
     equivalent(mgr, target.to_pysmt(), expected)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+@pytest.mark.parametrize("strategy", STRATEGIES)
+@pytest.mark.parametrize("explicit", [False, True])
+@pytest.mark.parametrize("theory", [False, True])
+def test_node_id_atom_order(mgr, backend, strategy, explicit, theory):
+    z, a, y, b = [mgr.Symbol(name, INT) if theory else mgr.Symbol(name) for name in ("z", "a", "y", "b")]
+    if theory:
+        raw = [mgr.GE(mgr.Times(mgr.Int(2), symbol), mgr.Int(4)) for symbol in (z, a, y, b)]
+        # Create canonical atoms in an order different from both spelling and raw node IDs.
+        with NormalizerWalker(mgr.env) as normalizer:
+            y, z, b, a = [normalizer.normalize(atom) for atom in (raw[2], raw[0], raw[3], raw[1])]
+        assert all(atom not in (z, a, y, b) for atom in raw)
+    else:
+        raw = [z, a, y, b]
+    projection = [raw[1], mgr.Not(raw[0]), raw[1]] if explicit else None
+    with TheoryCompilation(mgr.And(*raw[:2]), projection, env=mgr.env) as compilation:
+        assert compilation.project_on == ((a, z) if explicit else (z, a))
+        target = getattr(compilation, strategy)(backend(), [mgr.And(*raw[2:])])
+        assert target.projection_atoms == compilation.project_on
+        assert dict(target.abstr.id_to_atom) == dict(enumerate((*compilation.project_on, y, b), 1))
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -140,14 +160,15 @@ def test_sdd_native_options(mgr, strategy, options):
 @pytest.mark.parametrize("builder", [TReducedBuilder, TExtendedBuilder])
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_builder_preserves_abstraction(mgr, builder, backend):
-    atom, added = mgr.Symbol("a"), mgr.Symbol("b")
+    added, last, atom = [mgr.Symbol(name) for name in ("z", "b", "a")]
     abstractor = Abstractor({2: atom})
-    formula = mgr.And(atom, added)
+    formula = mgr.And(atom, last, added)
     target = builder(backend(), env=mgr.env).build(formula, [], abstractor)
     assert target.abstr is abstractor
-    assert dict(abstractor.id_to_atom) == {2: atom, 3: added}
+    assert dict(abstractor.id_to_atom) == {2: atom, 3: added, 4: last}
     assert target.abstr.get_id(atom) == 2
     assert target.abstr.get_id(added) == 3
+    assert target.abstr.get_id(last) == 4
     assert target.abstr.get_atom(2) is atom
     equivalent(mgr, target.to_pysmt(), formula)
 
