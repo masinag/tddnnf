@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import tddnnf.compilers.d4 as d4
 from tddnnf import TheoryCompilation
 from tddnnf.compilers.d4 import D4_BIN, D4CompiledTarget, D4Compiler
 from tddnnf.core.abstraction import Abstractor
@@ -61,8 +62,6 @@ def test_projection_cleanup(mgr, a, b, c, monkeypatch, tmp_path, injected):
 
 
 def test_d4_failure_diagnostics_and_cleanup(mgr, monkeypatch):
-    import tddnnf.compilers.d4 as d4
-
     observed = []
 
     def fail(cmd, **kwargs):

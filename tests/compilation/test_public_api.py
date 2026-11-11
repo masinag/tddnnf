@@ -1,11 +1,16 @@
 """Public exports, compiler argument validation, and keyword-only abstraction reuse."""
 
+import inspect
+
 import pytest
 
-from tddnnf import TheoryCompilation
+import tddnnf
+from tddnnf import TheoryCompilation, TheoryCompiledTarget
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.core.abstraction import Abstractor
+from tddnnf.core.containers import TheoryCompiledTarget as Container
+from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
 from tests.support import STRATEGIES
 
 
@@ -18,13 +23,6 @@ def test_invalid_compiler(mgr, bad):
 
 
 def test_public_exports_and_keyword_only_abstraction(mgr):
-    import inspect
-
-    import tddnnf
-    from tddnnf import TheoryCompiledTarget
-    from tddnnf.core.containers import TheoryCompiledTarget as Container
-    from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
-
     assert tddnnf.__all__ == ["TheoryCompilation", "TheoryCompiledTarget"]
     assert TheoryCompiledTarget is Container
     assert not hasattr(tddnnf, "CompilationContext")

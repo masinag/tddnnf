@@ -1,6 +1,7 @@
 """Native SDD options and vtree validation, plus prepared-abstraction requirements."""
 
 import pytest
+from pysdd.sdd import SddManager, Vtree
 
 from tddnnf import TheoryCompilation
 from tddnnf.compilers.pysdd import SddCompiler
@@ -11,8 +12,6 @@ from tests.support import BACKENDS, STRATEGIES, equivalent
 @pytest.mark.parametrize("strategy", STRATEGIES)
 @pytest.mark.parametrize("options", [{}, {"auto_gc_and_minimize": True}, {"auto_gc_and_minimize": False}])
 def test_sdd_native_options(mgr, strategy, options):
-    from pysdd.sdd import SddManager, Vtree
-
     compiler = SddCompiler(vtree_type="right", **options)
     # Compare actual native configuration and vtree with native construction.
     a, b, c = [mgr.Symbol(name) for name in ("a", "b", "c")]
