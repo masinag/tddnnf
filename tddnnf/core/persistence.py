@@ -45,7 +45,7 @@ def metadata(directory):
 
 def write_metadata(directory, representation, **extra):
     files = [PAYLOADS[representation]]
-    if representation == "sdd" and not extra.get("legacy_missing_vtree"):
+    if representation == "sdd":
         files.append("circuit.vtree")
     data = {
         "schema_version": SCHEMA_VERSION,

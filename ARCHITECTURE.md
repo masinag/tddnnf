@@ -306,10 +306,11 @@ loading does not certify a circuit's semantics.
 
 Unversioned artifacts require the standalone testbench migration script. Migration
 preserves native payload bytes and historical logs, recovers complete OBDD order
-from DDDMP, and retains original SDD vtrees. Only explicitly recorded
-`legacy_missing_vtree: true` permits a balanced-vtree fallback. That exception
-survives load/save: successful fallback loading cannot certify the original SDD,
-and its original vtree cannot be recovered. It always requires recompilation.
+from DDDMP, and retains original SDD vtrees. Every SDD artifact must include
+`circuit.vtree`; loads restore it before reading the SDD. Missing vtrees in legacy
+or versioned artifacts fail migration with `missing_required_data`, require
+recompilation, and publish no destination. Previously migrated SDD artifacts
+without vtrees are unsupported; there is no fallback or provenance flag.
 Format migration with complete validated data does not itself require recompilation.
 Historical compilation timings are retained unchanged and need fresh timed runs.
 

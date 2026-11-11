@@ -177,13 +177,14 @@ update testbench producers and consumers in linked companion PRs.
 Round-trip every representation, constants, nontrivial remapping, inactive and
 absent active atoms, custom/minimized SDD vtrees, and reordered OBDDs. Check
 environment binding, unknown versions/codecs, corrupt metadata, and missing
-declared files. Distinguish an explicitly identified legacy SDD without a
-vtree from a damaged modern artifact. Validate safe writes, refusal to
+declared files. Require the saved vtree for every legacy or versioned SDD
+artifact; missing vtrees require recompilation without publishing a destination. Validate safe writes, refusal to
 overwrite, and cleanup after failure.
 
 Migration checks cover single, recursive, and dry-run modes; preserved IDs,
 projection order, logs, and byte-identical native payloads; DDDMP order recovery;
-existing and missing legacy SDD vtrees; and absence of recompilation. Run the
+existing and missing SDD vtrees in legacy and versioned artifacts; and absence of
+compilation during migration. Run the
 testbench serialization, compile-task, query-consumer, and migration tests
 against the proposed library SHA. Record limitations where original structural
 metadata cannot be recovered.
@@ -1104,3 +1105,23 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   formatting passes for all seven changed Python files. Both `git diff --check`
   checks pass. No new tests, abstractions, benchmarks, or dataset scans for this
   naming-only change. Deliver together through library PR #12 and companion PR #15.
+
+
+### Require saved SDD vtrees (2026-11-11)
+
+- Supersedes the missing-vtree fallback and provenance behavior recorded in earlier
+  step 5 evidence. Every SDD save writes and declares `circuit.vtree`; loads restore
+  the saved tree before reading the SDD. Public APIs and schema version 1 remain.
+- Migration requires the vtree for legacy and versioned SDD artifacts. Missing trees
+  fail with `missing_required_data`, require recompilation, and publish no destination.
+  Removed the missing-vtree return value, special reason code, and fallback diagnostics.
+  Subprocess isolation, recursive continuation, dry runs, overwrite refusal, and cleanup remain.
+- Full paired-source verification: library **907 passed** (1155 warnings, 25.52 s),
+  testbench **245 passed** (5 warnings, 15.72 s). Used the existing library/testbench
+  virtualenvs with explicit `PYTHONPATH=/tmp/tddnnf-05-persistence` and the companion
+  `scripts` directory for testbench tests. Ruff passes for library `tddnnf tests examples`
+  and companion `scripts tests`; formatting passes for all five changed Python files;
+  both `git diff --check` checks pass. Import checks confirm the paired worktree sources.
+- Historical evidence and CSV files are unchanged. Recompilation jobs, dataset scans,
+  benchmarks, and historical report regeneration were skipped. Previously migrated SDD
+  artifacts without vtrees are unsupported and require recompilation.

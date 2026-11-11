@@ -48,6 +48,7 @@ def test_sparse_roundtrip_and_environment(artifact):
     if isinstance(original.target, BddCompiledTarget):
         assert loaded.target.manager.var_levels == original.target.manager.var_levels
     if isinstance(original.target, SddCompiledTarget):
+        assert "circuit.vtree" in read_json(path / "metadata.json")["files"]
         second = path.parent / "second"
         loaded.save(second)
         assert (second / "circuit.vtree").read_bytes() == (path / "circuit.vtree").read_bytes()
@@ -179,3 +180,18 @@ def test_missing_d4_payload_propagates(tmp_path):
     (path / "circuit.nnf").unlink()
     with pytest.raises(FileNotFoundError):
         D4CompiledTarget.load(path)
+
+
+@pytest.mark.parametrize("legacy_flag", [False, True])
+def test_missing_sdd_vtree_requires_recompilation(tmp_path, legacy_flag):
+    manager = SddManager(var_count=1)
+    path = tmp_path / "target"
+    SddCompiledTarget(manager.literal(1), manager).save(path)
+    (path / "circuit.vtree").unlink()
+    if legacy_flag:
+        data = read_json(path / "metadata.json")
+        data["legacy_missing_vtree"] = True
+        data["files"].remove("circuit.vtree")
+        (path / "metadata.json").write_text(json.dumps(data))
+    with pytest.raises(FileNotFoundError, match="circuit.vtree"):
+        SddCompiledTarget.load(path)

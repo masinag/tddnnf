@@ -24,7 +24,6 @@ class SddCompiledTarget(PropCompiledTarget):
     def __init__(self, root: SddNode, manager: SddManager) -> None:
         self._root = root
         self._manager = manager
-        self._legacy_missing_vtree = False
 
     @property
     def root(self) -> SddNode:
@@ -84,27 +83,21 @@ class SddCompiledTarget(PropCompiledTarget):
         with saving_to(directory) as temporary_directory:
             temporary_directory.mkdir()
             self.manager.save(str(temporary_directory / "circuit.sdd").encode(), self.root)
-            extra = {}
-            if self._legacy_missing_vtree:
-                extra["legacy_missing_vtree"] = True
-            else:
-                self.manager.vtree().save(str(temporary_directory / "circuit.vtree").encode())
-            write_metadata(temporary_directory, "sdd", var_count=self.manager.var_count(), **extra)
+            self.manager.vtree().save(str(temporary_directory / "circuit.vtree").encode())
+            write_metadata(temporary_directory, "sdd", var_count=self.manager.var_count())
 
     @classmethod
     def load(cls, directory: Path) -> Self:
         directory = Path(directory)
-        data = metadata(directory)
-        if data.get("legacy_missing_vtree"):
-            manager = SddManager(var_count=data["var_count"])
-        else:
-            tree = Vtree.from_file(str(directory / "circuit.vtree").encode())
-            manager = SddManager.from_vtree(tree)
+        metadata(directory)
+        vtree_path = directory / "circuit.vtree"
+        if not vtree_path.is_file():
+            raise FileNotFoundError(vtree_path)
+        tree = Vtree.from_file(str(vtree_path).encode())
+        manager = SddManager.from_vtree(tree)
         manager.auto_gc_and_minimize_off()
         root = manager.read_sdd_file(str(directory / "circuit.sdd").encode())
-        target = cls(root, manager)
-        target._legacy_missing_vtree = data.get("legacy_missing_vtree") is True
-        return target
+        return cls(root, manager)
 
 
 class SddWalker(DagWalker):
