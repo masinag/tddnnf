@@ -338,7 +338,7 @@ from pysmt.environment import Environment
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import DagSize
-from tddnnf.core.persistence import metadata, saving_to, write_metadata
+from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 
 
 class LiteralTarget:
@@ -360,7 +360,7 @@ class LiteralTarget:
     @classmethod
     def load(cls, directory):
         directory = Path(directory)
-        metadata(directory)
+        read_metadata(directory)
         return cls(int((directory / "literal.txt").read_text()))
 
 

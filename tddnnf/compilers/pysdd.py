@@ -14,7 +14,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
-from tddnnf.core.persistence import metadata, saving_to, write_metadata
+from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -95,7 +95,7 @@ class SddCompiledTarget(PropCompiledTarget):
     @classmethod
     def load(cls, directory: Path) -> Self:
         directory = Path(directory)
-        metadata(directory)
+        read_metadata(directory)
         vtree_path = directory / "circuit.vtree"
         if not vtree_path.is_file():
             raise FileNotFoundError(vtree_path)

@@ -16,7 +16,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
-from tddnnf.core.persistence import metadata, saving_to, write_metadata
+from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 D4_BIN = Path(__file__).resolve().parent.parent / "bin" / "d4.bin"
@@ -138,7 +138,7 @@ class D4CompiledTarget(PropCompiledTarget):
     @classmethod
     def load(cls, directory: Path) -> Self:
         directory = Path(directory)
-        data = metadata(directory)
+        data = read_metadata(directory)
         remapping = {int(k): v for k, v in data["remapping"].items()}
         return cls((directory / "circuit.nnf").read_text(), data["var_count"], remapping)
 

@@ -12,7 +12,7 @@ from tddnnf.compilers.pysdd import SddCompiledTarget
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget
-from tddnnf.core.persistence import metadata, read_json, saving_to, write_metadata
+from tddnnf.core.persistence import read_json, read_metadata, saving_to, write_metadata
 
 
 @pytest.fixture(params=["obdd", "sdd", "ddnnf"])
@@ -219,7 +219,7 @@ class LiteralTarget:
 
     @classmethod
     def load(cls, directory):
-        metadata(directory)
+        read_metadata(directory)
         return cls(int((directory / "literal.txt").read_text()))
 
 

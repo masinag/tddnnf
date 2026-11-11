@@ -10,7 +10,7 @@ from pysmt.fnode import FNode
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, QueryEngine, T_Target
-from tddnnf.core.persistence import metadata, read_json, saving_to
+from tddnnf.core.persistence import read_json, read_metadata, saving_to
 from tddnnf.queries.session import QuerySession
 
 
@@ -79,7 +79,7 @@ class TheoryCompiledTarget(Generic[T_Target]):
         """Load with the selected backend and bind atoms to env."""
         directory = Path(directory)
         env = env if env is not None else get_env()
-        metadata(directory)
+        read_metadata(directory)
         target = target_type.load(directory)
         payload = read_json(directory / "abstraction.json")
         abstr = Abstractor.from_dict(payload["abstraction"], env=env)

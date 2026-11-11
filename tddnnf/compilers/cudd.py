@@ -13,7 +13,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
-from tddnnf.core.persistence import metadata, saving_to, write_metadata
+from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -89,7 +89,7 @@ class BddCompiledTarget(PropCompiledTarget):
     @classmethod
     def load(cls, directory: Path) -> Self:
         directory = Path(directory)
-        data = metadata(directory)
+        data = read_metadata(directory)
         order = data["variable_order"]
         manager = BDD()
         manager.configure(reordering=False)

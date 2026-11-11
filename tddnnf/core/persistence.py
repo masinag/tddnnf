@@ -32,7 +32,7 @@ def saving_to(directory):
         temporary_directory.rename(directory)
 
 
-def metadata(directory):
+def read_metadata(directory):
     data = read_json(Path(directory) / "metadata.json")
     if "schema_version" not in data:
         raise ValueError("Unversioned artifact requires migration")
