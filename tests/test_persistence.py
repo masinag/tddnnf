@@ -73,26 +73,13 @@ def test_constants(tmp_path, mgr, value, rep):
     assert TheoryCompiledTarget.load(path, env=mgr.env).to_pysmt() is mgr.Bool(value)
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
-        ("schema_version", 999),
-        ("schema_version", True),
-        ("codec", "unknown"),
-        ("representation", "unknown"),
-        ("files", []),
-        ("files", ["../outside"]),
-        ("files", [None]),
-        ("var_count", -1),
-        ("var_count", True),
-    ],
-)
-def test_bad_metadata(artifact, field, value):
+@pytest.mark.parametrize("version", [999, True])
+def test_unsupported_schema_version(artifact, version):
     path, _ = artifact
     data = read_json(path / "metadata.json")
-    data[field] = value
+    data["schema_version"] = version
     (path / "metadata.json").write_text(json.dumps(data))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="schema version"):
         TheoryCompiledTarget.load(path)
 
 
@@ -105,33 +92,12 @@ def test_unversioned_requires_migration(artifact):
         TheoryCompiledTarget.load(path)
 
 
-@pytest.mark.parametrize("mutation", ["duplicate_ids", "duplicate_projection", "unknown_projection", "conflict"])
-def test_bad_abstraction(artifact, mutation):
-    path, _ = artifact
-    payload = read_json(path / "abstraction.json")
-    if mutation == "duplicate_ids":
-        payload["abstraction"] = dict.fromkeys(payload["abstraction"], 3)
-    elif mutation == "duplicate_projection":
-        payload["projection_atom_ids"] = [3, 3]
-    elif mutation == "unknown_projection":
-        payload["projection_atom_ids"] = [100]
-    else:
-        payload["care_var_ids"] = [3]
-    (path / "abstraction.json").write_text(json.dumps(payload))
-    with pytest.raises(ValueError):
-        TheoryCompiledTarget.load(path)
-
-
-def test_overwrite_and_missing_file(artifact):
+def test_overwrite_refusal(artifact):
     path, original = artifact
     before = (path / "metadata.json").read_bytes()
     with pytest.raises(FileExistsError):
         original.save(path)
     assert (path / "metadata.json").read_bytes() == before
-    name = read_json(path / "metadata.json")["files"][0]
-    (path / name).unlink()
-    with pytest.raises(ValueError, match="Missing"):
-        TheoryCompiledTarget.load(path)
 
 
 def test_failure_cleanup(tmp_path, monkeypatch):
@@ -166,15 +132,6 @@ def test_sdd_minimized_vtree_roundtrip(tmp_path, mgr):
     root.deref()
 
 
-def test_d4_mapping_covers_absent_active_atoms(tmp_path, mgr):
-    a, absent = mgr.Symbol("a"), mgr.Symbol("absent")
-    native = D4CompiledTarget("o 1 0\nt 2 0\n1 2 1 0\n", 1, {3: 1})
-    target = TheoryCompiledTarget(native, Abstractor({3: a, 7: absent}), [a, absent], mgr.env)
-    with pytest.raises(ValueError, match="cover"):
-        target.save(tmp_path / "bad")
-    assert not list(tmp_path.iterdir())
-
-
 def test_obdd_empty_manager_constant(tmp_path):
     manager = BDD()
     path = tmp_path / "empty"
@@ -182,14 +139,6 @@ def test_obdd_empty_manager_constant(tmp_path):
     loaded = BddCompiledTarget.load(path)
     assert loaded.root == loaded.manager.false
     assert loaded.manager.vars == set()
-
-
-def test_d4_zero_count_mapping_exception_requires_canonical_constant(tmp_path, mgr):
-    atom = mgr.Symbol("a")
-    native = D4CompiledTarget("o 1 0\nt 2 0\n1 2 0\n", 0)
-    target = TheoryCompiledTarget(native, Abstractor({3: atom}), [atom], mgr.env)
-    with pytest.raises(ValueError, match="cover"):
-        target.save(tmp_path / "bad")
 
 
 def test_d4_sparse_node_ids(tmp_path):
@@ -206,33 +155,27 @@ def test_d4_payload_is_preserved_without_graph_validation(tmp_path, payload):
     assert D4CompiledTarget.load(tmp_path / "target").nnf_text == payload
 
 
-@pytest.mark.parametrize("order", [None, ["b3", "b3"], ["invalid"], [True], []])
-def test_bad_obdd_order(tmp_path, order):
-    manager = BDD()
-    manager.declare("b3")
-    path = tmp_path / "bdd"
-    BddCompiledTarget(manager.var("b3"), manager).save(path)
-    data = read_json(path / "metadata.json")
-    data["variable_order"] = order
-    (path / "metadata.json").write_text(json.dumps(data))
-    with pytest.raises(ValueError, match="order"):
-        BddCompiledTarget.load(path)
-
-
-@pytest.mark.parametrize("remapping", [None, {"0": 1}, {"3": True}, {"3": 2}, {"3": 1, "7": 1}])
-def test_bad_d4_mapping(tmp_path, remapping):
-    path = tmp_path / "d4"
-    D4CompiledTarget("t 1\n", 1, {3: 1}).save(path)
-    data = read_json(path / "metadata.json")
-    data["remapping"] = remapping
-    (path / "metadata.json").write_text(json.dumps(data))
-    with pytest.raises(ValueError):
-        D4CompiledTarget.load(path)
-
-
-def test_save_does_not_reload_native_payload(tmp_path, monkeypatch):
+def test_save_does_not_reload_state(tmp_path, monkeypatch, mgr):
     def forbidden(*args, **kwargs):
-        pytest.fail("Saving must not reload a native payload")
+        pytest.fail("Saving must not reconstruct saved state")
 
     monkeypatch.setattr(D4CompiledTarget, "load", forbidden)
-    D4CompiledTarget("t 1\n", 0).save(tmp_path / "target")
+    monkeypatch.setattr(Abstractor, "from_dict", forbidden)
+    target = TheoryCompiledTarget(D4CompiledTarget("t 1\n", 0), Abstractor(), [], mgr.env)
+    target.save(tmp_path / "target")
+
+
+def test_missing_abstraction_propagates(tmp_path, mgr):
+    path = tmp_path / "target"
+    TheoryCompiledTarget(D4CompiledTarget("t 1\n", 0), Abstractor(), [], mgr.env).save(path)
+    (path / "abstraction.json").unlink()
+    with pytest.raises(FileNotFoundError):
+        TheoryCompiledTarget.load(path)
+
+
+def test_missing_d4_payload_propagates(tmp_path):
+    path = tmp_path / "target"
+    D4CompiledTarget("t 1\n", 0).save(path)
+    (path / "circuit.nnf").unlink()
+    with pytest.raises(FileNotFoundError):
+        D4CompiledTarget.load(path)

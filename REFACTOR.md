@@ -1054,3 +1054,33 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   `git diff --check` checks pass, and the historical CSV is byte-identical to HEAD.
   No native malformed-file probes, dataset scans, benchmarks, or unrelated
   formatting changes were performed.
+
+
+### Step 5 follow-up — convention-based persistence (2026-11-11)
+
+- Supersedes the metadata and mapping checks retained in the previous entry.
+  Package-created artifacts are trusted state. Removed `_read_data`, abstraction
+  reconstruction during save, custom JSON parsing, manifest/codec checks, backend
+  mapping/order validators, and ID/projection cross-checks. Only the schema-version
+  gate remains; missing data and backend errors propagate naturally.
+- APIs and version 1 artifact layout are unchanged. Full OBDD order, actual SDD
+  vtrees, d4 mappings, sparse abstraction IDs, ordered projection, environment
+  binding, overwrite refusal, temporary cleanup, and explicit legacy missing-vtree
+  provenance remain. Malformed or manually edited artifacts may load incorrectly,
+  raise ordinary exceptions, or crash native readers.
+- Migration keeps historical recovery checks, byte copying, reports, and public
+  loading in subprocesses. Its local JSON reader rejects non-object historical
+  JSON so metadata, abstraction, or log failures cannot stop recursive reporting.
+  Nine regression cases cover these failures and continuation to the next artifact.
+- Verification uses `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python`
+  with `PYTHONPATH=/tmp/tddnnf-05-persistence:/tmp/tddnnf-testbench-05-persistence/scripts`.
+  In each worktree, `python -m pytest -q --disable-warnings` passes: library
+  **905 passed**, 1159 warnings, 30.02 s; testbench **239 passed**, 5 warnings,
+  17.53 s. Removed tests asserted defensive guarantees deliberately dropped here.
+- `ruff check tddnnf tests` and `ruff check scripts tests` pass. Library
+  `ruff format --check tddnnf tests` passes (44 files); changed migration/test
+  formatting passes. Full companion formatting flags the same four unchanged
+  files recorded above. Fresh-process imports verify both proposed source paths;
+  both `git diff --check` checks pass. Historical CSV is unchanged from HEAD.
+- Skipped dataset scans, benchmarks, malformed native-file probes, and unrelated
+  cleanup. No historical CSV regeneration or compilation/query reruns.

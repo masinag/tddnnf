@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import subprocess
 import tempfile
 from collections.abc import Mapping, Sequence
@@ -17,24 +16,10 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
-from tddnnf.core.persistence import backend_metadata, integer, publication, write_metadata
+from tddnnf.core.persistence import metadata, publication, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 D4_BIN = Path(__file__).resolve().parent.parent / "bin" / "d4.bin"
-
-
-def _read_remapping(data):
-    count = integer(data.get("var_count"))
-    remapping = data.get("remapping")
-    if not isinstance(remapping, dict):
-        raise ValueError("Missing d4 remapping")
-    for key, value in remapping.items():
-        if not isinstance(key, str) or not re.fullmatch(r"[1-9][0-9]*", key):
-            raise ValueError("Invalid abstraction remapping ID")
-        integer(value, 1)
-    if set(remapping.values()) != set(range(1, count + 1)) or len(remapping) != count:
-        raise ValueError("d4 remapping must be a bijection onto native IDs")
-    return {int(k): v for k, v in remapping.items()}
 
 
 def _clean_nnf(nnf_text: str, var_count: int) -> str:
@@ -145,7 +130,6 @@ class D4CompiledTarget(PropCompiledTarget):
 
     def save(self, directory: Path) -> None:
         data = {"var_count": self.var_count, "remapping": {str(k): v for k, v in self.remapping.items()}}
-        _read_remapping(data)
         with publication(directory) as stage:
             stage.mkdir()
             (stage / "circuit.nnf").write_text(self.nnf_text)
@@ -154,8 +138,8 @@ class D4CompiledTarget(PropCompiledTarget):
     @classmethod
     def load(cls, directory: Path) -> Self:
         directory = Path(directory)
-        data = backend_metadata(directory, "ddnnf")
-        remapping = _read_remapping(data)
+        data = metadata(directory)
+        remapping = {int(k): v for k, v in data["remapping"].items()}
         return cls((directory / "circuit.nnf").read_text(), data["var_count"], remapping)
 
 

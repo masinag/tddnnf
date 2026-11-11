@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Self
@@ -14,7 +13,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
-from tddnnf.core.persistence import backend_metadata, publication, write_metadata
+from tddnnf.core.persistence import metadata, publication, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -83,23 +82,14 @@ class BddCompiledTarget(PropCompiledTarget):
     @classmethod
     def load(cls, directory: Path) -> Self:
         directory = Path(directory)
-        data = backend_metadata(directory, "obdd")
-        order = data.get("variable_order")
-        if (
-            not isinstance(order, list)
-            or any(not isinstance(name, str) or not re.fullmatch(r"b[1-9][0-9]*", name) for name in order)
-            or len(order) != data["var_count"]
-            or len(set(order)) != len(order)
-        ):
-            raise ValueError("Invalid OBDD variable order")
+        data = metadata(directory)
+        order = data["variable_order"]
         manager = BDD()
         manager.configure(reordering=False)
         manager.declare(*order)
-        roots = manager.load(str(directory / "circuit.dddmp"))
-        if len(roots) != 1:
-            raise ValueError("Expected one OBDD root")
+        (root,) = manager.load(str(directory / "circuit.dddmp"))
         manager.reorder({name: level for level, name in enumerate(order)})
-        return cls(roots[0], manager)
+        return cls(root, manager)
 
 
 class BddWalker(DagWalker):

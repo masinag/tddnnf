@@ -14,7 +14,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
-from tddnnf.core.persistence import backend_metadata, publication, write_metadata
+from tddnnf.core.persistence import metadata, publication, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -94,16 +94,12 @@ class SddCompiledTarget(PropCompiledTarget):
     @classmethod
     def load(cls, directory: Path) -> Self:
         directory = Path(directory)
-        data = backend_metadata(directory, "sdd")
-        if data["var_count"] < 1:
-            raise ValueError("SDD requires at least one native variable")
+        data = metadata(directory)
         if data.get("legacy_missing_vtree"):
             manager = SddManager(var_count=data["var_count"])
         else:
             tree = Vtree.from_file(str(directory / "circuit.vtree").encode())
             manager = SddManager.from_vtree(tree)
-            if manager.var_count() != data["var_count"]:
-                raise ValueError("SDD variable count disagrees with metadata")
         manager.auto_gc_and_minimize_off()
         root = manager.read_sdd_file(str(directory / "circuit.sdd").encode())
         target = cls(root, manager)

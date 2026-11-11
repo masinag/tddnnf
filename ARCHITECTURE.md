@@ -285,22 +285,24 @@ or graph validators.
 | d-DNNF | `d4` | `circuit.nnf` | `var_count`, abstraction-to-native `remapping` |
 
 All metadata declares `schema_version: 1`, `representation` (`obdd`, `sdd`, or
-`ddnnf`), `codec`, and required `files`. Saves check metadata in a temporary sibling artifact,
+`ddnnf`), `codec`, and payload `files`. Saves serialize into a temporary sibling artifact,
 refuse existing destinations, and clean up failed writes before publication.
 
 `TheoryCompiledTarget.load(directory, env=None)` infers its backend from metadata,
-validates the abstraction, ordered projection, mapping coverage, and file declarations,
-and binds restored atoms to the supplied PySMT environment. Vtrees and OBDD order
-are restored before native import; CUDD's importer can change order, so the
+checks the schema version, and reconstructs the abstraction and ordered projection
+directly in the supplied PySMT environment. Metadata and payloads are trusted
+package-owned state; codec and file declarations are descriptive conventions.
+Vtrees and OBDD order are restored before native import; CUDD's importer can change order, so the
 recorded order is also reapplied after import. Each backend owns save/load:
 CUDD dumps/loads DDDMP, PySDD saves/reads SDD and vtree files, and d4 writes/reads
-NNF text directly. Saves do not reload native payloads.
+NNF text directly. Saves do not reconstruct abstractions or reload native payloads.
 
-Native payloads are trusted. There are no handwritten native graph validators or
-custom SDD reconstruction. Malformed native files may crash ordinary loading;
+There are no metadata cross-checks, handwritten native graph validators, or
+custom SDD reconstruction. Malformed or manually edited artifacts may load
+incorrectly, raise ordinary exceptions, or crash native readers;
 d4 loading preserves text without certifying graph correctness. Migration invokes
-the public loader in a subprocess to contain native-reader failures. Metadata
-validation does not certify a circuit's semantics.
+the public loader in a subprocess to contain native-reader failures. Successful
+loading does not certify a circuit's semantics.
 
 Unversioned artifacts require the standalone testbench migration script. Migration
 preserves native payload bytes and historical logs, recovers complete OBDD order
