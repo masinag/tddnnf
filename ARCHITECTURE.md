@@ -308,19 +308,16 @@ NNF text directly. Saves do not reconstruct abstractions or reload native payloa
 There are no metadata cross-checks, handwritten native graph validators, or
 custom SDD reconstruction. Malformed or manually edited artifacts may load
 incorrectly, raise ordinary exceptions, or crash native readers;
-d4 loading preserves text without certifying graph correctness. Migration invokes
-the public loader in a subprocess to contain native-reader failures. Successful
-loading does not certify a circuit's semantics.
+d4 loading preserves text without certifying graph correctness. Successful loading
+does not certify a circuit's semantics.
 
-Unversioned artifacts require the standalone testbench migration script. Migration
-preserves native payload bytes and historical logs, recovers complete OBDD order
-from DDDMP, and retains original SDD vtrees. Every SDD artifact must include
-`circuit.vtree`; loads restore it before reading the SDD. Missing vtrees in legacy
-or versioned artifacts fail migration with `missing_required_data`, require
-recompilation, and publish no destination. Previously migrated SDD artifacts
-without vtrees are unsupported; there is no fallback or provenance flag.
-Format migration with complete validated data does not itself require recompilation.
-Historical compilation timings are retained unchanged and need fresh timed runs.
+Unversioned artifacts require recompilation with the current library; the
+standalone testbench migration tool has been removed. Consumers select the backend
+explicitly and delegate schema checks to its loader without separate metadata or
+representation checks. Every SDD artifact must include `circuit.vtree`; loads
+restore it before reading the SDD. Artifacts missing their saved vtree require
+recompilation; there is no fallback or provenance flag. Historical compilation
+timings remain historical evidence and need fresh timed runs.
 
 ## Protocols and instrumentation
 

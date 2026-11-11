@@ -304,15 +304,15 @@ target.save(target_dir)
 Reload the target without compiling again by supplying its backend class.
 The destination passed to `save()` must not already exist. Standalone backend
 save/load methods use the same versioned metadata and their backend libraries.
-Unversioned artifacts require the companion testbench's `scripts/migrate_compiled_targets.py`; they are never guessed
-by the library loader. Saved artifacts are package-owned state: loading checks
+Recompile unversioned artifacts with the current library; the library loader
+does not guess their format. The companion testbench no longer provides an
+artifact migration tool. Saved artifacts are package-owned state: loading checks
 only the schema version in the backend loader, then reconstructs directly from
 metadata, abstraction, and native payloads. Codec
 and file declarations describe the artifact by convention; they are not a
 validation contract. Malformed or manually edited artifacts may load incorrectly,
 raise ordinary exceptions, or crash CUDD/PySDD readers. d4 loading preserves NNF
-text without certifying graph correctness. Migration contains native-reader failures in a
-subprocess.
+text without certifying graph correctness.
 
 ```python
 loaded_target = TheoryCompiledTarget.load(target_dir, D4CompiledTarget)
