@@ -9,19 +9,14 @@ from pysmt.typing import BOOL, INT
 
 import tddnnf.queries.ddnnife_engine as ddnnife_module
 from tddnnf import TheoryCompilation, TheoryCompiledTarget
-from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
+from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
-from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
+from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
 from tddnnf.queries.session import QuerySession
 
 PAIRINGS = [(BddCompiler, BddEngine), (SddCompiler, SddEngine), (D4Compiler, DdnnifeEngine)]
-
-
-def open_queries(target):
-    engine_type = {BddCompiledTarget: BddEngine, SddCompiledTarget: SddEngine, D4CompiledTarget: DdnnifeEngine}
-    return target.queries(engine_type[type(target.target)])
 
 
 @pytest.fixture(params=PAIRINGS, ids=["cudd", "sdd", "ddnnife"])
