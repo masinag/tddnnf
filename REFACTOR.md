@@ -52,7 +52,7 @@ targeting its own `refactor/lean-core`. Validate them together using their
 proposed revisions, and record both SHAs and how the testbench selected that
 library checkout. Both PRs must be approved and merged before dependent work.
 If an earlier interface change breaks a consumer needed for acceptance, include
-its companion PR then rather than postponing it to step 5 or 7.
+its companion PR then rather than postponing it to step 5 or 6.
 
 For example, after prerequisites are merged:
 
@@ -92,8 +92,7 @@ acceptance details below extend the table rather than introducing extra stages.
 | 3 | `refactor/03-target-ownership` | Public backend targets, read-only target bindings, append-only abstraction reuse | 2 |
 | 4 | `refactor/04-query-sessions` | Query composition, input handling, native delegation, cleanup | 3 |
 | 5 | `refactor/05-persistence` | Versioned persistence and paired consumer migration | 4 |
-| 6 | `refactor/06-ddnnf-conversion` | Explicit SDD/OBDD DAG conversion | 5 |
-| 7 | `refactor/07-public-migration` | Public cleanup, examples, full validation | 6 |
+| 6 | `refactor/06-public-migration` | Public cleanup, examples, full validation | 5 |
 
 ### Step 0 — design
 
@@ -152,7 +151,7 @@ mapping/vocabulary mutation attempts, reconstruction in the bound environment,
 and native reordering/minimization without semantic change. Verify resource
 cleanup on exceptions and retained root ownership. Run affected target,
 compiler, reconstruction, and metrics tests. Backend compiled target classes
-and `.target` remain public through step 7.
+and `.target` remain public through step 6.
 
 ### Step 4 — query sessions
 
@@ -189,20 +188,7 @@ testbench serialization, compile-task, query-consumer, and migration tests
 against the proposed library SHA. Record limitations where original structural
 metadata cannot be recovered.
 
-### Step 6 — d-DNNF conversion
-
-Add `to_ddnnf()` using native DAG traversal and memoization. Existing d-DNNF
-targets return themselves. Exercise constants, shared subgraphs, complemented
-roots/edges, both literal polarities, and nontrivial native ID mappings. Verify
-the conversion preserves abstraction, environment, ordered active vocabulary,
-and source semantics without invoking a compiler or enumerating models.
-
-Query converted SDD/OBDD targets through the d-DNNF reasoner using all six unary
-operations on small fixtures. Round-trip converted NNF with its declared codec.
-Check sharing structurally, not only by comparing truth tables. Separate
-conversion errors from the reasoner's already documented native limitations.
-
-### Step 7 — public migration
+### Step 6 — public migration
 
 Migrate exports, examples, README, architecture documentation, and testbench
 consumers to the final public interface. Remove obsolete public contexts
@@ -216,22 +202,23 @@ paired revisions. Execute the public examples and compare the fixed step-1
 benchmarks, reporting timing, memory, size, and semantic differences. Stable ID
 ordering may change native structure and performance; investigate regressions
 instead of promising equal timings or byte-identical new compilations. Preserve
-existing dependencies, logging, reconstruction, and metrics. Transformations,
-relational queries, extra reasoners, and the Python d4 compiler stay deferred.
+existing dependencies, logging, reconstruction, and metrics. Explicit d-DNNF
+conversion, transformations, relational queries, extra reasoners, and the Python
+d4 compiler stay deferred in [TODO.md](TODO.md).
 
 ## Agent setup
 
 Use one implementation agent with write access and reuse its session while the
 context remains useful. Pause implementation during a fresh read-only review
-of substantive committed changes, especially ownership, persistence, and DAG
-conversion. Give the reviewer the step, relevant design sections, commit range,
-connected callers, and test evidence; the entire planning conversation is
+of substantive committed changes, especially ownership and persistence. Give
+the reviewer the step, relevant design sections, commit range, connected callers,
+and test evidence; the entire planning conversation is
 unnecessary. Routine documentation and mechanical changes need no extra agent.
 
 | Role | Model | Effort |
 | --- | --- | --- |
 | Implementation | GPT-6.1 Sol | Medium |
-| Difficult mapping/conversion | Same implementation agent | High |
+| Difficult mapping | Same implementation agent | High |
 | Independent review | GPT-6.1 Sol | High |
 | Unresolved semantic/design issue | GPT-6 Astra, bounded task | High |
 
@@ -324,7 +311,10 @@ Leave the PR open for renewed approval. Do not merge or start the next step.
 ## Completed checks
 
 Record evidence here as steps are implemented; consult GitHub for approvals and
-merges. Steps 1–4 record their checks below; steps 5–7 have not started.
+merges. Steps 0–5 have merged into `refactor/lean-core` and record their checks
+below. Step 6 (public migration) has not started; explicit d-DNNF conversion is
+deferred in [TODO.md](TODO.md#explicit-d-dnnf-conversion). Historical evidence
+below retains the step numbers and contracts used at the time.
 
 ### Step 0 — `refactor/00-design`
 

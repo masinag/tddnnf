@@ -186,25 +186,10 @@ documented with the installed versions and reproductions established in step 1.
 Derived answers inherit the limitations of the native primitive they use.
 Unsupported representation/reasoner combinations fail explicitly.
 
-## Explicit d-DNNF conversion
+## Deferred d-DNNF conversion
 
-`target.to_ddnnf()` returns the same object for an existing d-DNNF target. For
-SDD and OBDD targets it converts the native DAG to NNF without compiling a
-reconstructed PySMT formula or invoking d4.
-
-Traverse with memoization so shared subgraphs stay shared. OBDD decisions use
-their Shannon expansion; SDD decisions use the disjunction of prime/sub pairs.
-Preserve constants, literal signs, complemented roots and edges, decomposability,
-and determinism. Memoization must distinguish polarity where the native API
-uses complemented references. Conversion operates on the reachable DAG without
-enumerating satisfying assignments or expanding it into a tree.
-
-The result is another `TheoryCompiledTarget` with an owned NNF representation.
-Preserve its abstraction correspondence, owning environment, and exact ordered
-active vocabulary, including atoms absent from the DAG. Record any new NNF
-remapping and a codec that the d-DNNF reasoner and persistence layer understand.
-The result must remain usable independently of source-session lifetimes. This
-conversion is explicit; query selection never converts a target implicitly.
+Explicit `to_ddnnf()` conversion is outside this refactor. Its specification and
+acceptance checks are retained in [TODO.md](TODO.md#explicit-d-dnnf-conversion).
 
 ## Persistence and migration
 
@@ -219,8 +204,8 @@ representation. Keep the existing artifact layout:
 
 Record d-DNNF variable counts and remapping, the actual saved SDD vtree, and the
 complete OBDD variable-to-level order after reordering. An NNF codec identifies
-its text dialect; d4 output and converted DAGs must not be confused. Metadata
-describes artifacts, not compiler/reasoner configuration or a normalizer.
+its text dialect. Metadata describes artifacts, not compiler/reasoner
+configuration or a normalizer.
 
 Parse atoms into the requested environment, or the active environment by
 default. Treat package-produced metadata, abstraction IDs, ordered projection,
