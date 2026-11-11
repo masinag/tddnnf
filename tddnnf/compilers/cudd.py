@@ -187,9 +187,8 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
                 atoms.update(project_on)
             atoms = list(atoms)
             assert all(atom in abstractor for atom in atoms), "Abstraction must be prepared before compilation"
-            max_var = max(abstractor.max_var, 1)
             mgr = BDD()
-            for i in range(1, max_var + 1):
+            for i in sorted(abstractor.get_id(atom) for atom in atoms):
                 mgr.declare(f"b{i}")
             walker = BddWalker(mgr, abstractor)
             root = walker.translate(formula)

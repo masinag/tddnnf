@@ -34,7 +34,7 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         temp = self._target.root if root is None else root
         for lit in lits:
             atom = lit.arg(0) if lit.is_not() else lit
-            var_id = self._abstr.get_id(atom)
+            var_id = self._target.remapping[self._abstr.get_id(atom)]
             sdd_lit = self._target.manager.literal(-var_id if lit.is_not() ^ negate else var_id)
             temp = temp.condition(sdd_lit)
             if temp.is_false():
@@ -77,7 +77,7 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         if root.is_false():
             return
         mgr = self._target.manager
-        projection_ids = {self._abstr.get_id(a): a for a in self._projection_atoms}
+        projection_ids = {self._target.remapping[self._abstr.get_id(a)]: a for a in self._projection_atoms}
         # Forgotten variables are unconstrained; fix them to false to avoid duplicate projected models.
         for var_id in range(1, mgr.var_count() + 1):
             if var_id not in projection_ids:
