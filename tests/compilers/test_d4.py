@@ -11,6 +11,7 @@ from tddnnf.compilers.d4 import D4_BIN, D4CompiledTarget, D4Compiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries import DdnnifeEngine
+from tests.support import equivalent
 
 pytestmark = pytest.mark.skipif(
     not D4_BIN.is_file(),
@@ -29,7 +30,7 @@ def test_projection_cleanup(mgr, a, b, c, monkeypatch, tmp_path, injected):
         raw = "a 1 0\nt 2 0\nt 3 0\n1 2 1 -3 4 -9 0\n1 3 9 -12 0\n"
 
         def run_d4(circuit_path, out_path):
-            assert "P v3 v7 v11\n" in circuit_path.read_text()
+            assert "P v1 v2 v3\n" in circuit_path.read_text()
             out_path.write_text(raw)
 
         monkeypatch.setattr(D4Compiler, "_run_d4", staticmethod(run_d4))
@@ -75,3 +76,15 @@ def test_d4_failure_diagnostics_and_cleanup(mgr, monkeypatch):
         with pytest.raises(RuntimeError, match=r"exit 23.*\n.*native diagnostic"):
             compilation.compile_treduced(D4Compiler(), [])
     assert observed and all(not path.exists() for path in observed)
+
+
+def test_projection_remaps_atoms_before_forgotten_atoms(mgr, a, b, c):
+    abstr = Abstractor({3: b, 7: a, 1000: c})
+
+    native = D4Compiler().compile(mgr.And(a, mgr.Not(b)), abstr, project_on=[c, a])
+
+    equivalent(mgr, native.to_pysmt(abstr, mgr), a)
+    container = TheoryCompiledTarget(native, abstr, [c, a], env=mgr.env)
+    with container.queries(DdnnifeEngine) as query:
+        assert query.count_truth_assignments() == 2
+        assert query.count_truth_assignments([mgr.Not(a)]) == 0

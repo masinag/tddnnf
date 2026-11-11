@@ -196,8 +196,10 @@ Omitted projection uses the normalized input formula’s atoms.
 
 `D4Compiler` translates a PySMT Boolean skeleton to BC-S1.2 circuit syntax with
 `BCS12Walker`, invokes the bundled d4 executable, and stores the emitted NNF in
-`D4CompiledTarget`. Projected abstraction IDs are remapped to d4's dense output
-variable range. Constant results are represented directly as `t 1` or `f 1`.
+`D4CompiledTarget`. Compilation creates a dense mapping before translation,
+assigning projected atoms first and remaining formula atoms afterward. The walker
+and circuit declarations use those native IDs; the target retains only the
+projected mapping entries. Constant results are represented directly as `t 1` or `f 1`.
 
 `D4CompiledTarget` exposes the NNF text, projected variable count, and ID
 remapping. It uses `ddnnife` for DAG statistics, while its own NNF parser
@@ -373,5 +375,8 @@ tddnnf/
 ```
 
 Native allocation preserves shared abstraction IDs. OBDD compilation declares
-only needed `b<ID>` names in ascending ID order. SDD schema v1 artifacts require
-`remapping`; there is no identity fallback for older payloads.
+only needed `b<ID>` names in ascending ID order. Both SDD and d4 target
+constructors interpret omitted or empty mappings as identity over their native
+variable range; nonempty mappings are retained exactly and exposed read-only.
+SDD schema v1 artifacts require the `remapping` field; a missing field remains
+an error, including in older payloads.
