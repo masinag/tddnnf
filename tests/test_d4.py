@@ -38,11 +38,6 @@ def test_projection_cleanup(mgr, a, b, c, monkeypatch, tmp_path, injected):
     assert native.remapping == {3: 1, 7: 2, 11: 3}
     if injected:
         assert native.nnf_text == cleaned
-        # Invalid native literals must be rejected before publication.
-        legacy_dir = tmp_path / "legacy"
-        with pytest.raises(ValueError, match="edge/literal"):
-            D4CompiledTarget(raw, 3, native.remapping).save(legacy_dir)
-        assert not legacy_dir.exists()
 
     native.save(tmp_path / "cleaned")
     loaded = D4CompiledTarget.load(tmp_path / "cleaned")

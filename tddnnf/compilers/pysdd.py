@@ -14,6 +14,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
+from tddnnf.core.persistence import backend_metadata, publication, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -80,15 +81,34 @@ class SddCompiledTarget(PropCompiledTarget):
         return convert(self._root)
 
     def save(self, directory: Path) -> None:
-        from tddnnf.core.persistence import save_native
-
-        save_native(self, directory)
+        with publication(directory) as stage:
+            stage.mkdir()
+            self.manager.save(str(stage / "circuit.sdd").encode(), self.root)
+            extra = {}
+            if self._legacy_missing_vtree:
+                extra["legacy_missing_vtree"] = True
+            else:
+                self.manager.vtree().save(str(stage / "circuit.vtree").encode())
+            write_metadata(stage, "sdd", var_count=self.manager.var_count(), **extra)
 
     @classmethod
     def load(cls, directory: Path) -> Self:
-        from tddnnf.core.persistence import load_native
-
-        return load_native(directory, cls)
+        directory = Path(directory)
+        data = backend_metadata(directory, "sdd")
+        if data["var_count"] < 1:
+            raise ValueError("SDD requires at least one native variable")
+        if data.get("legacy_missing_vtree"):
+            manager = SddManager(var_count=data["var_count"])
+        else:
+            tree = Vtree.from_file(str(directory / "circuit.vtree").encode())
+            manager = SddManager.from_vtree(tree)
+            if manager.var_count() != data["var_count"]:
+                raise ValueError("SDD variable count disagrees with metadata")
+        manager.auto_gc_and_minimize_off()
+        root = manager.read_sdd_file(str(directory / "circuit.sdd").encode())
+        target = cls(root, manager)
+        target._legacy_missing_vtree = data.get("legacy_missing_vtree") is True
+        return target
 
 
 class SddWalker(DagWalker):

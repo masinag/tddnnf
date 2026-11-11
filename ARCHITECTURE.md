@@ -273,7 +273,10 @@ idempotent; subclasses of `QueryEngine` inherit a no-op default.
 `TheoryCompiledTarget.save(directory)` writes a versioned artifact containing
 `abstraction.json` (SMT-LIB atom scripts, original IDs, and ordered
 `projection_atom_ids`), `metadata.json`, and the native payload. Standalone backend
-`save()` and `load()` use the same internal codecs without the abstraction file.
+`save()` and `load()` use their native libraries and the same metadata format
+without the abstraction file. The dependency direction is container → backend
+classes → metadata/filesystem helpers; `core/persistence.py` owns no native codecs
+or graph validators.
 
 | Representation | Codec | Native files | Structural metadata |
 | --- | --- | --- | --- |
@@ -282,16 +285,22 @@ idempotent; subclasses of `QueryEngine` inherit a no-op default.
 | d-DNNF | `d4` | `circuit.nnf` | `var_count`, abstraction-to-native `remapping` |
 
 All metadata declares `schema_version: 1`, `representation` (`obdd`, `sdd`, or
-`ddnnf`), `codec`, and required `files`. Saves validate a temporary sibling artifact,
+`ddnnf`), `codec`, and required `files`. Saves check metadata in a temporary sibling artifact,
 refuse existing destinations, and clean up failed writes before publication.
 
 `TheoryCompiledTarget.load(directory, env=None)` infers its backend from metadata,
-validates the abstraction, projection, native support, mappings, file declarations,
-and structural records, and binds restored atoms to the supplied PySMT environment.
-Vtrees and OBDD order are restored before root reconstruction; CUDD's importer can
-change order, so the recorded order is also reapplied after import. SDD partitions
-are checked and reconstructed through public operations because the raw native
-reader trusts partition invariants that malformed files can violate.
+validates the abstraction, ordered projection, mapping coverage, and file declarations,
+and binds restored atoms to the supplied PySMT environment. Vtrees and OBDD order
+are restored before native import; CUDD's importer can change order, so the
+recorded order is also reapplied after import. Each backend owns save/load:
+CUDD dumps/loads DDDMP, PySDD saves/reads SDD and vtree files, and d4 writes/reads
+NNF text directly. Saves do not reload native payloads.
+
+Native payloads are trusted. There are no handwritten native graph validators or
+custom SDD reconstruction. Malformed native files may crash ordinary loading;
+d4 loading preserves text without certifying graph correctness. Migration invokes
+the public loader in a subprocess to contain native-reader failures. Metadata
+validation does not certify a circuit's semantics.
 
 Unversioned artifacts require the standalone testbench migration script. Migration
 preserves native payload bytes and historical logs, recovers complete OBDD order

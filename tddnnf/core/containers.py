@@ -8,8 +8,13 @@ from typing import Generic
 from pysmt.environment import Environment, get_env
 from pysmt.fnode import FNode
 
+from tddnnf.compilers.cudd import BddCompiledTarget
+from tddnnf.compilers.d4 import D4CompiledTarget
+from tddnnf.compilers.pysdd import SddCompiledTarget
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, QueryEngine, T_Target
+from tddnnf.core.persistence import integer, metadata, publication, read_json
+from tddnnf.core.pysmt_utils import is_atom
 from tddnnf.queries.session import QuerySession
 
 
@@ -52,20 +57,19 @@ class TheoryCompiledTarget(Generic[T_Target]):
         return self.target.dag_size()
 
     def save(self, directory: Path) -> None:
-        """Write and validate a versioned artifact before publishing it."""
-        from tddnnf.core.persistence import publication, read_json, write_native
+        """Stage a versioned artifact and validate its container metadata before publication."""
 
         with publication(directory) as stage:
+            self.target.save(stage)
             payload = {
                 "abstraction": self.abstr.to_dict(),
                 "projection_atom_ids": [self.abstr.atom_to_id[a] for a in self.projection_atoms],
             }
             (stage / "abstraction.json").write_text(json.dumps(payload, indent=2))
-            write_native(self.target, stage)
-            metadata = read_json(stage / "metadata.json")
-            metadata["files"].append("abstraction.json")
-            (stage / "metadata.json").write_text(json.dumps(metadata, indent=2))
-            self.load(stage, env=self.env)
+            data = read_json(stage / "metadata.json")
+            data["files"].append("abstraction.json")
+            (stage / "metadata.json").write_text(json.dumps(data, indent=2))
+            self._read_data(stage, metadata(stage), env=self.env)
 
     def to_pysmt(self) -> FNode:
         return self.target.to_pysmt(self.abstr, self.env.formula_manager)
@@ -77,20 +81,22 @@ class TheoryCompiledTarget(Generic[T_Target]):
         env: Environment | None = None,
     ) -> TheoryCompiledTarget:
         """Infer the representation from versioned metadata and bind atoms to env."""
-        from tddnnf.core.persistence import load_native
-
-        abstr, projection, env = cls._read_data(directory, env)
-        return cls(load_native(directory), abstr, projection, env=env)
+        data = read_json(Path(directory) / "metadata.json")
+        if "schema_version" not in data:
+            raise ValueError("Unversioned artifact requires migration")
+        rep = data.get("representation")
+        backends = {"obdd": BddCompiledTarget, "sdd": SddCompiledTarget, "ddnnf": D4CompiledTarget}
+        if not isinstance(rep, str) or rep not in backends:
+            raise ValueError("Unsupported representation")
+        target = backends[rep].load(directory)
+        abstr, projection, env = cls._read_data(directory, data, env)
+        return cls(target, abstr, projection, env=env)
 
     @staticmethod
-    def _read_data(directory: Path, env: Environment | None = None):
+    def _read_data(directory: Path, data: dict, env: Environment | None = None):
         """Validate container data without expanding or importing the native graph."""
-        from tddnnf.core.persistence import integer, metadata, read_json, validate_native
-        from tddnnf.core.pysmt_utils import is_atom
-
         directory = Path(directory)
         env = env if env is not None else get_env()
-        data = metadata(directory)
         if "abstraction.json" not in data["files"]:
             raise ValueError("Missing abstraction declaration")
         payload = read_json(directory / "abstraction.json")
@@ -114,9 +120,6 @@ class TheoryCompiledTarget(Generic[T_Target]):
             raise ValueError("Invalid projection IDs")
         if "care_var_ids" in payload and payload["care_var_ids"] != projection:
             raise ValueError("Conflicting projection keys")
-        support = validate_native(directory, data)
-        if not support <= set(projection):
-            raise ValueError("Native support is outside the active projection")
         if data["representation"] == "ddnnf":
             if {int(k) for k in data["remapping"]} != set(projection):
                 canonical_constant = (directory / "circuit.nnf").read_text() in ("t 1\n", "f 1\n")

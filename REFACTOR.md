@@ -1018,3 +1018,39 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   unchanged; every processed historical result requires a fresh timed compilation.
   Format migration alone does not require recompilation when all data validates.
   No benchmark compilation/query reruns were performed for this step.
+
+
+### Step 5 simplification — trusted native payloads (2026-11-11)
+
+- Replaces the native-validation design recorded above. Container persistence
+  delegates to backend classes; those classes use CUDD/PySDD directly or preserve
+  d4 NNF text. `persistence.py` now contains only metadata/filesystem helpers.
+  Handwritten DDDMP/SDD/vtree/d4 graph validation, packed graph arrays, custom
+  SDD reconstruction, central native dispatch, and save-time native reloads are
+  removed. Runtime imports are module-level; type-only imports use `TYPE_CHECKING`.
+- Retains versioned metadata, full OBDD order, actual SDD vtrees, d4 remapping,
+  abstraction IDs, ordered projection, environment binding, overwrite refusal,
+  temporary cleanup, and explicit missing-vtree provenance. Metadata and mapping
+  checks remain; native support and graph correctness are no longer certified.
+- Migration calls the public container/backend loaders in its subprocess and
+  keeps only DDDMP header extraction for historical order. Native-reader failures
+  remain per-artifact report failures. The existing recompilation CSV remains
+  historical evidence from the previous validation boundary; no dataset scan or
+  benchmark was repeated.
+- Malformed native files may crash ordinary loading. d4 loading only preserves
+  text; it does not prove graph validity. Migration subprocesses contain native
+  reader failures, but successful loading does not certify circuit semantics.
+- Verification with the existing testbench environment's Python and explicit
+  paired-source `PYTHONPATH`: library `python -m pytest -q --disable-warnings`
+  **948 passed**, 1151 existing warnings, 25.46 s; companion **230 passed**,
+  5 existing warnings. Ruff passes for both complete source/test trees. Library
+  formatting passes across all 47 files; changed companion files pass formatting.
+  The companion-wide formatting check still flags four unchanged files:
+  `scripts/plots/plot_query_time.py`, `scripts/tasks/generate_synthetic_queries.py`,
+  `tests/test_plot_query_time.py`, and `tests/test_query_mathsat.py`.
+- Fresh-process import smoke checks pass for container, helpers, backends,
+  queries, installer, and migration. An AST check confirms no function-local
+  runtime imports in `tddnnf`; paired source paths are verified. Both
+  `git diff --check` checks pass, and the historical CSV is byte-identical to HEAD.
+  No native malformed-file probes, dataset scans, benchmarks, or unrelated
+  formatting changes were performed.

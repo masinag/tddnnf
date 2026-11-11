@@ -303,9 +303,13 @@ target.save(target_dir)
 
 Reload the target without compiling again; versioned metadata selects its backend.
 The destination passed to `save()` must not already exist. Standalone backend
-save/load methods use the same versioned codecs. Unversioned artifacts require the
+save/load methods use the same versioned metadata and their backend libraries. Unversioned artifacts require the
 companion testbench's `scripts/migrate_compiled_targets.py`; they are never guessed
-by the library loader.
+by the library loader. Metadata, abstraction IDs, ordered projection, mappings,
+and declared files are checked. Native payloads are trusted: malformed CUDD or
+PySDD files may crash ordinary loading. d4 loading preserves NNF text without
+certifying graph correctness. Migration contains native-reader failures in a
+subprocess.
 
 ```python
 loaded_target = TheoryCompiledTarget.load(target_dir)
