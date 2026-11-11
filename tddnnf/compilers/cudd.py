@@ -13,7 +13,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
-from tddnnf.core.persistence import metadata, publication, write_metadata
+from tddnnf.core.persistence import metadata, saving_to, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -52,11 +52,11 @@ class BddCompiledTarget(PropCompiledTarget):
         return DagSize(vertices=int(self._root.dag_size), edges=edges)
 
     def save(self, directory: Path) -> None:
-        with publication(directory) as stage:
-            stage.mkdir()
+        with saving_to(directory) as temporary_directory:
+            temporary_directory.mkdir()
             order = sorted(self.manager.vars, key=self.manager.level_of_var)
-            self.manager.dump(str(stage / "circuit.dddmp"), [self.root])
-            write_metadata(stage, "obdd", var_count=len(order), variable_order=order)
+            self.manager.dump(str(temporary_directory / "circuit.dddmp"), [self.root])
+            write_metadata(temporary_directory, "obdd", var_count=len(order), variable_order=order)
 
     def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
         _memo: dict[Function, FNode] = {}

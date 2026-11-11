@@ -14,7 +14,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
-from tddnnf.core.persistence import metadata, publication, write_metadata
+from tddnnf.core.persistence import metadata, saving_to, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -81,15 +81,15 @@ class SddCompiledTarget(PropCompiledTarget):
         return convert(self._root)
 
     def save(self, directory: Path) -> None:
-        with publication(directory) as stage:
-            stage.mkdir()
-            self.manager.save(str(stage / "circuit.sdd").encode(), self.root)
+        with saving_to(directory) as temporary_directory:
+            temporary_directory.mkdir()
+            self.manager.save(str(temporary_directory / "circuit.sdd").encode(), self.root)
             extra = {}
             if self._legacy_missing_vtree:
                 extra["legacy_missing_vtree"] = True
             else:
-                self.manager.vtree().save(str(stage / "circuit.vtree").encode())
-            write_metadata(stage, "sdd", var_count=self.manager.var_count(), **extra)
+                self.manager.vtree().save(str(temporary_directory / "circuit.vtree").encode())
+            write_metadata(temporary_directory, "sdd", var_count=self.manager.var_count(), **extra)
 
     @classmethod
     def load(cls, directory: Path) -> Self:

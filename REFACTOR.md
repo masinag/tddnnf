@@ -1084,3 +1084,23 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   both `git diff --check` checks pass. Historical CSV is unchanged from HEAD.
 - Skipped dataset scans, benchmarks, malformed native-file probes, and unrelated
   cleanup. No historical CSV regeneration or compilation/query reruns.
+
+
+### Save workflow naming (2026-11-11)
+
+- Renamed the internal `publication` helper to `saving_to` and its `stage`
+  variables to `temporary_directory` across backend/container saves and paired
+  migration/tests. The helper documents temporary writes, rename on success,
+  and cleanup on failure. Backend `mkdir()` calls and container delegation remain;
+  public APIs, version 1 artifacts, overwrite refusal, and cleanup are unchanged.
+- Both suites ran with
+  `PYTHONPATH=/tmp/tddnnf-05-persistence:/tmp/tddnnf-testbench-05-persistence/scripts`
+  and the existing testbench environment. Library: its `.venv/bin/python -m pytest
+  -q --disable-warnings`, **905 passed**, 1156 warnings, 27.44 s. Companion:
+  `uv run --no-sync python -m pytest -q --disable-warnings` with the existing
+  `UV_PROJECT_ENVIRONMENT` and `/tmp/uv-step05-cache`, **239 passed**, 5 warnings,
+  15.47 s. Logs: `/tmp/saving-to-{library,testbench}.log`.
+- Ruff passes for library `tddnnf tests examples` and companion `scripts tests`;
+  formatting passes for all seven changed Python files. Both `git diff --check`
+  checks pass. No new tests, abstractions, benchmarks, or dataset scans for this
+  naming-only change. Deliver together through library PR #12 and companion PR #15.

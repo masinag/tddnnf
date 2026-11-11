@@ -13,7 +13,7 @@ from tddnnf.compilers.d4 import D4CompiledTarget
 from tddnnf.compilers.pysdd import SddCompiledTarget
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, QueryEngine, T_Target
-from tddnnf.core.persistence import metadata, publication, read_json
+from tddnnf.core.persistence import metadata, read_json, saving_to
 from tddnnf.queries.session import QuerySession
 
 
@@ -58,16 +58,16 @@ class TheoryCompiledTarget(Generic[T_Target]):
     def save(self, directory: Path) -> None:
         """Serialize package-owned state into a versioned artifact."""
 
-        with publication(directory) as stage:
-            self.target.save(stage)
+        with saving_to(directory) as temporary_directory:
+            self.target.save(temporary_directory)
             payload = {
                 "abstraction": self.abstr.to_dict(),
                 "projection_atom_ids": [self.abstr.atom_to_id[a] for a in self.projection_atoms],
             }
-            (stage / "abstraction.json").write_text(json.dumps(payload, indent=2))
-            data = read_json(stage / "metadata.json")
+            (temporary_directory / "abstraction.json").write_text(json.dumps(payload, indent=2))
+            data = read_json(temporary_directory / "metadata.json")
             data["files"].append("abstraction.json")
-            (stage / "metadata.json").write_text(json.dumps(data, indent=2))
+            (temporary_directory / "metadata.json").write_text(json.dumps(data, indent=2))
 
     def to_pysmt(self) -> FNode:
         return self.target.to_pysmt(self.abstr, self.env.formula_manager)
