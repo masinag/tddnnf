@@ -1280,3 +1280,10 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   Final documentation check resolves **35 relative links/anchors** before adding
   review/evidence links. Both base-to-head whitespace checks pass. No merge,
   auto-merge or final integration PR is authorized by this delivery.
+
+- Delivered as linked open PRs [library #16](https://github.com/masinag/tddnnf/pull/16)
+  and [testbench #18](https://github.com/masinag/tddnnf-testbench/pull/18), both
+  targeting `refactor/lean-core`. The companion’s
+  [comparison and evidence](https://github.com/masinag/tddnnf-testbench/blob/refactor/06-public-migration/validation/step06/README.md)
+  includes original per-cell measurements, archived artifacts and independent reviews.
+  Both remain open; no merge or final integration PR was performed.
