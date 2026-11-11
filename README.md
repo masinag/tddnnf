@@ -301,13 +301,13 @@ target_dir = artifact_dir / "ddnnf"
 target.save(target_dir)
 ```
 
-Reload the target without compiling again; versioned metadata selects its backend.
+Reload the target without compiling again by supplying its backend class.
 The destination passed to `save()` must not already exist. Standalone backend
 save/load methods use the same versioned metadata and their backend libraries.
 Unversioned artifacts require the companion testbench's `scripts/migrate_compiled_targets.py`; they are never guessed
 by the library loader. Saved artifacts are package-owned state: loading checks
-only the schema version,
-then reconstructs directly from metadata, abstraction, and native payloads. Codec
+only the schema version in the backend loader, then reconstructs directly from
+metadata, abstraction, and native payloads. Codec
 and file declarations describe the artifact by convention; they are not a
 validation contract. Malformed or manually edited artifacts may load incorrectly,
 raise ordinary exceptions, or crash CUDD/PySDD readers. d4 loading preserves NNF
@@ -328,7 +328,10 @@ with loaded_target.queries(DdnnifeEngine) as queries:
 See the [`examples/`](examples/) directory for more examples.
 
 External backends can implement `PropCompiledTarget` structurally, without
-inheritance or registration. For example, this target stores one abstraction ID:
+inheritance or registration. Each backend must validate its metadata schema in
+`load(directory)`, whether called directly or through `TheoryCompiledTarget.load()`.
+The container delegates validation to the backend; `read_metadata()` provides the
+shared schema check. For example, this target stores one abstraction ID:
 
 ```python
 from pathlib import Path

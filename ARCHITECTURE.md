@@ -292,10 +292,14 @@ All metadata declares `schema_version: 1`, `representation` (built-ins use `obdd
 sibling artifact, refuse existing destinations, and clean up failed writes before
 publication.
 
-`TheoryCompiledTarget.load(directory, target_type, env=None)` checks the schema
-version, delegates to the supplied backend class, and reconstructs the abstraction
-and ordered projection directly in the supplied PySMT environment. Metadata and
-payloads are trusted package-owned state; codec and file declarations are descriptive conventions.
+`TheoryCompiledTarget.load(directory, target_type, env=None)` delegates loading
+and metadata schema validation to the supplied backend class, then reconstructs
+the abstraction and ordered projection directly in the supplied PySMT environment.
+Every backend, including external implementations of `PropCompiledTarget`, must
+validate its schema in `load(directory)` for both direct and container loads.
+Built-ins use `read_metadata()`; the container does not read metadata on load.
+Metadata and payloads are trusted package-owned state; codec and file declarations
+are descriptive conventions.
 Vtrees are restored and the saved OBDD variable order is declared before native
 import, with CUDD automatic reordering disabled. Each backend owns save/load:
 CUDD dumps/loads DDDMP, PySDD saves/reads SDD and vtree files, and d4 writes/reads

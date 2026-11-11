@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import assert_type
 
 import pytest
@@ -76,23 +77,31 @@ def test_constants(tmp_path, mgr, value, rep):
     assert TheoryCompiledTarget.load(path, type(native), env=mgr.env).to_pysmt() is mgr.Bool(value)
 
 
+@pytest.mark.parametrize("container_load", [False, True])
 @pytest.mark.parametrize("version", [999, True])
-def test_unsupported_schema_version(artifact, version):
+def test_unsupported_schema_version(artifact, version, container_load):
     path, original = artifact
     data = read_json(path / "metadata.json")
     data["schema_version"] = version
     (path / "metadata.json").write_text(json.dumps(data))
     with pytest.raises(ValueError, match="schema version"):
-        TheoryCompiledTarget.load(path, type(original.target))
+        if container_load:
+            TheoryCompiledTarget.load(path, type(original.target))
+        else:
+            type(original.target).load(path)
 
 
-def test_unversioned_requires_migration(artifact):
+@pytest.mark.parametrize("container_load", [False, True])
+def test_unversioned_requires_migration(artifact, container_load):
     path, original = artifact
     data = read_json(path / "metadata.json")
     del data["schema_version"]
     (path / "metadata.json").write_text(json.dumps(data))
     with pytest.raises(ValueError, match="migration"):
-        TheoryCompiledTarget.load(path, type(original.target))
+        if container_load:
+            TheoryCompiledTarget.load(path, type(original.target))
+        else:
+            type(original.target).load(path)
 
 
 def test_overwrite_refusal(artifact):
@@ -265,19 +274,37 @@ def test_backend_exception_propagates(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("version", [None, True, 999])
-def test_schema_checked_before_backend(tmp_path, monkeypatch, version):
+def test_container_delegates_validation_to_backend(tmp_path, monkeypatch, mgr, version):
     path = tmp_path / "custom"
-    LiteralTarget(7).save(path)
+    native = LiteralTarget(7)
+    TheoryCompiledTarget(native, Abstractor({7: mgr.Symbol("a")}), [], mgr.env).save(path)
     data = read_json(path / "metadata.json")
     if version is None:
         del data["schema_version"]
     else:
         data["schema_version"] = version
     (path / "metadata.json").write_text(json.dumps(data))
+    calls = []
 
-    def forbidden(directory):
-        pytest.fail("Invalid schema must fail before calling the backend")
+    def load(directory):
+        calls.append(directory)
+        return native
 
-    monkeypatch.setattr(LiteralTarget, "load", forbidden)
-    with pytest.raises(ValueError, match="migration" if version is None else "schema version"):
-        TheoryCompiledTarget.load(path, LiteralTarget)
+    monkeypatch.setattr(LiteralTarget, "load", load)
+    assert TheoryCompiledTarget.load(path, LiteralTarget).target is native
+    assert calls == [path]
+
+
+def test_container_reads_metadata_once(artifact, monkeypatch):
+    path, original = artifact
+    read_text = Path.read_text
+    reads = []
+
+    def track_reads(file, *args, **kwargs):
+        if file == path / "metadata.json":
+            reads.append(file)
+        return read_text(file, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", track_reads)
+    TheoryCompiledTarget.load(path, type(original.target))
+    assert reads == [path / "metadata.json"]
