@@ -301,7 +301,18 @@ target_dir = artifact_dir / "ddnnf"
 target.save(target_dir)
 ```
 
-Reload the d4 target without compiling again.
+Reload the target without compiling again by supplying its backend class.
+The destination passed to `save()` must not already exist. Standalone backend
+save/load methods use the same versioned metadata and their backend libraries.
+Recompile unversioned artifacts with the current library; the library loader
+does not guess their format. The companion testbench no longer provides an
+artifact migration tool. Saved artifacts are package-owned state: loading checks
+only the schema version in the backend loader, then reconstructs directly from
+metadata, abstraction, and native payloads. Codec
+and file declarations describe the artifact by convention; they are not a
+validation contract. Malformed or manually edited artifacts may load incorrectly,
+raise ordinary exceptions, or crash CUDD/PySDD readers. d4 loading preserves NNF
+text without certifying graph correctness.
 
 ```python
 loaded_target = TheoryCompiledTarget.load(target_dir, D4CompiledTarget)
@@ -315,3 +326,57 @@ with loaded_target.queries(DdnnifeEngine) as queries:
 ```
 
 See the [`examples/`](examples/) directory for more examples.
+
+External backends can implement `PropCompiledTarget` structurally, without
+inheritance or registration. Each backend must validate its metadata schema in
+`load(directory)`, whether called directly or through `TheoryCompiledTarget.load()`.
+The container delegates validation to the backend; `read_metadata()` provides the
+shared schema check. For example, this target stores one abstraction ID:
+
+```python
+from pathlib import Path
+
+from pysmt.environment import Environment
+
+from tddnnf.core.abstraction import Abstractor
+from tddnnf.core.containers import TheoryCompiledTarget
+from tddnnf.core.interfaces import DagSize
+from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
+
+
+class LiteralTarget:
+    def __init__(self, atom_id: int):
+        self.atom_id = atom_id
+
+    def dag_size(self):
+        return DagSize(1, 0)
+
+    def to_pysmt(self, abstr, mgr):
+        return abstr.get_atom(self.atom_id)
+
+    def save(self, directory):
+        with saving_to(directory) as temporary:
+            temporary.mkdir()
+            (temporary / "literal.txt").write_text(str(self.atom_id))
+            write_metadata(temporary, "literal", codec="integer-text", files=["literal.txt"])
+
+    @classmethod
+    def load(cls, directory):
+        directory = Path(directory)
+        read_metadata(directory)
+        return cls(int((directory / "literal.txt").read_text()))
+
+
+env = Environment()
+atom = env.formula_manager.Symbol("a")
+target = TheoryCompiledTarget(LiteralTarget(7), Abstractor({7: atom}), [atom], env)
+target.save(Path("literal-target"))
+loaded = TheoryCompiledTarget.load(Path("literal-target"), LiteralTarget, env=env)
+assert loaded.to_pysmt() is atom
+```
+
+The container writes `abstraction.json` and adds it to the backend's declared
+payload files. `load` requires a target class and preserves its concrete type;
+representation and codec metadata are descriptive and do not select a backend.
+Applications should check representation metadata before calling native loaders
+when they need to reject a mismatch with their selected backend.

@@ -58,6 +58,7 @@ def test_fresh_query_context_handles_direct_and_loaded_targets(
     compilation = TheoryCompilation(mgr.And(p, atom), env=mgr.env)
     target = compilation.compile_treduced(SddCompiler(), [])
 
+    tmp_path = tmp_path / "artifact"
     target.save(tmp_path)
     loaded = TheoryCompiledTarget.load(tmp_path, SddCompiledTarget, env=mgr.env)
 

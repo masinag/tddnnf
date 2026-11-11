@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from array import array
 from collections.abc import Sequence
 from pathlib import Path
@@ -15,6 +14,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
+from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -80,20 +80,30 @@ class SddCompiledTarget(PropCompiledTarget):
         return convert(self._root)
 
     def save(self, directory: Path) -> None:
-        directory.mkdir(parents=True, exist_ok=True)
-        sdd_path = directory / "circuit.sdd"
-        self._manager.save(str(sdd_path).encode(), self._root)
-        metadata = {"var_count": self._manager.var_count()}
-        (directory / "metadata.json").write_text(json.dumps(metadata))
+        with saving_to(directory) as temporary_directory:
+            temporary_directory.mkdir()
+            self.manager.save(str(temporary_directory / "circuit.sdd").encode(), self.root)
+            self.manager.vtree().save(str(temporary_directory / "circuit.vtree").encode())
+            write_metadata(
+                temporary_directory,
+                "sdd",
+                codec="pysdd",
+                files=["circuit.sdd", "circuit.vtree"],
+                var_count=self.manager.var_count(),
+            )
 
     @classmethod
     def load(cls, directory: Path) -> Self:
-        sdd_path = directory / "circuit.sdd"
-        metadata = json.loads((directory / "metadata.json").read_text())
-        var_count = metadata["var_count"]
-        mgr = SddManager(var_count)
-        root = mgr.read_sdd_file(str(sdd_path).encode())
-        return cls(root, mgr)
+        directory = Path(directory)
+        read_metadata(directory)
+        vtree_path = directory / "circuit.vtree"
+        if not vtree_path.is_file():
+            raise FileNotFoundError(vtree_path)
+        tree = Vtree.from_file(str(vtree_path).encode())
+        manager = SddManager.from_vtree(tree)
+        manager.auto_gc_and_minimize_off()
+        root = manager.read_sdd_file(str(directory / "circuit.sdd").encode())
+        return cls(root, manager)
 
 
 class SddWalker(DagWalker):

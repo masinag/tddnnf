@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Generic
+from typing import Generic
 
 from pysmt.environment import Environment, get_env
 from pysmt.fnode import FNode
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import DagSize, QueryEngine, T_Target
+from tddnnf.core.interfaces import DagSize, PropCompiledTarget, QueryEngine, T_Target
+from tddnnf.core.persistence import read_json, saving_to
 from tddnnf.queries.session import QuerySession
 
 
@@ -52,30 +53,34 @@ class TheoryCompiledTarget(Generic[T_Target]):
         return self.target.dag_size()
 
     def save(self, directory: Path) -> None:
-        """Serialize the abstraction and delegate target persistence."""
-        directory.mkdir(parents=True, exist_ok=True)
-        payload: dict[str, Any] = {
-            "abstraction": self.abstr.to_dict(),
-            "projection_atom_ids": [self.abstr.get_id(a) for a in self.projection_atoms],
-        }
-        (directory / "abstraction.json").write_text(json.dumps(payload, indent=2))
-        self.target.save(directory)
+        """Serialize package-owned state into a versioned artifact."""
+
+        with saving_to(directory) as temporary_directory:
+            self.target.save(temporary_directory)
+            payload = {
+                "abstraction": self.abstr.to_dict(),
+                "projection_atom_ids": [self.abstr.atom_to_id[a] for a in self.projection_atoms],
+            }
+            (temporary_directory / "abstraction.json").write_text(json.dumps(payload, indent=2))
+            data = read_json(temporary_directory / "metadata.json")
+            data["files"].append("abstraction.json")
+            (temporary_directory / "metadata.json").write_text(json.dumps(data, indent=2))
 
     def to_pysmt(self) -> FNode:
         return self.target.to_pysmt(self.abstr, self.env.formula_manager)
 
     @classmethod
-    def load(
-        cls,
+    def load[T_Loaded: PropCompiledTarget](
+        cls: type[TheoryCompiledTarget],
         directory: Path,
-        target_type: type[T_Target],
+        target_type: type[T_Loaded],
         env: Environment | None = None,
-    ) -> TheoryCompiledTarget[T_Target]:
-        """Reconstruct a container from a directory and the target's load classmethod."""
+    ) -> TheoryCompiledTarget[T_Loaded]:
+        """Load with the selected backend and bind atoms to env."""
+        directory = Path(directory)
         env = env if env is not None else get_env()
-        payload = json.loads((directory / "abstraction.json").read_text())
-        abstr = Abstractor.from_dict(payload["abstraction"], env=env)
-        projection_atom_ids: list[int] = payload["projection_atom_ids"]
         target = target_type.load(directory)
-        projection_atoms = [abstr.get_atom(i) for i in projection_atom_ids]
-        return cls(target, abstr, projection_atoms, env=env)
+        payload = read_json(directory / "abstraction.json")
+        abstr = Abstractor.from_dict(payload["abstraction"], env=env)
+        projection = [abstr.get_atom(i) for i in payload["projection_atom_ids"]]
+        return cls(target, abstr, projection, env=env)

@@ -208,9 +208,9 @@ conversion is explicit; query selection never converts a target implicitly.
 
 ## Persistence and migration
 
-Use `target.save(path)` and `TheoryCompiledTarget.load(path, env=...)`. Loading
-infers the representation from versioned metadata; callers supply no target
-subclass, compiler, or reasoner. Keep the existing artifact layout:
+Use `target.save(path)` and `TheoryCompiledTarget.load(path, TargetClass, env=...)`.
+Callers explicitly select the compiled-target class; metadata describes the
+representation. Keep the existing artifact layout:
 
 - `abstraction.json`: SMT-LIB atom serialization and ordered active IDs.
 - `metadata.json`: schema version, representation family, codec, declared
@@ -223,10 +223,19 @@ its text dialect; d4 output and converted DAGs must not be confused. Metadata
 describes artifacts, not compiler/reasoner configuration or a normalizer.
 
 Parse atoms into the requested environment, or the active environment by
-default. Validate schema and codec, IDs, active vocabulary, support, mappings,
-and native structural metadata before returning a target. Unknown versions,
-corrupt payloads, and **missing declared files are errors**, including a missing
-declared SDD vtree. Load saved vtrees and OBDD orders before importing roots.
+default. Treat package-produced metadata, abstraction IDs, ordered projection,
+mappings, and native payloads as trusted state. Keep only the schema-version
+gate; codec and file declarations remain descriptive fields, not a validation
+contract. Missing data and library errors propagate naturally. Load saved vtrees
+and OBDD orders before importing roots. Each backend owns persistence using its native library; shared
+helpers handle metadata and filesystem publication only.
+
+Do not recheck compilation invariants or maintain handwritten graph validators or
+custom SDD reconstruction. Malformed or manually edited artifacts may load
+incorrectly, raise ordinary exceptions, or crash native readers. d4 loading
+preserves NNF text without certifying graph correctness. Saves do not reconstruct
+abstractions or reload native payloads. Migration calls the public loader in a
+subprocess to contain native-reader failures.
 
 Only an explicitly identified legacy SDD artifact that never saved a vtree may
 use the balanced-vtree fallback. If migration produces versioned metadata for
@@ -237,7 +246,7 @@ and report this limitation without claiming recovery of its original shape or
 guaranteeing semantics for an unknown incompatible original vtree.
 
 Write complete artifacts through a temporary sibling destination and publish
-only after validation. Refuse accidental source or destination overwrites;
+after serialization completes. Refuse accidental source or destination overwrites;
 failure leaves the source and any existing valid destination intact. Clean up
 temporary writes deterministically.
 
@@ -245,9 +254,10 @@ The legacy migration command belongs in `tddnnf-testbench`. Support individual
 artifacts, recursive discovery, and dry runs. Preserve abstraction IDs,
 projection order, logs, and native payload bytes; upgrade metadata without
 theory or propositional recompilation. Retain an existing SDD vtree, identify
-the legacy missing-vtree case, and recover OBDD order from DDDMP. Validate
-remapping and codec round trips, and report failures per artifact. Update
-library and benchmark consumers through linked companion PRs in step 5 (or
+the legacy missing-vtree case, and recover OBDD order from the DDDMP header.
+Check historical recovery data locally and backend loadability in the subprocess;
+report failures per artifact. Update library and benchmark consumers through
+linked companion PRs in step 5 (or
 earlier when an interface change requires it).
 
 ## Reserved operation semantics

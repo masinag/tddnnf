@@ -270,23 +270,54 @@ idempotent; subclasses of `QueryEngine` inherit a no-op default.
 
 ## Persistence and reconstruction
 
-`TheoryCompiledTarget.save(directory)` creates a directory and writes
-`abstraction.json`, containing the SMT-LIB abstraction map and the ordered list
-of projection atom IDs. It then delegates backend persistence to `target.save()`.
+`TheoryCompiledTarget.save(directory)` writes a versioned artifact containing
+`abstraction.json` (SMT-LIB atom scripts, original IDs, and ordered
+`projection_atom_ids`), `metadata.json`, and the native payload. Standalone backend
+`save()` and `load()` use their native libraries and the same metadata format
+without the abstraction file. External targets implement `PropCompiledTarget`
+without registration; each backend supplies its codec and complete payload file
+list to `write_metadata(directory, representation, *, codec, files, **extra)`.
+The container depends on the backend protocol; backend implementations use the
+metadata/filesystem helpers. `core/persistence.py` owns no native codecs or
+graph validators.
 
-Backend files are:
+| Representation | Codec | Native files | Structural metadata |
+| --- | --- | --- | --- |
+| OBDD | `dddmp-2.0` | `circuit.dddmp` | complete `variable_order`, `var_count` |
+| SDD | `pysdd` | `circuit.sdd`, `circuit.vtree` | actual manager vtree, `var_count` |
+| d-DNNF | `d4` | `circuit.nnf` | `var_count`, abstraction-to-native `remapping` |
 
-| Target              | Circuit file    | `metadata.json` contents                       |
-| ------------------- | --------------- | ---------------------------------------------- |
-| `D4CompiledTarget`  | `circuit.nnf`   | variable count and abstraction-to-d4 remapping |
-| `SddCompiledTarget` | `circuit.sdd`   | PySDD manager variable count                   |
-| `BddCompiledTarget` | `circuit.dddmp` | CUDD manager variable count                    |
+All metadata declares `schema_version: 1`, `representation` (built-ins use `obdd`,
+`sdd`, or `ddnnf`), `codec`, and payload `files`. Saves serialize into a temporary
+sibling artifact, refuse existing destinations, and clean up failed writes before
+publication.
 
-`TheoryCompiledTarget.load(directory, target_type, env=None)` reverses this
-process: it reconstructs the `Abstractor`, asks `target_type.load()` to restore
-the backend artifact, resolves projection IDs back to SMT atoms, and returns the
-complete container. Supplying the intended PySMT environment keeps restored
-atoms in the same formula manager as the caller.
+`TheoryCompiledTarget.load(directory, target_type, env=None)` delegates loading
+and metadata schema validation to the supplied backend class, then reconstructs
+the abstraction and ordered projection directly in the supplied PySMT environment.
+Every backend, including external implementations of `PropCompiledTarget`, must
+validate its schema in `load(directory)` for both direct and container loads.
+Built-ins use `read_metadata()`; the container does not read metadata on load.
+Metadata and payloads are trusted package-owned state; codec and file declarations
+are descriptive conventions.
+Vtrees are restored and the saved OBDD variable order is declared before native
+import, with CUDD automatic reordering disabled. Each backend owns save/load:
+CUDD dumps/loads DDDMP, PySDD saves/reads SDD and vtree files, and d4 writes/reads
+NNF text directly. Saves do not reconstruct abstractions or reload native payloads.
+
+There are no metadata cross-checks, handwritten native graph validators, or
+custom SDD reconstruction. Malformed or manually edited artifacts may load
+incorrectly, raise ordinary exceptions, or crash native readers;
+d4 loading preserves text without certifying graph correctness. Successful loading
+does not certify a circuit's semantics.
+
+Unversioned artifacts require recompilation with the current library; the
+standalone testbench migration tool has been removed. Consumers select the backend
+explicitly and delegate schema checks to its loader without separate metadata or
+representation checks. Every SDD artifact must include `circuit.vtree`; loads
+restore it before reading the SDD. Artifacts missing their saved vtree require
+recompilation; there is no fallback or provenance flag. Historical compilation
+timings remain historical evidence and need fresh timed runs.
 
 ## Protocols and instrumentation
 

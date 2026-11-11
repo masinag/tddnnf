@@ -30,7 +30,9 @@ class PropCompiledTarget(Protocol):
     def save(self, directory: Path) -> None: ...
 
     @classmethod
-    def load(cls, directory: Path) -> Self: ...
+    def load(cls, directory: Path) -> Self:
+        """Load an artifact, validating its metadata schema before reading payloads."""
+        ...
 
     def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
         """Reconstruct the formula from the compiled DAG."""

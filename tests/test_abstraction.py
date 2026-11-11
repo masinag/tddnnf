@@ -101,8 +101,11 @@ def test_compiled_target_round_trip_preserves_projection_atoms(
     tmp_path: Path, mgr: FormulaManager, a: FNode, b: FNode, abstr: Abstractor
 ) -> None:
     abstr = Abstractor({1: a, 2: b})
-    container = TheoryCompiledTarget(D4CompiledTarget("t 1\n", 2), abstr, projection_atoms=[b, a], env=mgr.env)
+    container = TheoryCompiledTarget(
+        D4CompiledTarget("t 1\n", 2, {1: 1, 2: 2}), abstr, projection_atoms=[b, a], env=mgr.env
+    )
 
+    tmp_path = tmp_path / "artifact"
     container.save(tmp_path)
     payload = json.loads((tmp_path / "abstraction.json").read_text())
     loaded = TheoryCompiledTarget.load(tmp_path, D4CompiledTarget, env=mgr.env)

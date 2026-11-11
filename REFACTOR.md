@@ -177,13 +177,14 @@ update testbench producers and consumers in linked companion PRs.
 Round-trip every representation, constants, nontrivial remapping, inactive and
 absent active atoms, custom/minimized SDD vtrees, and reordered OBDDs. Check
 environment binding, unknown versions/codecs, corrupt metadata, and missing
-declared files. Distinguish an explicitly identified legacy SDD without a
-vtree from a damaged modern artifact. Validate safe writes, refusal to
+declared files. Require the saved vtree for every legacy or versioned SDD
+artifact; missing vtrees require recompilation without publishing a destination. Validate safe writes, refusal to
 overwrite, and cleanup after failure.
 
 Migration checks cover single, recursive, and dry-run modes; preserved IDs,
 projection order, logs, and byte-identical native payloads; DDDMP order recovery;
-existing and missing legacy SDD vtrees; and absence of recompilation. Run the
+existing and missing SDD vtrees in legacy and versioned artifacts; and absence of
+compilation during migration. Run the
 testbench serialization, compile-task, query-consumer, and migration tests
 against the proposed library SHA. Record limitations where original structural
 metadata cannot be recovered.
@@ -973,3 +974,154 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   cleanup; existing native counting and enumeration limits remain.
 - Delivered on `refactor/04-query-sessions` through library PR #11; companion
   PR #14 records the matching verification. Both remain open.
+
+### Step 5 — persistence implementation and independent review (2026-11-11)
+
+- Branch `refactor/05-persistence` starts at the fetched integration head
+  `fc8a541` (companion: `f5d3c48`). Implementation uses isolated worktrees
+  `/tmp/tddnnf-05-persistence` and `/tmp/tddnnf-testbench-05-persistence`.
+  The original testbench's modified `pyproject.toml`, `uv.lock`, and untracked
+  `scripts/migrate_compiled_metadata.py` are untouched.
+- Shared version 1 codecs handle standalone and container saves. Metadata
+  dispatches representation/codec and declares files, counts, dense d4 remapping,
+  complete OBDD order, and the actual SDD vtree. Save validation occurs in a
+  temporary sibling before publication; existing destinations are refused.
+- Loading validates IDs, ordered projection, active support, mapping coverage,
+  native record structure, and declared files. It binds the selected PySMT
+  environment. Legacy artifacts require migration. Explicit missing-original-vtree
+  exceptions retain their provenance through load/save and cannot certify an SDD.
+- The companion adds only the standalone `scripts/migrate_compiled_targets.py`,
+  with single/recursive/dry-run execution, unchanged native/log/auxiliary bytes,
+  DDDMP order recovery, projection aliases/conflict rejection, isolated validation,
+  continuing per-artifact errors, and separate artifact/timing CSV flags.
+  Compile/query/plot consumers use inferred loading, and compilation no longer
+  creates the artifact destination prematurely. The query helper now flattens
+  literals for the existing flat-list API.
+- Verification: library **953 passed**, 1159 existing warnings, 27.74 s;
+  companion **219 passed**, 5 warnings, 12.89 s. Commands used `uv run --no-sync
+  python -m pytest -q --disable-warnings`, `UV_CACHE_DIR=/tmp/uv-step05-cache`,
+  explicit paired source `PYTHONPATH`, and existing library/testbench environments.
+  The library worktree uses a copy of the existing ignored d4 binary; no binary
+  or dependency lock was changed. Library Ruff (`tddnnf tests examples`), companion
+  Ruff (`scripts tests`), formatting checks, and `git diff --check` pass.
+- Independent agent review found native reader crash cases, incomplete d4 mapping
+  coverage, lost missing-vtree provenance on resave, and output-error classification
+  issues. All were fixed with regressions. DDDMP IDs/ranks/permutations and native
+  ASCII records are checked before C import. SDD roots are rebuilt using public
+  operations after disjoint/exhaustive/compressed partition validation, avoiding
+  the unsafe raw reader. Migration native validation runs in a subprocess so a
+  native failure leaves a report row and processing continues. Source health is
+  checked separately from destination I/O failures; report output opens before
+  publication and each row is flushed to disk. Final independent review reported
+  **no outstanding findings**, independently passing 78 persistence and 28 migration
+  tests. Native probes were targeted, not exhaustive.
+- Original missing SDD vtrees cannot be recovered. Historical timing logs remain
+  unchanged; every processed historical result requires a fresh timed compilation.
+  Format migration alone does not require recompilation when all data validates.
+  No benchmark compilation/query reruns were performed for this step.
+
+
+### Step 5 simplification — trusted native payloads (2026-11-11)
+
+- Replaces the native-validation design recorded above. Container persistence
+  delegates to backend classes; those classes use CUDD/PySDD directly or preserve
+  d4 NNF text. `persistence.py` now contains only metadata/filesystem helpers.
+  Handwritten DDDMP/SDD/vtree/d4 graph validation, packed graph arrays, custom
+  SDD reconstruction, central native dispatch, and save-time native reloads are
+  removed. Runtime imports are module-level; type-only imports use `TYPE_CHECKING`.
+- Retains versioned metadata, full OBDD order, actual SDD vtrees, d4 remapping,
+  abstraction IDs, ordered projection, environment binding, overwrite refusal,
+  temporary cleanup, and explicit missing-vtree provenance. Metadata and mapping
+  checks remain; native support and graph correctness are no longer certified.
+- Migration calls the public container/backend loaders in its subprocess and
+  keeps only DDDMP header extraction for historical order. Native-reader failures
+  remain per-artifact report failures. The existing recompilation CSV remains
+  historical evidence from the previous validation boundary; no dataset scan or
+  benchmark was repeated.
+- Malformed native files may crash ordinary loading. d4 loading only preserves
+  text; it does not prove graph validity. Migration subprocesses contain native
+  reader failures, but successful loading does not certify circuit semantics.
+- Verification with the existing testbench environment's Python and explicit
+  paired-source `PYTHONPATH`: library `python -m pytest -q --disable-warnings`
+  **948 passed**, 1151 existing warnings, 25.46 s; companion **230 passed**,
+  5 existing warnings. Ruff passes for both complete source/test trees. Library
+  formatting passes across all 47 files; changed companion files pass formatting.
+  The companion-wide formatting check still flags four unchanged files:
+  `scripts/plots/plot_query_time.py`, `scripts/tasks/generate_synthetic_queries.py`,
+  `tests/test_plot_query_time.py`, and `tests/test_query_mathsat.py`.
+- Fresh-process import smoke checks pass for container, helpers, backends,
+  queries, installer, and migration. An AST check confirms no function-local
+  runtime imports in `tddnnf`; paired source paths are verified. Both
+  `git diff --check` checks pass, and the historical CSV is byte-identical to HEAD.
+  No native malformed-file probes, dataset scans, benchmarks, or unrelated
+  formatting changes were performed.
+
+
+### Step 5 follow-up — convention-based persistence (2026-11-11)
+
+- Supersedes the metadata and mapping checks retained in the previous entry.
+  Package-created artifacts are trusted state. Removed `_read_data`, abstraction
+  reconstruction during save, custom JSON parsing, manifest/codec checks, backend
+  mapping/order validators, and ID/projection cross-checks. Only the schema-version
+  gate remains; missing data and backend errors propagate naturally.
+- APIs and version 1 artifact layout are unchanged. Full OBDD order, actual SDD
+  vtrees, d4 mappings, sparse abstraction IDs, ordered projection, environment
+  binding, overwrite refusal, temporary cleanup, and explicit legacy missing-vtree
+  provenance remain. Malformed or manually edited artifacts may load incorrectly,
+  raise ordinary exceptions, or crash native readers.
+- Migration keeps historical recovery checks, byte copying, reports, and public
+  loading in subprocesses. Its local JSON reader rejects non-object historical
+  JSON so metadata, abstraction, or log failures cannot stop recursive reporting.
+  Nine regression cases cover these failures and continuation to the next artifact.
+- Verification uses `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python`
+  with `PYTHONPATH=/tmp/tddnnf-05-persistence:/tmp/tddnnf-testbench-05-persistence/scripts`.
+  In each worktree, `python -m pytest -q --disable-warnings` passes: library
+  **905 passed**, 1159 warnings, 30.02 s; testbench **239 passed**, 5 warnings,
+  17.53 s. Removed tests asserted defensive guarantees deliberately dropped here.
+- `ruff check tddnnf tests` and `ruff check scripts tests` pass. Library
+  `ruff format --check tddnnf tests` passes (44 files); changed migration/test
+  formatting passes. Full companion formatting flags the same four unchanged
+  files recorded above. Fresh-process imports verify both proposed source paths;
+  both `git diff --check` checks pass. Historical CSV is unchanged from HEAD.
+- Skipped dataset scans, benchmarks, malformed native-file probes, and unrelated
+  cleanup. No historical CSV regeneration or compilation/query reruns.
+
+
+### Save workflow naming (2026-11-11)
+
+- Renamed the internal `publication` helper to `saving_to` and its `stage`
+  variables to `temporary_directory` across backend/container saves and paired
+  migration/tests. The helper documents temporary writes, rename on success,
+  and cleanup on failure. Backend `mkdir()` calls and container delegation remain;
+  public APIs, version 1 artifacts, overwrite refusal, and cleanup are unchanged.
+- Both suites ran with
+  `PYTHONPATH=/tmp/tddnnf-05-persistence:/tmp/tddnnf-testbench-05-persistence/scripts`
+  and the existing testbench environment. Library: its `.venv/bin/python -m pytest
+  -q --disable-warnings`, **905 passed**, 1156 warnings, 27.44 s. Companion:
+  `uv run --no-sync python -m pytest -q --disable-warnings` with the existing
+  `UV_PROJECT_ENVIRONMENT` and `/tmp/uv-step05-cache`, **239 passed**, 5 warnings,
+  15.47 s. Logs: `/tmp/saving-to-{library,testbench}.log`.
+- Ruff passes for library `tddnnf tests examples` and companion `scripts tests`;
+  formatting passes for all seven changed Python files. Both `git diff --check`
+  checks pass. No new tests, abstractions, benchmarks, or dataset scans for this
+  naming-only change. Deliver together through library PR #12 and companion PR #15.
+
+
+### Require saved SDD vtrees (2026-11-11)
+
+- Supersedes the missing-vtree fallback and provenance behavior recorded in earlier
+  step 5 evidence. Every SDD save writes and declares `circuit.vtree`; loads restore
+  the saved tree before reading the SDD. Public APIs and schema version 1 remain.
+- Migration requires the vtree for legacy and versioned SDD artifacts. Missing trees
+  fail with `missing_required_data`, require recompilation, and publish no destination.
+  Removed the missing-vtree return value, special reason code, and fallback diagnostics.
+  Subprocess isolation, recursive continuation, dry runs, overwrite refusal, and cleanup remain.
+- Full paired-source verification: library **907 passed** (1155 warnings, 25.52 s),
+  testbench **245 passed** (5 warnings, 15.72 s). Used the existing library/testbench
+  virtualenvs with explicit `PYTHONPATH=/tmp/tddnnf-05-persistence` and the companion
+  `scripts` directory for testbench tests. Ruff passes for library `tddnnf tests examples`
+  and companion `scripts tests`; formatting passes for all five changed Python files;
+  both `git diff --check` checks pass. Import checks confirm the paired worktree sources.
+- Historical evidence and CSV files are unchanged. Recompilation jobs, dataset scans,
+  benchmarks, and historical report regeneration were skipped. Previously migrated SDD
+  artifacts without vtrees are unsupported and require recompilation.

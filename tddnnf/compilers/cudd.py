@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Self
@@ -14,6 +13,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
+from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -52,11 +52,18 @@ class BddCompiledTarget(PropCompiledTarget):
         return DagSize(vertices=int(self._root.dag_size), edges=edges)
 
     def save(self, directory: Path) -> None:
-        directory.mkdir(parents=True, exist_ok=True)
-        bdd_path = directory / "circuit.dddmp"
-        self._manager.dump(str(bdd_path), [self._root])
-        var_count = len(self._manager.vars)
-        (directory / "metadata.json").write_text(json.dumps({"var_count": var_count}))
+        with saving_to(directory) as temporary_directory:
+            temporary_directory.mkdir()
+            order = sorted(self.manager.vars, key=self.manager.level_of_var)
+            self.manager.dump(str(temporary_directory / "circuit.dddmp"), [self.root])
+            write_metadata(
+                temporary_directory,
+                "obdd",
+                codec="dddmp-2.0",
+                files=["circuit.dddmp"],
+                var_count=len(order),
+                variable_order=order,
+            )
 
     def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
         _memo: dict[Function, FNode] = {}
@@ -81,14 +88,14 @@ class BddCompiledTarget(PropCompiledTarget):
 
     @classmethod
     def load(cls, directory: Path) -> Self:
-        bdd_path = directory / "circuit.dddmp"
-        metadata = json.loads((directory / "metadata.json").read_text())
-        var_count = metadata["var_count"]
-        mgr = BDD()
-        for i in range(1, var_count + 1):
-            mgr.declare(f"b{i}")
-        roots = mgr.load(str(bdd_path))
-        return cls(roots[0], mgr)
+        directory = Path(directory)
+        data = read_metadata(directory)
+        order = data["variable_order"]
+        manager = BDD()
+        manager.configure(reordering=False)
+        manager.declare(*order)
+        (root,) = manager.load(str(directory / "circuit.dddmp"))
+        return cls(root, manager)
 
 
 class BddWalker(DagWalker):

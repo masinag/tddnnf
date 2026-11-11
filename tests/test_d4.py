@@ -38,10 +38,6 @@ def test_projection_cleanup(mgr, a, b, c, monkeypatch, tmp_path, injected):
     assert native.remapping == {3: 1, 7: 2, 11: 3}
     if injected:
         assert native.nnf_text == cleaned
-        # Loading existing artifacts must preserve their text without cleanup.
-        legacy_dir = tmp_path / "legacy"
-        D4CompiledTarget(raw, 3, native.remapping).save(legacy_dir)
-        assert D4CompiledTarget.load(legacy_dir).nnf_text == raw
 
     native.save(tmp_path / "cleaned")
     loaded = D4CompiledTarget.load(tmp_path / "cleaned")

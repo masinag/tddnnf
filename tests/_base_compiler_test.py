@@ -39,8 +39,8 @@ class BaseTestCompiler:
         original_pysmt = target.to_pysmt(abstr, mgr)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            target.save(Path(tmpdir))
-            loaded = self.target_cls.load(Path(tmpdir))
+            target.save(Path(tmpdir) / "artifact")
+            loaded = self.target_cls.load(Path(tmpdir) / "artifact")
             loaded_pysmt = loaded.to_pysmt(abstr, mgr)
 
             not_equivalent = mgr.Not(mgr.Iff(original_pysmt, loaded_pysmt))

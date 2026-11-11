@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 import tempfile
 from collections.abc import Mapping, Sequence
@@ -17,6 +16,7 @@ from pysmt.walkers import DagWalker, handles
 
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
+from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 from tddnnf.core.stats_collector import StatsCollector
 
 D4_BIN = Path(__file__).resolve().parent.parent / "bin" / "d4.bin"
@@ -129,23 +129,18 @@ class D4CompiledTarget(PropCompiledTarget):
         return graph[1].to_pysmt(graph, abstr, mgr, inv_remap)
 
     def save(self, directory: Path) -> None:
-        directory.mkdir(parents=True, exist_ok=True)
-        (directory / "circuit.nnf").write_text(self._nnf_text)
-        (directory / "metadata.json").write_text(
-            json.dumps(
-                {
-                    "var_count": self._var_count,
-                    "remapping": {str(k): v for k, v in self._remapping.items()},
-                }
-            )
-        )
+        data = {"var_count": self.var_count, "remapping": {str(k): v for k, v in self.remapping.items()}}
+        with saving_to(directory) as temporary_directory:
+            temporary_directory.mkdir()
+            (temporary_directory / "circuit.nnf").write_text(self.nnf_text)
+            write_metadata(temporary_directory, "ddnnf", codec="d4", files=["circuit.nnf"], **data)
 
     @classmethod
     def load(cls, directory: Path) -> Self:
-        nnf_text = (directory / "circuit.nnf").read_text()
-        metadata = json.loads((directory / "metadata.json").read_text())
-        remapping = {int(k): v for k, v in metadata.get("remapping", {}).items()}
-        return cls(nnf_text, metadata["var_count"], remapping=remapping)
+        directory = Path(directory)
+        data = read_metadata(directory)
+        remapping = {int(k): v for k, v in data["remapping"].items()}
+        return cls((directory / "circuit.nnf").read_text(), data["var_count"], remapping)
 
 
 class BCS12Walker(DagWalker):

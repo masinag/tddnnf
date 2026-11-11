@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import platform
 import stat
 import subprocess
 from pathlib import Path
@@ -40,8 +41,6 @@ def install_d4(install_dir: Path) -> Path:
         tmp.mkdir(exist_ok=True)
         _run(["tar", "-xzf", "libpatoh.tar.gz", "-C", str(tmp)])
         Path("libpatoh.tar.gz").unlink()
-        import platform
-
         arch = platform.machine()
         mach_map = {"x86_64": "Linux-x86_64", "aarch64": "Linux-aarch64", "arm64": "Linux-aarch64"}
         plat = mach_map.get(arch, f"Linux-{arch}")
