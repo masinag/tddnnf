@@ -315,7 +315,7 @@ text without certifying graph correctness. Migration contains native-reader fail
 subprocess.
 
 ```python
-loaded_target = TheoryCompiledTarget.load(target_dir)
+loaded_target = TheoryCompiledTarget.load(target_dir, D4CompiledTarget)
 ```
 
 Open a session and query the loaded target.
@@ -326,3 +326,54 @@ with loaded_target.queries(DdnnifeEngine) as queries:
 ```
 
 See the [`examples/`](examples/) directory for more examples.
+
+External backends can implement `PropCompiledTarget` structurally, without
+inheritance or registration. For example, this target stores one abstraction ID:
+
+```python
+from pathlib import Path
+
+from pysmt.environment import Environment
+
+from tddnnf.core.abstraction import Abstractor
+from tddnnf.core.containers import TheoryCompiledTarget
+from tddnnf.core.interfaces import DagSize
+from tddnnf.core.persistence import metadata, saving_to, write_metadata
+
+
+class LiteralTarget:
+    def __init__(self, atom_id: int):
+        self.atom_id = atom_id
+
+    def dag_size(self):
+        return DagSize(1, 0)
+
+    def to_pysmt(self, abstr, mgr):
+        return abstr.get_atom(self.atom_id)
+
+    def save(self, directory):
+        with saving_to(directory) as temporary:
+            temporary.mkdir()
+            (temporary / "literal.txt").write_text(str(self.atom_id))
+            write_metadata(temporary, "literal", codec="integer-text", files=["literal.txt"])
+
+    @classmethod
+    def load(cls, directory):
+        directory = Path(directory)
+        metadata(directory)
+        return cls(int((directory / "literal.txt").read_text()))
+
+
+env = Environment()
+atom = env.formula_manager.Symbol("a")
+target = TheoryCompiledTarget(LiteralTarget(7), Abstractor({7: atom}), [atom], env)
+target.save(Path("literal-target"))
+loaded = TheoryCompiledTarget.load(Path("literal-target"), LiteralTarget, env=env)
+assert loaded.to_pysmt() is atom
+```
+
+The container writes `abstraction.json` and adds it to the backend's declared
+payload files. `load` requires a target class and preserves its concrete type;
+representation and codec metadata are descriptive and do not select a backend.
+Applications should check representation metadata before calling native loaders
+when they need to reject a mismatch with their selected backend.

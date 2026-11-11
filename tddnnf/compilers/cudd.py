@@ -56,7 +56,14 @@ class BddCompiledTarget(PropCompiledTarget):
             temporary_directory.mkdir()
             order = sorted(self.manager.vars, key=self.manager.level_of_var)
             self.manager.dump(str(temporary_directory / "circuit.dddmp"), [self.root])
-            write_metadata(temporary_directory, "obdd", var_count=len(order), variable_order=order)
+            write_metadata(
+                temporary_directory,
+                "obdd",
+                codec="dddmp-2.0",
+                files=["circuit.dddmp"],
+                var_count=len(order),
+                variable_order=order,
+            )
 
     def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
         _memo: dict[Function, FNode] = {}

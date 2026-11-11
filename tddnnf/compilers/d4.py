@@ -133,7 +133,7 @@ class D4CompiledTarget(PropCompiledTarget):
         with saving_to(directory) as temporary_directory:
             temporary_directory.mkdir()
             (temporary_directory / "circuit.nnf").write_text(self.nnf_text)
-            write_metadata(temporary_directory, "ddnnf", **data)
+            write_metadata(temporary_directory, "ddnnf", codec="d4", files=["circuit.nnf"], **data)
 
     @classmethod
     def load(cls, directory: Path) -> Self:

@@ -84,7 +84,13 @@ class SddCompiledTarget(PropCompiledTarget):
             temporary_directory.mkdir()
             self.manager.save(str(temporary_directory / "circuit.sdd").encode(), self.root)
             self.manager.vtree().save(str(temporary_directory / "circuit.vtree").encode())
-            write_metadata(temporary_directory, "sdd", var_count=self.manager.var_count())
+            write_metadata(
+                temporary_directory,
+                "sdd",
+                codec="pysdd",
+                files=["circuit.sdd", "circuit.vtree"],
+                var_count=self.manager.var_count(),
+            )
 
     @classmethod
     def load(cls, directory: Path) -> Self:

@@ -7,7 +7,7 @@ from pysmt.typing import BOOL, INT
 from tddnnf import TheoryCompilation
 from tddnnf.builders.extended import TExtendedBuilder
 from tddnnf.builders.reduced import TReducedBuilder
-from tddnnf.compilers.pysdd import SddCompiler
+from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries.sdd_engine import SddEngine
@@ -60,7 +60,7 @@ def test_fresh_query_context_handles_direct_and_loaded_targets(
 
     tmp_path = tmp_path / "artifact"
     target.save(tmp_path)
-    loaded = TheoryCompiledTarget.load(tmp_path, env=mgr.env)
+    loaded = TheoryCompiledTarget.load(tmp_path, SddCompiledTarget, env=mgr.env)
 
     for query_target in (target, loaded):
         engine = query_target.queries(SddEngine)

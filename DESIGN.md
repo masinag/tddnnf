@@ -208,9 +208,9 @@ conversion is explicit; query selection never converts a target implicitly.
 
 ## Persistence and migration
 
-Use `target.save(path)` and `TheoryCompiledTarget.load(path, env=...)`. Loading
-infers the representation from versioned metadata; callers supply no target
-subclass, compiler, or reasoner. Keep the existing artifact layout:
+Use `target.save(path)` and `TheoryCompiledTarget.load(path, TargetClass, env=...)`.
+Callers explicitly select the compiled-target class; metadata describes the
+representation. Keep the existing artifact layout:
 
 - `abstraction.json`: SMT-LIB atom serialization and ordered active IDs.
 - `metadata.json`: schema version, representation family, codec, declared

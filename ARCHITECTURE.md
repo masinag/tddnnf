@@ -274,9 +274,12 @@ idempotent; subclasses of `QueryEngine` inherit a no-op default.
 `abstraction.json` (SMT-LIB atom scripts, original IDs, and ordered
 `projection_atom_ids`), `metadata.json`, and the native payload. Standalone backend
 `save()` and `load()` use their native libraries and the same metadata format
-without the abstraction file. The dependency direction is container → backend
-classes → metadata/filesystem helpers; `core/persistence.py` owns no native codecs
-or graph validators.
+without the abstraction file. External targets implement `PropCompiledTarget`
+without registration; each backend supplies its codec and complete payload file
+list to `write_metadata(directory, representation, *, codec, files, **extra)`.
+The container depends on the backend protocol; backend implementations use the
+metadata/filesystem helpers. `core/persistence.py` owns no native codecs or
+graph validators.
 
 | Representation | Codec | Native files | Structural metadata |
 | --- | --- | --- | --- |
@@ -284,14 +287,15 @@ or graph validators.
 | SDD | `pysdd` | `circuit.sdd`, `circuit.vtree` | actual manager vtree, `var_count` |
 | d-DNNF | `d4` | `circuit.nnf` | `var_count`, abstraction-to-native `remapping` |
 
-All metadata declares `schema_version: 1`, `representation` (`obdd`, `sdd`, or
-`ddnnf`), `codec`, and payload `files`. Saves serialize into a temporary sibling artifact,
-refuse existing destinations, and clean up failed writes before publication.
+All metadata declares `schema_version: 1`, `representation` (built-ins use `obdd`,
+`sdd`, or `ddnnf`), `codec`, and payload `files`. Saves serialize into a temporary
+sibling artifact, refuse existing destinations, and clean up failed writes before
+publication.
 
-`TheoryCompiledTarget.load(directory, env=None)` infers its backend from metadata,
-checks the schema version, and reconstructs the abstraction and ordered projection
-directly in the supplied PySMT environment. Metadata and payloads are trusted
-package-owned state; codec and file declarations are descriptive conventions.
+`TheoryCompiledTarget.load(directory, target_type, env=None)` checks the schema
+version, delegates to the supplied backend class, and reconstructs the abstraction
+and ordered projection directly in the supplied PySMT environment. Metadata and
+payloads are trusted package-owned state; codec and file declarations are descriptive conventions.
 Vtrees are restored and the saved OBDD variable order is declared before native
 import, with CUDD automatic reordering disabled. Each backend owns save/load:
 CUDD dumps/loads DDDMP, PySDD saves/reads SDD and vtree files, and d4 writes/reads

@@ -1,4 +1,5 @@
 import json
+from typing import assert_type
 
 import pytest
 from dd.cudd import BDD
@@ -10,7 +11,8 @@ from tddnnf.compilers.d4 import D4CompiledTarget
 from tddnnf.compilers.pysdd import SddCompiledTarget
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
-from tddnnf.core.persistence import read_json
+from tddnnf.core.interfaces import DagSize, PropCompiledTarget
+from tddnnf.core.persistence import metadata, read_json, saving_to, write_metadata
 
 
 @pytest.fixture(params=["obdd", "sdd", "ddnnf"])
@@ -39,7 +41,7 @@ def artifact(request, mgr, tmp_path):
 def test_sparse_roundtrip_and_environment(artifact):
     path, original = artifact
     fresh = Environment()
-    loaded = TheoryCompiledTarget.load(path, env=fresh)
+    loaded = TheoryCompiledTarget.load(path, type(original.target), env=fresh)
     assert loaded.env is fresh
     assert list(loaded.abstr.id_to_atom) == [3, 7, 11]
     assert [loaded.abstr.get_id(a) for a in loaded.projection_atoms] == [11, 3]
@@ -71,26 +73,26 @@ def test_constants(tmp_path, mgr, value, rep):
     target = TheoryCompiledTarget(native, Abstractor(), [], mgr.env)
     path = tmp_path / "constant"
     target.save(path)
-    assert TheoryCompiledTarget.load(path, env=mgr.env).to_pysmt() is mgr.Bool(value)
+    assert TheoryCompiledTarget.load(path, type(native), env=mgr.env).to_pysmt() is mgr.Bool(value)
 
 
 @pytest.mark.parametrize("version", [999, True])
 def test_unsupported_schema_version(artifact, version):
-    path, _ = artifact
+    path, original = artifact
     data = read_json(path / "metadata.json")
     data["schema_version"] = version
     (path / "metadata.json").write_text(json.dumps(data))
     with pytest.raises(ValueError, match="schema version"):
-        TheoryCompiledTarget.load(path)
+        TheoryCompiledTarget.load(path, type(original.target))
 
 
 def test_unversioned_requires_migration(artifact):
-    path, _ = artifact
+    path, original = artifact
     data = read_json(path / "metadata.json")
     del data["schema_version"]
     (path / "metadata.json").write_text(json.dumps(data))
     with pytest.raises(ValueError, match="migration"):
-        TheoryCompiledTarget.load(path)
+        TheoryCompiledTarget.load(path, type(original.target))
 
 
 def test_overwrite_refusal(artifact):
@@ -171,7 +173,7 @@ def test_missing_abstraction_propagates(tmp_path, mgr):
     TheoryCompiledTarget(D4CompiledTarget("t 1\n", 0), Abstractor(), [], mgr.env).save(path)
     (path / "abstraction.json").unlink()
     with pytest.raises(FileNotFoundError):
-        TheoryCompiledTarget.load(path)
+        TheoryCompiledTarget.load(path, D4CompiledTarget)
 
 
 def test_missing_d4_payload_propagates(tmp_path):
@@ -195,3 +197,87 @@ def test_missing_sdd_vtree_requires_recompilation(tmp_path, legacy_flag):
         (path / "metadata.json").write_text(json.dumps(data))
     with pytest.raises(FileNotFoundError, match="circuit.vtree"):
         SddCompiledTarget.load(path)
+
+
+class LiteralTarget:
+    """Structural backend with its own representation, codec, and payload."""
+
+    def __init__(self, atom_id: int):
+        self.atom_id = atom_id
+
+    def dag_size(self):
+        return DagSize(1, 0)
+
+    def to_pysmt(self, abstr, mgr):
+        return abstr.get_atom(self.atom_id)
+
+    def save(self, directory):
+        with saving_to(directory) as temporary:
+            temporary.mkdir()
+            (temporary / "literal.txt").write_text(str(self.atom_id))
+            write_metadata(temporary, "literal", codec="integer-text", files=["literal.txt"])
+
+    @classmethod
+    def load(cls, directory):
+        metadata(directory)
+        return cls(int((directory / "literal.txt").read_text()))
+
+
+def test_external_backend_roundtrip(tmp_path, mgr):
+    atom, absent = mgr.Symbol("atom"), mgr.Symbol("absent")
+    original = TheoryCompiledTarget(LiteralTarget(7), Abstractor({7: atom, 11: absent}), [absent, atom], mgr.env)
+    path = tmp_path / "custom"
+    original.save(path)
+    fresh = Environment()
+    loaded = assert_type(TheoryCompiledTarget.load(path, LiteralTarget, env=fresh), TheoryCompiledTarget[LiteralTarget])
+    assert isinstance(loaded.target, LiteralTarget)
+    assert isinstance(loaded.target, PropCompiledTarget)
+    assert loaded.target.atom_id == 7
+    assert loaded.env is fresh
+    assert loaded.to_pysmt() is fresh.formula_manager.Symbol("atom")
+    assert [loaded.abstr.get_id(a) for a in loaded.projection_atoms] == [11, 7]
+    assert loaded.dag_size() == DagSize(1, 0)
+    assert read_json(path / "metadata.json") == {
+        "schema_version": 1,
+        "representation": "literal",
+        "codec": "integer-text",
+        "files": ["literal.txt", "abstraction.json"],
+    }
+
+
+def test_load_requires_target_type(tmp_path):
+    with pytest.raises(TypeError, match="target_type"):
+        TheoryCompiledTarget.load(tmp_path)
+
+
+def test_backend_exception_propagates(tmp_path, monkeypatch):
+    path = tmp_path / "custom"
+    LiteralTarget(7).save(path)
+    error = RuntimeError("backend failure")
+
+    def fail(directory):
+        raise error
+
+    monkeypatch.setattr(LiteralTarget, "load", fail)
+    with pytest.raises(RuntimeError) as caught:
+        TheoryCompiledTarget.load(path, LiteralTarget)
+    assert caught.value is error
+
+
+@pytest.mark.parametrize("version", [None, True, 999])
+def test_schema_checked_before_backend(tmp_path, monkeypatch, version):
+    path = tmp_path / "custom"
+    LiteralTarget(7).save(path)
+    data = read_json(path / "metadata.json")
+    if version is None:
+        del data["schema_version"]
+    else:
+        data["schema_version"] = version
+    (path / "metadata.json").write_text(json.dumps(data))
+
+    def forbidden(directory):
+        pytest.fail("Invalid schema must fail before calling the backend")
+
+    monkeypatch.setattr(LiteralTarget, "load", forbidden)
+    with pytest.raises(ValueError, match="migration" if version is None else "schema version"):
+        TheoryCompiledTarget.load(path, LiteralTarget)

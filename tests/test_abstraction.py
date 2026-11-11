@@ -108,7 +108,7 @@ def test_compiled_target_round_trip_preserves_projection_atoms(
     tmp_path = tmp_path / "artifact"
     container.save(tmp_path)
     payload = json.loads((tmp_path / "abstraction.json").read_text())
-    loaded = TheoryCompiledTarget.load(tmp_path, env=mgr.env)
+    loaded = TheoryCompiledTarget.load(tmp_path, D4CompiledTarget, env=mgr.env)
 
     assert payload["projection_atom_ids"] == [abstr.get_id(b), abstr.get_id(a)]
     assert "care_var_ids" not in payload

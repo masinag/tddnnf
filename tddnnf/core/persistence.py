@@ -8,8 +8,6 @@ from contextlib import contextmanager
 from pathlib import Path
 
 SCHEMA_VERSION = 1
-CODECS = {"obdd": "dddmp-2.0", "sdd": "pysdd", "ddnnf": "d4"}
-PAYLOADS = {"obdd": "circuit.dddmp", "sdd": "circuit.sdd", "ddnnf": "circuit.nnf"}
 
 
 def read_json(path):
@@ -43,14 +41,11 @@ def metadata(directory):
     return data
 
 
-def write_metadata(directory, representation, **extra):
-    files = [PAYLOADS[representation]]
-    if representation == "sdd":
-        files.append("circuit.vtree")
+def write_metadata(directory, representation, *, codec, files, **extra):
     data = {
         "schema_version": SCHEMA_VERSION,
         "representation": representation,
-        "codec": CODECS[representation],
+        "codec": codec,
         "files": files,
         **extra,
     }

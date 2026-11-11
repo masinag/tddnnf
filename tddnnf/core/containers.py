@@ -8,11 +8,8 @@ from typing import Generic
 from pysmt.environment import Environment, get_env
 from pysmt.fnode import FNode
 
-from tddnnf.compilers.cudd import BddCompiledTarget
-from tddnnf.compilers.d4 import D4CompiledTarget
-from tddnnf.compilers.pysdd import SddCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import DagSize, QueryEngine, T_Target
+from tddnnf.core.interfaces import DagSize, PropCompiledTarget, QueryEngine, T_Target
 from tddnnf.core.persistence import metadata, read_json, saving_to
 from tddnnf.queries.session import QuerySession
 
@@ -73,17 +70,17 @@ class TheoryCompiledTarget(Generic[T_Target]):
         return self.target.to_pysmt(self.abstr, self.env.formula_manager)
 
     @classmethod
-    def load(
-        cls,
+    def load[T_Loaded: PropCompiledTarget](
+        cls: type[TheoryCompiledTarget],
         directory: Path,
+        target_type: type[T_Loaded],
         env: Environment | None = None,
-    ) -> TheoryCompiledTarget:
-        """Infer the representation from versioned metadata and bind atoms to env."""
+    ) -> TheoryCompiledTarget[T_Loaded]:
+        """Load with the selected backend and bind atoms to env."""
         directory = Path(directory)
         env = env if env is not None else get_env()
-        data = metadata(directory)
-        backends = {"obdd": BddCompiledTarget, "sdd": SddCompiledTarget, "ddnnf": D4CompiledTarget}
-        target = backends[data["representation"]].load(directory)
+        metadata(directory)
+        target = target_type.load(directory)
         payload = read_json(directory / "abstraction.json")
         abstr = Abstractor.from_dict(payload["abstraction"], env=env)
         projection = [abstr.get_atom(i) for i in payload["projection_atom_ids"]]
