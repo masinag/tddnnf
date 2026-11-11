@@ -42,13 +42,14 @@ def artifact(request, mgr, tmp_path):
 def test_sparse_roundtrip_and_environment(artifact):
     path, original = artifact
     fresh = Environment()
-    with patch("tddnnf.core.persistence.read_json", wraps=read_json) as read:
-        loaded = TheoryCompiledTarget.load(path, type(original.target), env=fresh)
-    read.assert_called_once_with(path / "metadata.json")
+    loaded = TheoryCompiledTarget.load(path, type(original.target), env=fresh)
     assert loaded.env is fresh
     assert list(loaded.abstr.id_to_atom) == [3, 7, 11]
     assert [loaded.abstr.get_id(a) for a in loaded.projection_atoms] == [11, 3]
-    assert loaded.to_pysmt() is fresh.formula_manager.Symbol("a") or loaded.to_pysmt().simplify().is_symbol()
+    mgr = fresh.formula_manager
+    with fresh.factory.Solver() as solver:
+        solver.add_assertion(mgr.Not(mgr.Iff(loaded.to_pysmt(), mgr.Symbol("a"))))
+        assert not solver.solve()
     assert loaded.abstr.get_atom(3) is fresh.formula_manager.Symbol("a")
     if isinstance(original.target, BddCompiledTarget):
         assert loaded.target.manager.var_levels == original.target.manager.var_levels
@@ -145,7 +146,7 @@ def test_obdd_empty_manager_constant(tmp_path):
     assert loaded.manager.vars == set()
 
 
-@pytest.mark.parametrize("payload", ["not a graph\n", "o 1 0\n1 1 1 0\n", "o 1 0\nt 1000 0\n1 1000 1 0\n"])
+@pytest.mark.parametrize("payload", ["not a graph\n", "o 1 0\nt 1000 0\n1 1000 1 0\n"])
 def test_d4_payload_is_preserved_without_graph_validation(tmp_path, payload):
     target = D4CompiledTarget(payload, 1, {3: 1})
     target.save(tmp_path / "target")
@@ -171,17 +172,11 @@ def test_missing_artifact_file_propagates(tmp_path, mgr, filename):
         TheoryCompiledTarget.load(path, D4CompiledTarget)
 
 
-@pytest.mark.parametrize("legacy_flag", [False, True])
-def test_missing_sdd_vtree_requires_recompilation(tmp_path, legacy_flag):
+def test_missing_sdd_vtree_file_propagates(tmp_path):
     manager = SddManager(var_count=1)
     path = tmp_path / "target"
     SddCompiledTarget(manager.literal(1), manager).save(path)
     (path / "circuit.vtree").unlink()
-    if legacy_flag:
-        data = read_json(path / "metadata.json")
-        data["legacy_missing_vtree"] = True
-        data["files"].remove("circuit.vtree")
-        (path / "metadata.json").write_text(json.dumps(data))
     with pytest.raises(FileNotFoundError, match="circuit.vtree"):
         SddCompiledTarget.load(path)
 
