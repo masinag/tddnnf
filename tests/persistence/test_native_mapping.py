@@ -1,11 +1,13 @@
-"""SDD persistence requires the native variable mapping in metadata."""
+"""SDD persistence preserves sparse atom IDs and requires mapping metadata."""
 
 import json
 
 import pytest
 from pysdd.sdd import SddManager
 
-from tddnnf.compilers.pysdd import SddCompiledTarget
+from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
+from tddnnf.core.abstraction import Abstractor
+from tests.support import equivalent
 
 
 def test_sdd_requires_mapping(tmp_path):
@@ -18,3 +20,15 @@ def test_sdd_requires_mapping(tmp_path):
     metadata.write_text(json.dumps(data))
     with pytest.raises(KeyError, match="remapping"):
         SddCompiledTarget.load(path)
+
+
+def test_sdd_roundtrip_preserves_sparse_atom_ids(mgr, a, b, tmp_path):
+    abstr = Abstractor({7: a, 1000: b})
+    formula = mgr.And(a, mgr.Not(b))
+    target = SddCompiler().compile(formula, abstr)
+    path = tmp_path / "target"
+
+    target.save(path)
+    loaded = SddCompiledTarget.load(path)
+
+    equivalent(mgr, loaded.to_pysmt(abstr, mgr), formula)
