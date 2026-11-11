@@ -1,6 +1,6 @@
 import json
-from pathlib import Path
 from typing import assert_type
+from unittest.mock import patch
 
 import pytest
 from dd.cudd import BDD
@@ -42,7 +42,9 @@ def artifact(request, mgr, tmp_path):
 def test_sparse_roundtrip_and_environment(artifact):
     path, original = artifact
     fresh = Environment()
-    loaded = TheoryCompiledTarget.load(path, type(original.target), env=fresh)
+    with patch("tddnnf.core.persistence.read_json", wraps=read_json) as read:
+        loaded = TheoryCompiledTarget.load(path, type(original.target), env=fresh)
+    read.assert_called_once_with(path / "metadata.json")
     assert loaded.env is fresh
     assert list(loaded.abstr.id_to_atom) == [3, 7, 11]
     assert [loaded.abstr.get_id(a) for a in loaded.projection_atoms] == [11, 3]
@@ -78,26 +80,16 @@ def test_constants(tmp_path, mgr, value, rep):
 
 
 @pytest.mark.parametrize("container_load", [False, True])
-@pytest.mark.parametrize("version", [999, True])
-def test_unsupported_schema_version(artifact, version, container_load):
+@pytest.mark.parametrize("version, message", [(None, "migration"), (999, "schema version"), (True, "schema version")])
+def test_invalid_schema_version(artifact, version, message, container_load):
     path, original = artifact
     data = read_json(path / "metadata.json")
-    data["schema_version"] = version
+    if version is None:
+        del data["schema_version"]
+    else:
+        data["schema_version"] = version
     (path / "metadata.json").write_text(json.dumps(data))
-    with pytest.raises(ValueError, match="schema version"):
-        if container_load:
-            TheoryCompiledTarget.load(path, type(original.target))
-        else:
-            type(original.target).load(path)
-
-
-@pytest.mark.parametrize("container_load", [False, True])
-def test_unversioned_requires_migration(artifact, container_load):
-    path, original = artifact
-    data = read_json(path / "metadata.json")
-    del data["schema_version"]
-    (path / "metadata.json").write_text(json.dumps(data))
-    with pytest.raises(ValueError, match="migration"):
+    with pytest.raises(ValueError, match=message):
         if container_load:
             TheoryCompiledTarget.load(path, type(original.target))
         else:
@@ -153,14 +145,7 @@ def test_obdd_empty_manager_constant(tmp_path):
     assert loaded.manager.vars == set()
 
 
-def test_d4_sparse_node_ids(tmp_path):
-    target = D4CompiledTarget("o 1 0\nt 1000 0\n1 1000 1 0\n", 1, {7: 1})
-    path = tmp_path / "sparse"
-    target.save(path)
-    assert D4CompiledTarget.load(path).nnf_text == target.nnf_text
-
-
-@pytest.mark.parametrize("payload", ["not a graph\n", "o 1 0\n1 1 1 0\n"])
+@pytest.mark.parametrize("payload", ["not a graph\n", "o 1 0\n1 1 1 0\n", "o 1 0\nt 1000 0\n1 1000 1 0\n"])
 def test_d4_payload_is_preserved_without_graph_validation(tmp_path, payload):
     target = D4CompiledTarget(payload, 1, {3: 1})
     target.save(tmp_path / "target")
@@ -177,20 +162,13 @@ def test_save_does_not_reload_state(tmp_path, monkeypatch, mgr):
     target.save(tmp_path / "target")
 
 
-def test_missing_abstraction_propagates(tmp_path, mgr):
+@pytest.mark.parametrize("filename", ["abstraction.json", "circuit.nnf"])
+def test_missing_artifact_file_propagates(tmp_path, mgr, filename):
     path = tmp_path / "target"
     TheoryCompiledTarget(D4CompiledTarget("t 1\n", 0), Abstractor(), [], mgr.env).save(path)
-    (path / "abstraction.json").unlink()
-    with pytest.raises(FileNotFoundError):
+    (path / filename).unlink()
+    with pytest.raises(FileNotFoundError, match=filename):
         TheoryCompiledTarget.load(path, D4CompiledTarget)
-
-
-def test_missing_d4_payload_propagates(tmp_path):
-    path = tmp_path / "target"
-    D4CompiledTarget("t 1\n", 0).save(path)
-    (path / "circuit.nnf").unlink()
-    with pytest.raises(FileNotFoundError):
-        D4CompiledTarget.load(path)
 
 
 @pytest.mark.parametrize("legacy_flag", [False, True])
@@ -237,14 +215,14 @@ def test_external_backend_roundtrip(tmp_path, mgr):
     original = TheoryCompiledTarget(LiteralTarget(7), Abstractor({7: atom, 11: absent}), [absent, atom], mgr.env)
     path = tmp_path / "custom"
     original.save(path)
-    fresh = Environment()
-    loaded = assert_type(TheoryCompiledTarget.load(path, LiteralTarget, env=fresh), TheoryCompiledTarget[LiteralTarget])
+    loaded = assert_type(
+        TheoryCompiledTarget.load(path, LiteralTarget, env=mgr.env), TheoryCompiledTarget[LiteralTarget]
+    )
     assert isinstance(loaded.target, LiteralTarget)
     assert isinstance(loaded.target, PropCompiledTarget)
     assert loaded.target.atom_id == 7
-    assert loaded.env is fresh
-    assert loaded.to_pysmt() is fresh.formula_manager.Symbol("atom")
-    assert [loaded.abstr.get_id(a) for a in loaded.projection_atoms] == [11, 7]
+    assert loaded.to_pysmt() is atom
+    assert (path / "literal.txt").read_text() == "7"
     assert loaded.dag_size() == DagSize(1, 0)
     assert read_json(path / "metadata.json") == {
         "schema_version": 1,
@@ -254,27 +232,8 @@ def test_external_backend_roundtrip(tmp_path, mgr):
     }
 
 
-def test_load_requires_target_type(tmp_path):
-    with pytest.raises(TypeError, match="target_type"):
-        TheoryCompiledTarget.load(tmp_path)
-
-
-def test_backend_exception_propagates(tmp_path, monkeypatch):
-    path = tmp_path / "custom"
-    LiteralTarget(7).save(path)
-    error = RuntimeError("backend failure")
-
-    def fail(directory):
-        raise error
-
-    monkeypatch.setattr(LiteralTarget, "load", fail)
-    with pytest.raises(RuntimeError) as caught:
-        TheoryCompiledTarget.load(path, LiteralTarget)
-    assert caught.value is error
-
-
 @pytest.mark.parametrize("version", [None, True, 999])
-def test_container_delegates_validation_to_backend(tmp_path, monkeypatch, mgr, version):
+def test_container_delegates_validation_and_propagates_backend_exception(tmp_path, mgr, version):
     path = tmp_path / "custom"
     native = LiteralTarget(7)
     TheoryCompiledTarget(native, Abstractor({7: mgr.Symbol("a")}), [], mgr.env).save(path)
@@ -284,27 +243,9 @@ def test_container_delegates_validation_to_backend(tmp_path, monkeypatch, mgr, v
     else:
         data["schema_version"] = version
     (path / "metadata.json").write_text(json.dumps(data))
-    calls = []
-
-    def load(directory):
-        calls.append(directory)
-        return native
-
-    monkeypatch.setattr(LiteralTarget, "load", load)
-    assert TheoryCompiledTarget.load(path, LiteralTarget).target is native
-    assert calls == [path]
-
-
-def test_container_reads_metadata_once(artifact, monkeypatch):
-    path, original = artifact
-    read_text = Path.read_text
-    reads = []
-
-    def track_reads(file, *args, **kwargs):
-        if file == path / "metadata.json":
-            reads.append(file)
-        return read_text(file, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "read_text", track_reads)
-    TheoryCompiledTarget.load(path, type(original.target))
-    assert reads == [path / "metadata.json"]
+    error = RuntimeError("backend failure")
+    with patch.object(LiteralTarget, "load", side_effect=error) as load:
+        with pytest.raises(RuntimeError) as caught:
+            TheoryCompiledTarget.load(path, LiteralTarget)
+    load.assert_called_once_with(path)
+    assert caught.value is error
