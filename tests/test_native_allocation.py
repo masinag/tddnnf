@@ -1,4 +1,7 @@
+import json
+
 import pytest
+from pysdd.sdd import SddManager
 from pysmt.environment import Environment
 
 from tddnnf.builders.reduced import TReducedBuilder
@@ -50,10 +53,6 @@ def test_sparse_allocation_and_roundtrip(mgr, tmp_path, compiler, engine, projec
 
 
 def test_sdd_requires_mapping(tmp_path):
-    import json
-
-    from pysdd.sdd import SddManager
-
     manager = SddManager(var_count=1)
     path = tmp_path / "target"
     SddCompiledTarget(manager.true(), manager, {}).save(path)
