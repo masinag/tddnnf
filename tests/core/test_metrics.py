@@ -1,3 +1,5 @@
+"""Exact DAG vertex and edge counts for each native representation."""
+
 from __future__ import annotations
 
 from pysmt.fnode import FNode

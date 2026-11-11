@@ -1,3 +1,5 @@
+"""Container and native artifact metadata, environment restoration, safe writes, and load failures."""
+
 import json
 from typing import assert_type
 from unittest.mock import patch

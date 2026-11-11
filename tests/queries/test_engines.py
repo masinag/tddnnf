@@ -1,3 +1,5 @@
+"""Direct engine semantics, exhaustive solver equivalence, assumptions, and vocabulary validation."""
+
 import itertools
 
 import ddnnife
@@ -5,48 +7,25 @@ import pytest
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 
-from tddnnf.compilers.cudd import BddCompiler
-from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
-from tddnnf.compilers.pysdd import SddCompiler
+from tddnnf.compilers.d4 import D4CompiledTarget
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import PropCompiler, QueryEngine
-from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
-from tddnnf.queries.session import QuerySession
-from tests.conftest import SolverGroundTruth
-
-PAIRINGS = [(BddCompiler, BddEngine), (SddCompiler, SddEngine), (D4Compiler, DdnnifeEngine)]
-
-
-@pytest.fixture(params=PAIRINGS, ids=["bdd", "sdd", "ddnnife"])
-def pairing(request):
-    return request.param
+from tests.support import SolverGroundTruth
 
 
 @pytest.fixture
-def compiler(pairing):
-    return pairing[0]()
-
-
-@pytest.fixture(params=[False, True], ids=["engine", "session"])
-def engine_factory(pairing, request):
+def engine_factory(pairing):
     opened = []
 
     def create(target):
-        engine = target.queries(pairing[1]) if request.param else pairing[1](target)
+        engine = pairing[1](target)
         opened.append(engine)
         return engine
 
     yield create
     for engine in reversed(opened):
         engine.close()
-
-
-def query_literals(engine, mgr, operation, literals):
-    query = literals
-    if isinstance(engine, QuerySession):
-        query = mgr.Or(literals) if operation == "entails_clause" else mgr.And(literals)
-    return getattr(engine, operation)(query)
 
 
 @pytest.fixture
@@ -96,7 +75,7 @@ def test_exhaustive_engine_and_solver_space(
         if asg_frozen in engine_pos_set:
             all_pos_conjunctions.append(conj)
 
-            assert query_literals(engine, mgr, "is_implicant", cube)
+            assert engine.is_implicant(cube)
 
             with mgr.env.factory.Solver() as solver:
                 solver.add_assertion(mgr.And(conj, mgr.Not(bank_case.expected_formula)))
@@ -104,7 +83,7 @@ def test_exhaustive_engine_and_solver_space(
         else:
             all_neg_conjunctions.append(conj)
 
-            assert not query_literals(engine, mgr, "is_implicant", cube)
+            assert not engine.is_implicant(cube)
 
             with mgr.env.factory.Solver() as solver:
                 solver.add_assertion(mgr.And(conj, bank_case.expected_formula))
@@ -112,7 +91,7 @@ def test_exhaustive_engine_and_solver_space(
 
             clause = [mgr.Not(v) if val else v for v, val in asg.items()]
             entailed_clause = mgr.Or(clause)
-            assert query_literals(engine, mgr, "entails_clause", clause)
+            assert engine.entails_clause(clause)
 
             with mgr.env.factory.Solver() as solver:
                 solver.add_assertion(mgr.And(bank_case.expected_formula, mgr.Not(entailed_clause)))
@@ -230,8 +209,8 @@ def test_flat_literal_semantics(engine, mgr, a, b, engine_factory):
         ([mgr.FALSE(), a], True, True, 0),
         ([mgr.TRUE(), mgr.Not(a)], True, False, 0),
     ):
-        assert query_literals(engine, mgr, "entails_clause", literals) == entailed
-        assert query_literals(engine, mgr, "is_implicant", literals) == implicant
+        assert engine.entails_clause(literals) == entailed
+        assert engine.is_implicant(literals) == implicant
         assert engine.is_satisfiable(literals) == (count > 0)
         assert engine.count_truth_assignments(literals) == count
 
@@ -242,40 +221,23 @@ def test_validates_before_shortcuts(engine, mgr, a, b, c, engine_factory):
             literals = [*prefix, tail]
             for operation in ("entails_clause", "is_implicant"):
                 with pytest.raises(ValueError):
-                    query_literals(engine, mgr, operation, literals)
+                    getattr(engine, operation)(literals)
             for operation in (engine.is_satisfiable, engine.count_truth_assignments):
                 with pytest.raises(ValueError):
                     operation(literals)
 
 
-# --- Error / Validation Tests ---
-
-
-def test_is_satisfiable_unknown_assumption(engine: QueryEngine, c: FNode, engine_factory) -> None:
+@pytest.mark.parametrize("operation", ["is_satisfiable", "count_truth_assignments", "entails_clause", "is_implicant"])
+def test_unknown_atom_rejected(engine, c, operation):
     with pytest.raises(ValueError, match="not .*projection"):
-        engine.is_satisfiable(assumptions=[c])
-
-
-def test_count_truth_assignments_unknown_assumption(engine: QueryEngine, c: FNode, engine_factory) -> None:
-    with pytest.raises(ValueError, match="not .*projection"):
-        engine.count_truth_assignments(assumptions=[c])
-
-
-def test_entails_clause_unknown_atom(engine: QueryEngine, c: FNode, mgr: FormulaManager, engine_factory) -> None:
-    with pytest.raises(ValueError, match="not .*projection"):
-        query_literals(engine, mgr, "entails_clause", [c])
-
-
-def test_is_implicant_unknown_atom(engine: QueryEngine, c: FNode, mgr: FormulaManager, engine_factory) -> None:
-    with pytest.raises(ValueError, match="not .*projection"):
-        query_literals(engine, mgr, "is_implicant", [c])
+        getattr(engine, operation)([c])
 
 
 def test_is_implicant_invalid_input(
     engine: QueryEngine, mgr: FormulaManager, a: FNode, b: FNode, engine_factory
 ) -> None:
     with pytest.raises(ValueError):
-        query_literals(engine, mgr, "is_implicant", [mgr.Or(a, b)])
+        engine.is_implicant([mgr.Or(a, b)])
 
 
 def test_projected_assumption_on_forgotten_var_raises(

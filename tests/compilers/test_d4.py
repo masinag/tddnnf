@@ -1,5 +1,11 @@
+"""d4 projection cleanup, remapping, subprocess diagnostics, and temporary-file cleanup."""
+
+import subprocess
+from pathlib import Path
+
 import pytest
 
+from tddnnf import TheoryCompilation
 from tddnnf.compilers.d4 import D4_BIN, D4CompiledTarget, D4Compiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
@@ -52,3 +58,21 @@ def test_projection_cleanup(mgr, a, b, c, monkeypatch, tmp_path, injected):
             assert {tuple(m.values()) for m in models} == {(False, False, True), (False, True, True)}
             assert queries.count_truth_assignments([b]) == queries.count_truth_assignments([mgr.Not(b)]) == 1
             assert queries.count_truth_assignments([mgr.Not(a)]) == 0
+
+
+def test_d4_failure_diagnostics_and_cleanup(mgr, monkeypatch):
+    import tddnnf.compilers.d4 as d4
+
+    observed = []
+
+    def fail(cmd, **kwargs):
+        circuit = Path(cmd[cmd.index("-i") + 1])
+        assert circuit.exists()
+        observed.append(circuit.parent)
+        return subprocess.CompletedProcess(cmd, 23, b"stdout", b"native diagnostic")
+
+    monkeypatch.setattr(d4.subprocess, "run", fail)
+    with TheoryCompilation(mgr.Symbol("a"), env=mgr.env) as compilation:
+        with pytest.raises(RuntimeError, match=r"exit 23.*\n.*native diagnostic"):
+            compilation.compile_treduced(D4Compiler(), [])
+    assert observed and all(not path.exists() for path in observed)

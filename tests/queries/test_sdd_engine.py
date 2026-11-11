@@ -1,3 +1,5 @@
+"""SDD counting uses native dimensions with sparse IDs, constants, and empty projections."""
+
 import pytest
 
 from tddnnf import TheoryCompilation

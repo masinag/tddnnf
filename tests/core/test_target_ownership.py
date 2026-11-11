@@ -1,4 +1,4 @@
-"""Targets retain read-only context bindings after compilation ends."""
+"""Targets retain read-only bindings, native roots, and semantics after owner changes."""
 
 import gc
 
@@ -14,7 +14,7 @@ from tddnnf.core.abstraction import Abstractor
 from tddnnf.queries.bdd_engine import BddEngine
 from tddnnf.queries.ddnnife_engine import DdnnifeEngine
 from tddnnf.queries.sdd_engine import SddEngine
-from tests.test_compilation_pipeline import equivalent
+from tests.support import equivalent
 
 
 @pytest.mark.parametrize("backend", [BddCompiler, SddCompiler, D4Compiler])

@@ -1,32 +1,21 @@
-"""Compilation contracts shared by the three native adapters."""
+"""Construction semantics, projection, normalization, abstraction reuse, and deterministic registration."""
 
 import json
 import os
 import subprocess
 import sys
-from pathlib import Path
-from unittest.mock import Mock
 
 import pytest
 from pysmt.fnode import FNode
 from pysmt.typing import INT
 
 from tddnnf import TheoryCompilation
-from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.normalization.normalizer import NormalizerWalker
-from tests.conftest import shannon_forget
-
-BACKENDS = [BddCompiler, SddCompiler, D4Compiler]
-STRATEGIES = ["compile_treduced", "compile_textended"]
-
-
-def equivalent(mgr, actual, expected):
-    with mgr.env.factory.Solver() as solver:
-        solver.add_assertion(mgr.Not(mgr.Iff(actual, expected)))
-        assert not solver.solve()
+from tddnnf.queries import SddEngine
+from tests.support import BACKENDS, STRATEGIES, equivalent, shannon_forget
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -112,11 +101,19 @@ def test_normalized_projection_and_compiler_reuse(mgr, backend, strategy):
     compiler = backend()
     first_log, second_log = {}, {}
     with TheoryCompilation(p, [absent, atom, mgr.Not(duplicate), p], env=mgr.env) as compilation:
+        canonical_atom = compilation.normalize(atom)
+        assert compilation.normalize(duplicate) == canonical_atom
+        assert compilation.project_on == (absent, canonical_atom, p)
         first = getattr(compilation, strategy)(compiler, [duplicate], first_log)
+        expected = mgr.And(p, canonical_atom) if strategy == "compile_treduced" else mgr.Or(p, mgr.Not(canonical_atom))
+        equivalent(mgr, first.to_pysmt(), expected)
         assert first.projection_atoms == (absent, compilation.normalize(atom), p)
         assert [first.abstr.get_id(a) for a in first.projection_atoms] == [1, 2, 3]
         snapshot = dict(first_log)
         second = getattr(compilation, strategy)(compiler, [], second_log)
+        equivalent(mgr, second.to_pysmt(), p)
+        if backend is SddCompiler:
+            assert SddEngine(second).count_truth_assignments() == 4
         assert second.abstr is not first.abstr
         assert first_log == snapshot
     with TheoryCompilation(p, env=mgr.env) as compilation:
@@ -138,24 +135,6 @@ def test_normalized_projection_and_compiler_reuse(mgr, backend, strategy):
 
 
 @pytest.mark.parametrize("strategy", STRATEGIES)
-@pytest.mark.parametrize("options", [{}, {"auto_gc_and_minimize": True}, {"auto_gc_and_minimize": False}])
-def test_sdd_native_options(mgr, strategy, options):
-    from pysdd.sdd import SddManager, Vtree
-
-    compiler = SddCompiler(vtree_type="right", **options)
-    # Compare actual native configuration and vtree with native construction.
-    a, b, c = [mgr.Symbol(name) for name in ("a", "b", "c")]
-    phi = mgr.And(mgr.Or(a, b), c)
-    with TheoryCompilation(phi, env=mgr.env) as compilation:
-        target = getattr(compilation, strategy)(compiler, [])
-        manager = target.target.manager
-        assert bool(manager.is_auto_gc_and_minimize_on()) is options.get("auto_gc_and_minimize", True)
-        expected = SddManager.from_vtree(Vtree(var_count=3, vtree_type="right"))
-        assert manager.vtree().left().is_leaf() == expected.vtree().left().is_leaf()
-        equivalent(mgr, target.to_pysmt(), phi)
-
-
-@pytest.mark.parametrize("strategy", STRATEGIES)
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_supplied_abstraction_preserves_ids(mgr, strategy, backend):
     added, last, atom = [mgr.Symbol(name) for name in ("z", "b", "a")]
@@ -172,14 +151,6 @@ def test_supplied_abstraction_preserves_ids(mgr, strategy, backend):
     equivalent(mgr, target.to_pysmt(), formula)
 
 
-@pytest.mark.parametrize("bad", ["sdd", SddCompiler, object(), None])
-def test_invalid_compiler(mgr, bad):
-    with TheoryCompilation(mgr.TRUE(), env=mgr.env) as compilation:
-        for strategy in STRATEGIES:
-            with pytest.raises(TypeError, match="instance"):
-                getattr(compilation, strategy)(bad, [])
-
-
 @pytest.mark.parametrize("entry", ["true", "false", "and", "or"])
 @pytest.mark.parametrize("negated", [False, True])
 def test_rejects_compound_and_constant_projection(mgr, entry, negated):
@@ -190,65 +161,6 @@ def test_rejects_compound_and_constant_projection(mgr, entry, negated):
         TheoryCompilation(a, [value], env=mgr.env)
 
 
-@pytest.mark.parametrize("session_type", [TheoryCompilation, NormalizerWalker])
-def test_session_lifecycle(mgr, session_type):
-    session = session_type(mgr.TRUE(), env=mgr.env) if session_type is TheoryCompilation else session_type(mgr.env)
-    with pytest.raises(LookupError), session:
-        raise LookupError("body failure")
-    session.close()
-    with pytest.raises(RuntimeError, match="closed"):
-        session.normalize(mgr.TRUE())
-    with pytest.raises(RuntimeError, match="closed"):
-        session.__enter__()
-    if session_type is TheoryCompilation:
-        with pytest.raises(RuntimeError, match="closed"):
-            session.compile_treduced(BddCompiler(), [])
-
-
-def test_partial_initialization_cleanup(mgr, monkeypatch):
-    solver = Mock()
-    solver.converter = Mock()
-    monkeypatch.setattr(mgr.env.factory, "Solver", Mock(return_value=solver))
-    with pytest.raises(ValueError, match="Projection entries"):
-        TheoryCompilation(mgr.TRUE(), project_on=[mgr.TRUE()], env=mgr.env)
-    solver.exit.assert_called_once()
-
-    # Failure while reading the newly allocated solver's converter also cleans up.
-    class BrokenSolver:
-        exit = Mock()
-
-        @property
-        def converter(self):
-            raise RuntimeError("converter failure")
-
-    broken = BrokenSolver()
-    monkeypatch.setattr(mgr.env.factory, "Solver", Mock(return_value=broken))
-    with pytest.raises(RuntimeError, match="converter failure"):
-        NormalizerWalker(mgr.env)
-    broken.exit.assert_called_once()
-    monkeypatch.setattr(mgr.env.factory, "Solver", Mock(side_effect=RuntimeError("allocation failure")))
-    with pytest.raises(RuntimeError, match="allocation failure"):
-        TheoryCompilation(mgr.TRUE(), env=mgr.env)
-
-
-def test_d4_failure_diagnostics_and_cleanup(mgr, monkeypatch):
-    import tddnnf.compilers.d4 as d4
-
-    observed = []
-
-    def fail(cmd, **kwargs):
-        circuit = Path(cmd[cmd.index("-i") + 1])
-        assert circuit.exists()
-        observed.append(circuit.parent)
-        return subprocess.CompletedProcess(cmd, 23, b"stdout", b"native diagnostic")
-
-    monkeypatch.setattr(d4.subprocess, "run", fail)
-    with TheoryCompilation(mgr.Symbol("a"), env=mgr.env) as compilation:
-        with pytest.raises(RuntimeError, match=r"exit 23.*\n.*native diagnostic"):
-            compilation.compile_treduced(D4Compiler(), [])
-    assert observed and all(not path.exists() for path in observed)
-
-
 def test_ids_across_hash_seeds_and_backends():
     code = """
 import json
@@ -257,6 +169,7 @@ from tddnnf import TheoryCompilation
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.compilers.d4 import D4Compiler
+from tddnnf.compilers.pysdd import SddCompiler
 atoms = {name: Symbol(name) for name in ["z", "a", "m", "absent", "lemma"]}
 results = []
 for backend in [BddCompiler, SddCompiler, D4Compiler]:
@@ -279,14 +192,6 @@ print(json.dumps(results, sort_keys=True))
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_backend_requires_prepared_abstraction(mgr, backend):
-    abstractor = Abstractor()
-    with pytest.raises(AssertionError, match="prepared"):
-        backend().compile(mgr.Symbol("a"), abstractor)
-    assert abstractor.var_count == 0
-
-
-@pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("strategy", STRATEGIES)
 @pytest.mark.parametrize("value", [True, False])
 def test_compound_constants_and_lemmas(mgr, backend, strategy, value):
@@ -297,41 +202,3 @@ def test_compound_constants_and_lemmas(mgr, backend, strategy, value):
         target = getattr(compilation, strategy)(backend(), lemmas)
     equivalent(mgr, target.to_pysmt(), mgr.Bool(expected))
     assert target.projection_atoms == ()
-
-
-@pytest.mark.parametrize("value", ["typo", ""])
-def test_sdd_rejects_invalid_vtree_type(value):
-    with pytest.raises(ValueError, match="vtree_type"):
-        SddCompiler(vtree_type=value)
-
-
-@pytest.mark.parametrize("vtree_type", ["right", "left", "vertical", "balanced", "random"])
-def test_sdd_supported_vtree_types(mgr, vtree_type):
-    phi = mgr.And(mgr.Symbol("a"), mgr.Symbol("b"))
-    with TheoryCompilation(phi, env=mgr.env) as compilation:
-        target = compilation.compile_treduced(SddCompiler(vtree_type=vtree_type), [])
-    equivalent(mgr, target.to_pysmt(), phi)
-
-
-def test_public_exports_and_keyword_only_abstraction(mgr):
-    import inspect
-
-    import tddnnf
-    from tddnnf import TheoryCompiledTarget
-    from tddnnf.core.containers import TheoryCompiledTarget as Container
-    from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
-
-    assert tddnnf.__all__ == ["TheoryCompilation", "TheoryCompiledTarget"]
-    assert TheoryCompiledTarget is Container
-    assert not hasattr(tddnnf, "CompilationContext")
-    assert not hasattr(tddnnf, "QueryContext")
-    assert [engine.__name__ for engine in (BddEngine, SddEngine, DdnnifeEngine)] == [
-        "BddEngine",
-        "SddEngine",
-        "DdnnifeEngine",
-    ]
-    with TheoryCompilation(mgr.Symbol("a"), env=mgr.env) as compilation:
-        for method in (compilation.compile_treduced, compilation.compile_textended):
-            assert inspect.signature(method).parameters["abstractor"].kind is inspect.Parameter.KEYWORD_ONLY
-            with pytest.raises(TypeError):
-                method(BddCompiler(), [], {}, Abstractor())

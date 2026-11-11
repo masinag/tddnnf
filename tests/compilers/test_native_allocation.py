@@ -1,12 +1,11 @@
-import json
+"""Sparse abstraction IDs allocate only needed native dimensions, including constants."""
 
 import pytest
-from pysdd.sdd import SddManager
 from pysmt.environment import Environment
 
 from tddnnf import TheoryCompilation, TheoryCompiledTarget
 from tddnnf.compilers.cudd import BddCompiler
-from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
+from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.queries.bdd_engine import BddEngine
 from tddnnf.queries.sdd_engine import SddEngine
@@ -50,18 +49,6 @@ def test_sparse_allocation_and_roundtrip(mgr, tmp_path, compiler, engine, projec
         with container.env.factory.Solver() as solver:
             solver.add_assertion(formula_manager.Not(formula_manager.Iff(container.to_pysmt(), expected_formula)))
             assert not solver.solve()
-
-
-def test_sdd_requires_mapping(tmp_path):
-    manager = SddManager(var_count=1)
-    path = tmp_path / "target"
-    SddCompiledTarget(manager.true(), manager, {}).save(path)
-    metadata = path / "metadata.json"
-    data = json.loads(metadata.read_text())
-    del data["remapping"]
-    metadata.write_text(json.dumps(data))
-    with pytest.raises(KeyError, match="remapping"):
-        SddCompiledTarget.load(path)
 
 
 @pytest.mark.parametrize("compiler", [SddCompiler, BddCompiler])

@@ -1,3 +1,5 @@
+"""Boolean formula families and projection strategies for exhaustive solver comparisons."""
+
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 
