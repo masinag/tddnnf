@@ -292,8 +292,8 @@ refuse existing destinations, and clean up failed writes before publication.
 checks the schema version, and reconstructs the abstraction and ordered projection
 directly in the supplied PySMT environment. Metadata and payloads are trusted
 package-owned state; codec and file declarations are descriptive conventions.
-Vtrees and OBDD order are restored before native import; CUDD's importer can change order, so the
-recorded order is also reapplied after import. Each backend owns save/load:
+Vtrees are restored and the saved OBDD variable order is declared before native
+import, with CUDD automatic reordering disabled. Each backend owns save/load:
 CUDD dumps/loads DDDMP, PySDD saves/reads SDD and vtree files, and d4 writes/reads
 NNF text directly. Saves do not reconstruct abstractions or reload native payloads.
 

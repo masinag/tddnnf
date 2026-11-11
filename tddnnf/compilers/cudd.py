@@ -88,7 +88,6 @@ class BddCompiledTarget(PropCompiledTarget):
         manager.configure(reordering=False)
         manager.declare(*order)
         (root,) = manager.load(str(directory / "circuit.dddmp"))
-        manager.reorder({name: level for level, name in enumerate(order)})
         return cls(root, manager)
 
 
