@@ -6,14 +6,11 @@ import ddnnife
 import pytest
 from pysmt.environment import Environment
 
-from tddnnf import TheoryCompilation
-from tddnnf.builders.extended import TExtendedBuilder
-from tddnnf.builders.reduced import TReducedBuilder
+from tddnnf import TheoryCompilation, TheoryCompiledTarget
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries.bdd_engine import BddEngine
 from tddnnf.queries.ddnnife_engine import DdnnifeEngine
 from tddnnf.queries.sdd_engine import SddEngine
@@ -94,13 +91,12 @@ def test_native_reorganization_preserves_retained_root(mgr, backend):
 
 
 @pytest.mark.parametrize("backend", [BddCompiler, SddCompiler, D4Compiler])
-@pytest.mark.parametrize("builder_name", ["reduced", "extended"])
-def test_shared_abstraction_growth_preserves_earlier_target(mgr, backend, builder_name):
+@pytest.mark.parametrize("strategy", ["compile_treduced", "compile_textended"])
+def test_shared_abstraction_growth_preserves_earlier_target(mgr, backend, strategy):
     a, b, c, d = [mgr.Symbol(name) for name in ("a", "b", "c", "d")]
     abstr = Abstractor()
-    builder_cls = TReducedBuilder if builder_name == "reduced" else TExtendedBuilder
-    builder = builder_cls(backend(), env=mgr.env)
-    first = builder.build(mgr.Or(a, b), [], abstr, [a, b])
+    with TheoryCompilation(mgr.Or(a, b), [a, b], env=mgr.env) as compilation:
+        first = getattr(compilation, strategy)(backend(), [], abstractor=abstr)
     engine_cls = {BddCompiler: BddEngine, SddCompiler: SddEngine, D4Compiler: DdnnifeEngine}[backend]
     engine = engine_cls(first)
 
@@ -124,7 +120,8 @@ def test_shared_abstraction_growth_preserves_earlier_target(mgr, backend, builde
         equivalent(mgr, first.to_pysmt(), mgr.Or(a, b))
 
     check_first(engine)
-    second = builder.build(mgr.And(c, d), [], abstr, [d, c])
+    with TheoryCompilation(mgr.And(c, d), [d, c], env=mgr.env) as compilation:
+        second = getattr(compilation, strategy)(backend(), [], abstractor=abstr)
     assert first.abstr is second.abstr is abstr
     assert dict(abstr.id_to_atom) == {1: a, 2: b, 3: d, 4: c}
     assert first.projection_atoms == (a, b)

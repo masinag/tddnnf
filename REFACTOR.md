@@ -314,7 +314,7 @@ Leave the PR open for renewed approval. Do not merge or start the next step.
 
 Record evidence here as steps are implemented; consult GitHub for approvals and
 merges. Steps 0–5 have merged into `refactor/lean-core` and record their checks
-below. Step 6 (public migration) has not started; explicit d-DNNF conversion is
+below. Step 6 (public migration) is recorded below; explicit d-DNNF conversion is
 deferred in [TODO.md](TODO.md#explicit-d-dnnf-conversion). Historical evidence
 below retains the step numbers and contracts used at the time.
 
@@ -1161,3 +1161,45 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   variable order, circuit size, and total compilation time may change; ordering
   is not canonical across different node creation histories. Existing saved
   artifacts retain their recorded abstraction IDs.
+
+
+### Step 6 — public migration (2026-11-11)
+
+- Isolated branches `refactor/06-public-migration` start at library `0314647`
+  and testbench `e431af3` in `/tmp/tddnnf-06-public-migration` and
+  `/tmp/tddnnf-testbench-06-public-migration`. GitHub confirms prerequisite
+  PRs #15/#17 merged at 13:58:45/14:00:33 UTC. Original checkouts, including
+  the testbench’s unrelated pending files, are untouched.
+- Public exports are `TheoryCompilation` and `TheoryCompiledTarget`. Both
+  compilation methods forward keyword-only `abstractor=None` to the existing
+  pipeline, preserving positional logger arguments, IDs, projection order,
+  and append-only reuse. Removed builders and the `CompilationContext` alias
+  after migrating callers. Compiler modules, backend targets, `.target`, and
+  engine-class query sessions remain public. No module rename or reasoner layer.
+- Compiler/engine/session matrices now use functions and parameterized fixtures;
+  their solver comparisons and native regressions remain. The common engine
+  fixture closes all successfully opened engines/sessions after each test.
+  Documentation describes replacements and supplied-abstraction reuse.
+- Paired source selection for all suites and the benchmark is explicit:
+  `PYTHONPATH=/tmp/tddnnf-06-public-migration:/tmp/tddnnf-testbench-06-public-migration/scripts`.
+  Existing environments are reused without sync or dependency changes. Library
+  interpreter: `/home/gabriele/Documents/theorykc/tddnnf/.venv/bin/python`;
+  companion interpreter: `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python`.
+  The existing ignored d4 binary was copied into the library worktree.
+- Commands: library `python -m pytest -q --disable-warnings`: **954 passed**,
+  1187 warnings, 29.96 s. Companion `python -m pytest -q --disable-warnings
+  tests baseline/test_recorder.py baseline/test_summary.py`: **195 passed**,
+  5 warnings, 4.43 s. Focused pipeline: **166 passed**. All three
+  `python examples/{abstr,tred,text}.py` invocations exit successfully.
+  Raw logs are `/tmp/step06-{library,testbench,focused,recorder,example-*}.log`.
+- Recorder resource files now live in a sibling `compile/` directory so the
+  target destination stays absent until save. Its regression invokes the real
+  recorder entry point and compiler on an absent destination. Both recorder
+  and summarizer accept `--results-dir` and `--evidence-dir`; summary tests
+  cover defaults and custom paths without creating baseline output.
+- Fixed campaign command (from companion worktree, with paired `PYTHONPATH`
+  and `PYTHONHASHSEED=0`): `python baseline/run.py --results-dir results_step06
+  --evidence-dir validation/step06`. Six frozen cases, three backends, two
+  constructions, two projections, one warm-up and three measured runs remain;
+  per-task deadline 60 s, 8 GiB address-space limit. Results/comparison and
+  independent review are pending; do not interpret this entry as completion.

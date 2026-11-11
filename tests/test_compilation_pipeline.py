@@ -11,9 +11,7 @@ import pytest
 from pysmt.fnode import FNode
 from pysmt.typing import INT
 
-from tddnnf import CompilationContext, TheoryCompilation
-from tddnnf.builders.extended import TExtendedBuilder
-from tddnnf.builders.reduced import TReducedBuilder
+from tddnnf import TheoryCompilation
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
@@ -157,13 +155,14 @@ def test_sdd_native_options(mgr, strategy, options):
         equivalent(mgr, target.to_pysmt(), phi)
 
 
-@pytest.mark.parametrize("builder", [TReducedBuilder, TExtendedBuilder])
+@pytest.mark.parametrize("strategy", STRATEGIES)
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_builder_preserves_abstraction(mgr, builder, backend):
+def test_supplied_abstraction_preserves_ids(mgr, strategy, backend):
     added, last, atom = [mgr.Symbol(name) for name in ("z", "b", "a")]
     abstractor = Abstractor({2: atom})
     formula = mgr.And(atom, last, added)
-    target = builder(backend(), env=mgr.env).build(formula, [], abstractor)
+    with TheoryCompilation(formula, env=mgr.env) as compilation:
+        target = getattr(compilation, strategy)(backend(), [], abstractor=abstractor)
     assert target.abstr is abstractor
     assert dict(abstractor.id_to_atom) == {2: atom, 3: added, 4: last}
     assert target.abstr.get_id(atom) == 2
@@ -193,7 +192,6 @@ def test_rejects_compound_and_constant_projection(mgr, entry, negated):
 
 @pytest.mark.parametrize("session_type", [TheoryCompilation, NormalizerWalker])
 def test_session_lifecycle(mgr, session_type):
-    assert CompilationContext is TheoryCompilation
     session = session_type(mgr.TRUE(), env=mgr.env) if session_type is TheoryCompilation else session_type(mgr.env)
     with pytest.raises(LookupError), session:
         raise LookupError("body failure")
@@ -313,3 +311,27 @@ def test_sdd_supported_vtree_types(mgr, vtree_type):
     with TheoryCompilation(phi, env=mgr.env) as compilation:
         target = compilation.compile_treduced(SddCompiler(vtree_type=vtree_type), [])
     equivalent(mgr, target.to_pysmt(), phi)
+
+
+def test_public_exports_and_keyword_only_abstraction(mgr):
+    import inspect
+
+    import tddnnf
+    from tddnnf import TheoryCompiledTarget
+    from tddnnf.core.containers import TheoryCompiledTarget as Container
+    from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
+
+    assert tddnnf.__all__ == ["TheoryCompilation", "TheoryCompiledTarget"]
+    assert TheoryCompiledTarget is Container
+    assert not hasattr(tddnnf, "CompilationContext")
+    assert not hasattr(tddnnf, "QueryContext")
+    assert [engine.__name__ for engine in (BddEngine, SddEngine, DdnnifeEngine)] == [
+        "BddEngine",
+        "SddEngine",
+        "DdnnifeEngine",
+    ]
+    with TheoryCompilation(mgr.Symbol("a"), env=mgr.env) as compilation:
+        for method in (compilation.compile_treduced, compilation.compile_textended):
+            assert inspect.signature(method).parameters["abstractor"].kind is inspect.Parameter.KEYWORD_ONLY
+            with pytest.raises(TypeError):
+                method(BddCompiler(), [], {}, Abstractor())

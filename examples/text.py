@@ -25,7 +25,7 @@ phi = Or(xgt0, xpygt5)
 cube = And(xgt5, ygt5)
 atoms = list(phi.get_atoms() | cube.get_atoms())
 
-# ---- COMPILATION CONTEXT ----
+# ---- COMPILATION SESSION ----
 
 with TheoryCompilation(phi, project_on=atoms) as compilation:
     # ---- LEMMA ENUMERATION ----

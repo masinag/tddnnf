@@ -4,11 +4,10 @@ import pytest
 from pysdd.sdd import SddManager
 from pysmt.environment import Environment
 
-from tddnnf.builders.reduced import TReducedBuilder
+from tddnnf import TheoryCompilation, TheoryCompiledTarget
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries.bdd_engine import BddEngine
 from tddnnf.queries.sdd_engine import SddEngine
 
@@ -19,7 +18,8 @@ def test_sparse_allocation_and_roundtrip(mgr, tmp_path, compiler, engine, projec
     a, b, absent = [mgr.Symbol(name) for name in ("a", "b", "absent")]
     abstr = Abstractor({7: a, 1000: b, 2000: absent})
     project = {"a": [a], "absent": [absent, a], "empty": []}[projection]
-    target = TReducedBuilder(compiler(), env=mgr.env).build(mgr.And(a, b), [], abstr, project)
+    with TheoryCompilation(mgr.And(a, b), project, env=mgr.env) as compilation:
+        target = compilation.compile_treduced(compiler(), [], abstractor=abstr)
     needed = {7, 1000} | ({2000} if projection == "absent" else set())
     if compiler is SddCompiler:
         assert target.target.manager.var_count() == len(needed)

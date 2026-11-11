@@ -26,7 +26,7 @@ clause = Or(xgt5, xpygt5)
 assumptions = [Not(ygt5), Not(xgt0)]
 atoms = [xgt5, xgt0, ygt5, xpygt5]
 
-# ---- COMPILATION CONTEXT ----
+# ---- COMPILATION SESSION ----
 
 with TheoryCompilation(phi, project_on=atoms) as compilation:
     # ---- LEMMA ENUMERATION ----

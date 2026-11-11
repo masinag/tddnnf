@@ -71,18 +71,22 @@ class TheoryCompilation:
         compiler: PropCompiler[T_Target],
         lemmas: Iterable[FNode],
         computation_logger: dict[str, object] | None = None,
+        *,
+        abstractor: Abstractor | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
         """Conjoin theory lemmas enumerated over normalized phi."""
-        return self._compile(compiler, lemmas, False, computation_logger)
+        return self._compile(compiler, lemmas, False, computation_logger, abstractor)
 
     def compile_textended(
         self,
         compiler: PropCompiler[T_Target],
         lemmas: Iterable[FNode],
         computation_logger: dict[str, object] | None = None,
+        *,
+        abstractor: Abstractor | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
         """Disjoin negated theory lemmas enumerated over Not(phi)."""
-        return self._compile(compiler, lemmas, True, computation_logger)
+        return self._compile(compiler, lemmas, True, computation_logger, abstractor)
 
     def _compile(
         self,
@@ -127,6 +131,3 @@ class TheoryCompilation:
         if not is_atom(positive):
             raise ValueError("Projection entries must normalize to Boolean symbols or theory atoms")
         return positive
-
-
-CompilationContext = TheoryCompilation

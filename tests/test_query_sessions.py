@@ -8,15 +8,13 @@ from pysmt.environment import Environment, pop_env, push_env
 from pysmt.typing import BOOL, INT
 
 import tddnnf.queries.ddnnife_engine as ddnnife_module
-from tddnnf import TheoryCompilation
+from tddnnf import TheoryCompilation, TheoryCompiledTarget
 from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
 from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
 from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
 from tddnnf.queries.session import QuerySession
-from tests._base_engine_test import BaseTestEngine
 
 PAIRINGS = [(BddCompiler, BddEngine), (SddCompiler, SddEngine), (D4Compiler, DdnnifeEngine)]
 
@@ -24,21 +22,6 @@ PAIRINGS = [(BddCompiler, BddEngine), (SddCompiler, SddEngine), (D4Compiler, Ddn
 def open_queries(target):
     engine_type = {BddCompiledTarget: BddEngine, SddCompiledTarget: SddEngine, D4CompiledTarget: DdnnifeEngine}
     return target.queries(engine_type[type(target.target)])
-
-
-class TestCuddSessions(BaseTestEngine):
-    compiler_cls = BddCompiler
-    engine_cls = staticmethod(open_queries)
-
-
-class TestSddSessions(BaseTestEngine):
-    compiler_cls = SddCompiler
-    engine_cls = staticmethod(open_queries)
-
-
-class TestDdnnifeSessions(BaseTestEngine):
-    compiler_cls = D4Compiler
-    engine_cls = staticmethod(open_queries)
 
 
 @pytest.fixture(params=PAIRINGS, ids=["cudd", "sdd", "ddnnife"])

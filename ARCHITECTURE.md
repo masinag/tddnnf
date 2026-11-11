@@ -33,8 +33,10 @@ PySMT environment and a `NormalizerWalker`, normalizes the input formula at
 construction time, and builds the projection vocabulary.
 
 ```python
-context = TheoryCompilation(phi, project_on=atoms)
-target = context.compile_treduced(D4Compiler(), lemmas)
+from tddnnf import TheoryCompilation, TheoryCompiledTarget
+
+with TheoryCompilation(phi, project_on=atoms) as compilation:
+    target = compilation.compile_treduced(D4Compiler(), lemmas, abstractor=abstractor)
 ```
 
 When `project_on` is omitted, the projection consists of the atoms in the
@@ -56,8 +58,10 @@ history in the environment and starting abstraction.
 
 Compilers are configured instances. Their `compile` methods receive the PySMT
 formula, prepared abstraction, projection, and logger for each call; native
-translators never allocate IDs. The old builders forward to this pipeline while
-preserving caller-supplied abstractions. `CompilationContext` remains an alias.
+translators never allocate IDs. Both public compilation methods accept keyword-only
+`abstractor=None`; a supplied mapping is reused with append-only registration.
+The old `CompilationContext` alias and builders are removed; use `TheoryCompilation`
+and its `compile_treduced` or `compile_textended` methods.
 Compilation sessions and normalizers support `with` and idempotent `close()`,
 including cleanup on exceptions and initialization failure. Closed sessions
 reject operations. Query sessions provide the same explicit lifecycle.
@@ -159,12 +163,11 @@ bindings’ reference ownership. d4 remapping is copied and exposed read-only.
 
 ## Compilation strategies
 
-Builders combine already-normalized inputs and delegate propositional
-compilation. They do not implement backend-specific translation.
+Both public methods normalize inputs and delegate to the shared pipeline.
 
 ### T-reduced
 
-`TReducedBuilder` compiles
+`compilation.compile_treduced(compiler, lemmas)` compiles
 
 $$
 \varphi \land \bigwedge_{C \in \mathit{Cl}} C.
@@ -175,7 +178,7 @@ assignments satisfying $\varphi$.
 
 ### T-extended
 
-`TExtendedBuilder` compiles
+`compilation.compile_textended(compiler, lemmas)` compiles
 
 $$
 \varphi \lor \bigvee_{C \in \mathit{Cl}} \neg C.
@@ -184,10 +187,8 @@ $$
 Its lemmas $\mathit{Cl}$ rule out theory-consistent propositional assignments
 satisfying $\neg\varphi$.
 
-Each builder records the requested projection list in the returned container.
-When a builder is used directly without `project_on`, it derives the projection
-from every atom in the combined formula and orders those atoms by abstraction
-ID.
+Both methods retain the session’s ordered projection in the returned container.
+Omitted projection uses the normalized input formula’s atoms.
 
 ## Propositional backends
 
@@ -341,7 +342,7 @@ base class:
 `DagSize` is the common immutable result for target size metrics, reporting
 reachable vertices and child-reference edges.
 
-Builders and compilers can receive a shared `dict[str, object]` as
+Compilation methods and compilers can receive a shared `dict[str, object]` as
 `computation_logger`. `StatsCollector` makes logging optional, accumulates
 wall-clock durations, and records counts such as lemmas, atoms, and projection
 variables. d4 additionally reports time spent registering atoms, writing the
@@ -360,9 +361,6 @@ tddnnf/
 │   └── stats_collector.py     # Optional timing and count instrumentation
 ├── normalization/
 │   └── normalizer.py          # MathSAT-backed NormalizerWalker
-├── builders/
-│   ├── reduced.py             # TReducedBuilder
-│   └── extended.py            # TExtendedBuilder
 ├── compilers/
 │   ├── d4.py                  # d4/d-DNNF compiler and target
 │   ├── pysdd.py               # PySDD compiler and target

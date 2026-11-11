@@ -116,8 +116,9 @@ The target retains read-only bindings to its environment, abstraction, and tuple
 vocabulary after compilation closes. Reconstruct with `target.to_pysmt()` and
 inspect DAG metrics with `target.dag_size()`. `Abstractor.get_id()` registers new
 atoms above the current maximum ID and preserves existing IDs. Constructor
-mappings are copied and public mapping views are read-only. Builders reuse a
-supplied abstractor; later registrations preserve earlier targets’ query
+mappings are copied and public mapping views are read-only. Both compilation
+methods accept keyword-only `abstractor=existing`; they reuse the supplied
+abstractor. Later registrations preserve earlier targets’ query
 dimensions. Concurrent mutation is unsupported; saved mappings may include atoms
 registered by later compilations.
 
@@ -184,8 +185,7 @@ native automatic garbage collection and minimization. Pass `False` to disable bo
 callers must respect the annotated argument types.
 
 `TheoryCompilation` supports `with` and idempotent `close()`; normalization and
-compilation fail after closure. `CompilationContext` remains an alias during
-migration. Inputs must be Boolean nodes from the selected PySMT environment,
+compilation fail after closure. Inputs must be Boolean nodes from the selected PySMT environment,
 including every descendant; type hints and environment membership are caller
 preconditions, without repeated runtime validation. Projection entries normalize
 to positive Boolean symbols or theory atoms. Atoms that normalize to constants,
@@ -201,6 +201,29 @@ keys; new abstraction IDs remain sequential above the existing maximum. Ordering
 is reproducible given the same node creation history in the environment and
 starting abstraction.
 Non-projection atoms and encoding auxiliaries are existentially eliminated.
+
+### Migrating old callers
+
+Import `TheoryCompilation` and `TheoryCompiledTarget` from `tddnnf`.
+`CompilationContext`, `QueryContext`, `TReducedBuilder`, and `TExtendedBuilder`
+are removed. Replace a builder call with:
+
+```python
+from tddnnf import TheoryCompilation, TheoryCompiledTarget
+
+with TheoryCompilation(phi, project_on=atoms, env=env) as compilation:
+    target = compilation.compile_treduced(compiler, lemmas, log, abstractor=abstractor)
+# Use compile_textended for the former TExtendedBuilder.
+with target.queries(DdnnifeEngine) as queries:
+    count = queries.count_truth_assignments()
+```
+
+Keep compiler module paths and backend target classes unchanged. Query sessions
+accept engine classes (`BddEngine`, `SddEngine`, `DdnnifeEngine`). Backend targets
+remain available through the read-only `target.target` property. Omitting
+`abstractor` creates a fresh mapping for each compilation; supplying one keeps
+existing IDs and appends new atoms. Old context query wrappers become
+`target.queries(Engine)`. See [Architecture](ARCHITECTURE.md) for lifetimes.
 
 ### Compilation strategies
 

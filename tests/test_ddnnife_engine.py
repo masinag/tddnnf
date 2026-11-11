@@ -1,16 +1,10 @@
 import ddnnife
 import pytest
 
-from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
+from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries.ddnnife_engine import DdnnifeEngine
-from tests._base_engine_test import BaseTestEngine
-
-
-class TestDdnnifeEngine(BaseTestEngine[D4CompiledTarget]):
-    compiler_cls = D4Compiler
-    engine_cls = DdnnifeEngine
 
 
 @pytest.mark.parametrize("truth", [False, True])
