@@ -4,13 +4,11 @@ from pysmt.shortcuts import GT, And, Not, Or, Plus, Real, Symbol
 from pysmt.typing import REAL
 from tlemma_enum.solvers.mathsat_total import MathSATTotalEnumerator
 
-from tddnnf import QueryContext, TheoryCompilation
+from tddnnf import TheoryCompilation
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
-from tddnnf.queries.bdd_engine import BddEngine
-from tddnnf.queries.d4_engine import D4Engine
-from tddnnf.queries.sdd_engine import SddEngine
+from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
 
 # ---- SMT ATOMS ----
 
@@ -46,18 +44,17 @@ with TheoryCompilation(phi, project_on=atoms) as compilation:
 
     # ---- BACKEND LOOP ----
 
-    for name, compiler, qengine in [
+    for name, compiler, engine_type in [
         ("BDD", BddCompiler, BddEngine),
         ("SDD", SddCompiler, SddEngine),
-        ("dDNNF", D4Compiler, D4Engine),
+        ("dDNNF", D4Compiler, DdnnifeEngine),
     ]:
         print(f"=== T-Reduced ({name}) ===")
         target = compilation.compile_treduced(compiler(), lemmas)
-        engine = QueryContext(target).wrap_queries(qengine(target))
-
-        print(f"Is sat under assumpions {assumptions}? {engine.is_satisfiable(assumptions)}")
-        print(f"Entails {clause}? {engine.entails_clause(clause)}")
-        print(f"Model count: {engine.count_truth_assignments()}")
-        print("Models:")
-        for m in engine.enumerate_truth_assignments():
-            print(f"  {m}")
+        with target.queries(engine_type) as engine:
+            print(f"Is sat under assumpions {assumptions}? {engine.is_satisfiable(assumptions)}")
+            print(f"Entails {clause}? {engine.entails_clause(clause)}")
+            print(f"Model count: {engine.count_truth_assignments()}")
+            print("Models:")
+            for m in engine.enumerate_truth_assignments():
+                print(f"  {m}")

@@ -27,6 +27,21 @@ correspondence internally, including imports across compatible managers. Check
 SDD vtrees and OBDD orders after alignment. Add focused compatibility and
 immutability tests; defer any cross-environment extension separately.
 
+## Native variable allocation
+
+Allocate native variables only for atoms needed by the compiled formula or its
+projection, preserving the shared abstraction IDs. Use dense per-target IDs for
+SDDs with a persisted abstraction-to-native mapping; for OBDDs, declare only the
+needed variable names. Carry the correspondence through compilation, forgetting,
+queries, reconstruction, and persistence, preserving native ordering settings.
+
+This removes sparse-ID overhead: with `Abstractor({1: a, 1000: b})`, compiling `a`
+with projection `[a]` should allocate one SDD variable rather than 1,000. Current
+enumeration constrains all inactive manager variables before yielding a model.
+Add sparse-ID and shared-abstraction-growth coverage, including codec round trips
+and empty projections. Many variables used in the formula and later forgotten
+remain a separate enumeration performance concern.
+
 ## Additional reasoners
 
 Evaluate an independent d-DNNF reasoner such as `DecDnnfRsReasoner` against the

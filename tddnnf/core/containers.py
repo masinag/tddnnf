@@ -9,7 +9,8 @@ from pysmt.environment import Environment, get_env
 from pysmt.fnode import FNode
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import DagSize, T_Target
+from tddnnf.core.interfaces import DagSize, QueryEngine, T_Target
+from tddnnf.queries.session import QuerySession
 
 
 class TheoryCompiledTarget(Generic[T_Target]):
@@ -42,6 +43,10 @@ class TheoryCompiledTarget(Generic[T_Target]):
     @property
     def env(self) -> Environment:
         return self._env
+
+    def queries(self, engine_type: type[QueryEngine[T_Target]]) -> QuerySession[T_Target]:
+        """Open an independent session using the explicitly selected engine class."""
+        return QuerySession(self, engine_type)
 
     def dag_size(self) -> DagSize:
         return self.target.dag_size()

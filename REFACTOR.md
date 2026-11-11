@@ -323,7 +323,7 @@ Leave the PR open for renewed approval. Do not merge or start the next step.
 ## Completed checks
 
 Record evidence here as steps are implemented; consult GitHub for approvals and
-merges. Steps 1 and 2 record their checks below; steps 3–7 have not started.
+merges. Steps 1–4 record their checks below; steps 5–7 have not started.
 
 ### Step 0 — `refactor/00-design`
 
@@ -703,3 +703,273 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   Tracked-source searches find no private representation class names or backend
   alias claims. No benchmark reruns, external testbench changes, or static type
   checks; existing native limitations remain.
+
+## Step 4 evidence — query sessions (2026-11-10)
+
+- GitHub confirms prerequisite library PRs #9 and #10 and companion PR #13
+  merged. Created `refactor/04-query-sessions` from fetched integration head
+  `8ac9df0e2c2536f6f5ef50c7ddeb125354839a01`.
+- Added configured `CuddReasoner()`, `SddReasoner()`, and `DdnnifeReasoner()`
+  instances and `target.queries(reasoner)`. Sessions share validation,
+  normalization/alignment, deduplication, constant handling, and elementary
+  derivations. Native validity/conditioning and native d-DNNF counts supply
+  reasoning. Each session owns its canonical index, bound normalizer, adapter,
+  active iterators, and temporary query files; closure is idempotent and also
+  handles exceptions and partial initialization. Targets retain no normalizers.
+- Reproduced the integration SDD adapter from `git show
+  origin/refactor/lean-core:tddnnf/queries/sdd_engine.py` against a compiled `a`:
+  assumptions `[a, Not(a)]` yield satisfiable **True**, count **0**. The new
+  session yields **False**, **0**; the legacy SDD adapter also rejects the
+  contradiction. Fixed SDD enumeration of sparse IDs and d-DNNF bookkeeping for
+  unmapped active dimensions, forgotten dimensions, fixed assumptions, and
+  duplicate projected models.
+- Retained legacy engines, `QueryContext`, builders, exports, and persistence.
+  Examples, README, and architecture now present query sessions. Reused the
+  existing exhaustive query/solver tests through sessions on all three native
+  pairings, while preserving their legacy engine runs. Added focused tests for
+  equivalent syntax/polarity, canonical contradictions, constants, empty scopes,
+  full input validation before shortcuts, inactive/unknown atoms, sparse IDs,
+  absent active atoms, append-only abstraction growth, native delegation,
+  incompatible reasoners, independent sessions, closure, exceptions, failed
+  initialization, early-stopped enumeration, and temporary-file cleanup.
+- Environment reused without installs or dependency synchronization:
+  `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python` is
+  Python **3.12.15**; PySMT **0.9.7.dev431**, MathSAT **5.6.16**
+  (`412f4b1ef83c`), PySDD **1.0.6**, dd **0.6.0** (CUDD **3.0.0**, baseline),
+  ddnnife **0.10.0**, tlemma-enum **0.1.0**, pytest **9.1.1**, Ruff **0.15.17**.
+  Bundled d4 binary unchanged from the recorded baseline.
+- Library command: the above Python with `-m pytest -q`: **775 passed**, 1112
+  existing native/deprecation warnings, 23.12 s. Log:
+  `/tmp/tddnnf-step4-full.log`. After retaining the original `QueryContext`
+  error wording and allowing either session or engine wording in the shared
+  validation assertions, `-m pytest -q tests/test_query_sessions.py
+  tests/test_bdd_engine.py tests/test_sdd_engine.py tests/test_d4_engine.py`:
+  **416 passed**, 674 warnings, 14.05 s. Log:
+  `/tmp/tddnnf-step4-acceptance.log`.
+- Companion suite from isolated detached checkout
+  `/tmp/tddnnf-testbench-04-validation`, integration SHA
+  `bd62fcc503c0d63dcd07c5bf4ac7150a71dc1083` (read its `AGENTS.md`):
+  **191 passed**, 5 warnings, 3.90 s. Command:
+  `PYTHONPATH=/tmp/tddnnf-testbench-04-validation/scripts:/home/gabriele/Documents/theorykc/tddnnf
+  UV_CACHE_DIR=/tmp/tddnnf-step4-uv-cache
+  UV_PROJECT_ENVIRONMENT=/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv
+  uv run --no-sync python -m pytest -q`.
+  Verified `tasks.__file__` resolves inside the isolated checkout and
+  `tddnnf.__file__` resolves inside this proposed library checkout. Log:
+  `/tmp/tddnnf-step4-testbench.log`. The initial run exposed an unnecessary
+  change to legacy `QueryContext`'s default environment; restored that default
+  while sessions explicitly supply `target.env`. No consumer migration or
+  companion PR is needed. Existing testbench working changes remain untouched.
+- The same Python ran `examples/abstr.py`, `examples/tred.py`, and
+  `examples/text.py` successfully across all backends. Logs:
+  `/tmp/tddnnf-step4-example-{abstr,tred,text}.log`. T-reduced counts are **3**;
+  T-extended implicant checks are **True** for each backend.
+- `ruff check tddnnf tests examples`, `ruff format --check` on all 11 affected
+  Python files, documentation Python-block syntax/local links/fences, and
+  `git diff --check` pass. No new dependencies, benchmarks, persistence changes,
+  native numerical workarounds, or external testbench migration. No static
+  type check was run. CUDD floating-point counting, PySDD global-count overflow,
+  ddnnife buffered/u64-limited enumeration, and existing native shutdown warnings
+  remain; derived d-DNNF answers inherit native counting limits.
+- Fresh committed-revision read-only review and delivery evidence follow below.
+
+
+### Step 4 independent review and corrections
+
+- Committed implementation `e26d4d9` and formatting correction `51f4c61`.
+  Paused implementation and launched a fresh reviewer with:
+  `codex exec --ephemeral -C /home/gabriele/Documents/theorykc/tddnnf
+  -m gpt-6.1-sol -c 'model_reasoning_effort="high"'
+  -c 'approval_policy="never"' --sandbox read-only
+  --output-last-message /tmp/tddnnf-step4-review.md`.
+  The review inspected `8ac9df0...51f4c61`, the contracts and connected callers;
+  it changed no files or branches and posted no external comments. Full log:
+  `/tmp/tddnnf-step4-review.log`. Independently verified **148 CUDD/SDD tests**
+  and **81 native ddnnife bookkeeping assertions**, bypassing file creation
+  for the read-only sandbox; the reviewer did not rerun full suites or file
+  cleanup tests.
+- Addressed both P2 findings. Stored theory atoms that normalize to constants
+  now retain exact atom/polarity alignment for sessions and legacy wrappers;
+  explicit Boolean constants retain ordinary Boolean semantics. Legacy formula
+  alignment substitutes aligned atoms before they can collapse to constants.
+  Added true/false-normalizing stored-atom regressions across all three pairings.
+  Legacy d4 satisfiability now checks contradictory assumptions before dropping
+  unmapped literals; added that regression to the unmapped-dimension fixture.
+- After corrections, the existing environment's Python command
+  `-m pytest -q tests/test_query_sessions.py tests/test_normalizing_queries.py
+  tests/test_d4_engine.py` passes **298 tests**, 476 warnings, 9.58 s. Log:
+  `/tmp/tddnnf-step4-review-fixes.log`.
+- Final full library rerun: **781 passed**, 1120 existing native/deprecation
+  warnings, 23.16 s (`/tmp/tddnnf-step4-final-full.log`). Final full companion
+  rerun with the same isolated checkout, SHA, and environment command above:
+  **191 passed**, 5 warnings, 3.92 s
+  (`/tmp/tddnnf-step4-final-testbench.log`). All three examples were rerun and
+  pass; Ruff lint, all 11 affected Python-file formatting checks, and
+  `git diff --check` also pass. No benchmark or static type checks were run.
+  The documented native limitations remain. No step-5 work was performed.
+- Delivery: pushed implementation and review corrections through `6606a6a` on
+  `refactor/04-query-sessions`; opened
+  [PR #11](https://github.com/masinag/tddnnf/pull/11) targeting
+  `refactor/lean-core`. Left open for user review, without auto-merge or step-5
+  work. This final entry only records delivery.
+
+### Step 4 projection invariant correction (2026-11-10)
+
+- Supersedes the stored-constant compatibility behavior in the independent
+  review corrections above: projection construction already discards atoms
+  that normalize to Boolean constants. `QueryContext._index_atoms()` now
+  asserts this invariant with `Projection atoms must not normalize to constants`.
+  Manually constructed targets that violate it raise `AssertionError` during
+  query-context/session initialization, and the normalizer is closed on failure.
+- `_align_literal()` handles any canonical Boolean constant directly; its
+  target-index compatibility branch is removed. Normalization polarity handling
+  remains because valid theory atoms can normalize to negated atoms.
+- Replaced stored-constant compatibility tests with true/false-normalizing
+  invalid-vocabulary tests for direct contexts and sessions on all three native
+  pairings, including index clearing and normalizer cleanup. Retained existing
+  polarity/session query-constant regressions and added direct-context checks
+  for explicit and normalized constants, including negation and formula alignment.
+- Verification using the existing testbench environment (no installs): library
+  `python -m pytest -q` passes **789 tests**, 1128 existing native/deprecation
+  warnings, 25.80 s (`/tmp/tddnnf-projection-invariant-final-library.log`).
+  The same isolated companion checkout and explicit library `PYTHONPATH` recorded
+  above pass **191 tests**, 5 warnings, 4.06 s
+  (`/tmp/tddnnf-projection-invariant-companion.log`); verified both import paths.
+  All three examples pass (`/tmp/tddnnf-projection-invariant-example-*.log`).
+  `ruff check tddnnf tests examples`, formatting checks for the three changed
+  Python files, and `git diff --check` pass. No benchmark or static type checks
+  were run; existing native limitations remain. This correction updates PR #11
+  on `refactor/04-query-sessions` and leaves it open for review.
+
+### Step 4 review response — merged query sessions (2026-11-10)
+
+- Supersedes the previous context/Reasoner API: `target.queries(BddEngine)` returns
+  `QuerySession[BddCompiledTarget]`. Sessions now directly own their normalizer,
+  canonical index, validation, engine, and generator cleanup. Removed QueryContext,
+  NormalizingQueryEngine, empty Reasoner classes, and the pairing registry.
+- Engines check compatibility and implement all backend-specific reasoning.
+  Restored whole-literal polarity normalization; absorbing constants return before
+  deduplication, after every input is validated. Imports are top-level, with
+  annotation-only dependencies under TYPE_CHECKING.
+- Nonconstant D4 engines assert exact projection mapping to dense native IDs.
+  Absent DAG atoms remain mapped. Removed partial-mapping count correction and
+  forgotten-dimension enumeration deduplication; invalid manual artifacts fail.
+- Tracked ordinary generators replace the iterator wrapper. Session closure
+  exhausts generators (StopIteration), while closed query methods raise
+  RuntimeError. ExitStack preserves cleanup when another cleanup raises.
+- Companion worktree `/tmp/tddnnf-testbench-04-sessions`, branch
+  `refactor/04-query-sessions`, starts at integration `bd62fcc`. The query task
+  loads one session per batch and closes it on success/failure. Existing main
+  checkout modifications are untouched. No persistence, schema, or CLI migration.
+- Existing environment Python `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python`
+  ran `-m pytest -q`: **784 passed**, 1121 native/deprecation/shutdown warnings,
+  24.18 s (`/tmp/merged-final-library.log`). Companion suite: **191 passed**,
+  5 warnings, 4.20 s (`/tmp/merged-companion.log`), using explicit
+  `PYTHONPATH=/tmp/tddnnf-testbench-04-sessions/scripts:/home/gabriele/Documents/theorykc/tddnnf`.
+  All three examples passed (`/tmp/merged-example-*.log`).
+- Ruff lint, changed-file formatting and whitespace checks pass in both repos.
+  Focused basedpyright checks pass for session/container and a valid inference
+  snippet, with explicit dependency search paths in `/tmp/merged-pyright.json`;
+  a mismatched D4Engine/BDD snippet produces the expected argument-type error.
+  No full-project type check or benchmarks. Native limitations remain.
+- Committed-revision review and linked delivery follow; both PRs stay open.
+
+### Merged-session committed review and delivery
+
+- Fresh ephemeral read-only review inspected library `491de46639c03de619bd8fc7734be4a19949c13d`
+  and companion `1d91cac0090b3f50a8ae605d441fac22c937af55`. Report:
+  `/tmp/merged-review.md`; full log `/tmp/merged-review.log`. Reviewer passed
+  285 tests and 480 native D4 assertions using existing files; its sandbox could
+  not run file-creating tests. Full file-based validation was run separately.
+- One P2 finding: closing an unstarted generator retained it in the session's
+  tracking set. Corrected by registering only when iteration starts; unstarted
+  generators advanced after session closure immediately stop. A regression
+  creates/closes 1,000 unstarted generators per backend and checks no retention.
+- Native saved targets were also loaded through the migrated companion caller
+  for all three backends: equivalent-atom counts, entailment, implicant checks,
+  and normalizer closure passed. Verified import paths select both proposed
+  checkouts. Main testbench changes remain untouched.
+- Updated [library PR #11](https://github.com/masinag/tddnnf/pull/11) and opened
+  [companion PR #14](https://github.com/masinag/tddnnf-testbench/pull/14), both
+  targeting their own `refactor/lean-core`. Both remain open; no merge or step-5
+  work. This entry supersedes the previous no-companion-needed delivery notes.
+- After review correction: full library **787 passed**, 1121 warnings, 26.33 s
+  (`/tmp/merged-reviewed-library.log`); full companion **191 passed**, 5 warnings,
+  4.15 s (`/tmp/merged-reviewed-companion.log`). Focused type/inference checks,
+  formatting and whitespace checks pass again. No benchmarks or full-project
+  static analysis; existing native limitations remain.
+
+
+### Engine backend naming correction (2026-11-10)
+
+- Renamed `D4Engine` to `DdnnifeEngine` and `d4_engine.py` to
+  `ddnnife_engine.py`, matching the query backend. Updated exports, imports,
+  error wording, temporary-directory prefix, test module/class, examples,
+  README, architecture, and the companion backend table. The old class/module
+  have no compatibility aliases: callers must update their imports.
+- `D4Compiler`, `D4CompiledTarget`, and the companion `"ddnnf"` backend identifier
+  remain unchanged. Earlier evidence above and frozen baseline logs preserve
+  their historical names.
+- Existing environment Python
+  `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python`
+  ran `-m pytest -q`: **787 passed**, 1121 existing warnings, 23.79 s
+  (`/tmp/ddnnife-rename-library.log`). Companion **191 passed**, 5 warnings,
+  3.89 s (`/tmp/ddnnife-rename-companion.log`), from
+  `/tmp/tddnnf-testbench-04-sessions` with
+  `PYTHONPATH=/tmp/tddnnf-testbench-04-sessions/scripts:/home/gabriele/Documents/theorykc/tddnnf`,
+  `UV_CACHE_DIR=/tmp/uv-cache`, and the existing `UV_PROJECT_ENVIRONMENT`, using
+  `uv run --no-sync python -m pytest -q`.
+- All three examples pass (`/tmp/ddnnife-rename-example-{abstr,tred,text}.log`).
+  Library Ruff lint, companion changed-file lint, changed-file formatting, and
+  both whitespace checks pass. Focused basedpyright checks pass using
+  `/tmp/merged-pyright.json` for session/container and `/tmp/merged-typing.py`
+  for BDD and Ddnnife generic inference. `/tmp/merged-typing-invalid.py` produces
+  exactly the expected engine/target argument-type error.
+- Searches find no old class/module references in executable code or current
+  documentation in either checkout; historical evidence is retained. No new
+  behavioral tests, benchmarks, full-project type checks, or unrelated cleanup.
+  Native limitations remain. Updates ship on the existing query-session branches
+  and PRs [#11](https://github.com/masinag/tddnnf/pull/11) and
+  [#14](https://github.com/masinag/tddnnf-testbench/pull/14), left open.
+
+### Clean d4 compilation output and native total enumeration (2026-11-10)
+
+- New `D4Compiler.compile()` results retain only signed edge literals with IDs
+  in `1..len(projected_ids)`, preserving nodes, edge endpoints, terminating zeros,
+  and edges that become literal-free. The supported d4 circuit parser assigns
+  sorted `P` variables first: raw NNF IDs already match the existing dense
+  abstraction remapping and are not renumbered. This cleanup relies on d4's
+  projection contract; it is not general existential projection of arbitrary
+  d-DNNFs. Constant and empty-projection paths are unchanged.
+- Metadata still maps every projected dimension, including dimensions absent
+  from the DAG. `DdnnifeEngine` maps total native assignments directly into
+  dictionaries in `projection_atoms` order, removing unmapped-literal filtering
+  and Python missing-dimension expansion. Constant enumeration, zero-count
+  handling, exact mapping assertions, and resource cleanup remain.
+- Parameterized compiler regression exercises real d4 and injected output with
+  positive/negative leftover literals, ID gaps, and an emptied edge. Sparse
+  abstraction IDs and reordered projection atoms verify reconstruction, unique
+  total enumeration, counts and assumptions before/after save/load. Python
+  expansion is disabled in this regression, proving absent dimensions come
+  from ddnnife. Loading a legacy artifact preserves its original text; only new
+  compilations are cleaned. Persistence formats and public APIs are unchanged.
+- Existing testbench environment Python
+  `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python`
+  ran `-m pytest -q`: **789 passed**, 1124 existing native/deprecation warnings,
+  31.47 s (`/tmp/d4-clean-library.log`). Focused compiler/engine/session tests:
+  **354 passed**, 554 warnings (`/tmp/d4-clean-focused.log`).
+- Companion checkout `/tmp/tddnnf-testbench-04-sessions` ran
+  `uv run --no-sync python -m pytest -q` with the existing environment,
+  `UV_CACHE_DIR=/tmp/uv-cache`, and explicit
+  `PYTHONPATH=/tmp/tddnnf-testbench-04-sessions/scripts:/home/gabriele/Documents/theorykc/tddnnf`:
+  **191 passed**, 5 warnings, 5.38 s (`/tmp/d4-clean-companion.log`). Verified
+  library and companion import paths; no companion source changes were needed.
+- All three examples pass (`/tmp/d4-clean-example-{abstr,tred,text}.log`).
+  `.venv/bin/ruff check tddnnf tests examples`, changed-file formatting and
+  `git diff --check` pass. Focused session/container and generic inference checks
+  pass with `/tmp/merged-pyright.json` and `/tmp/merged-typing.py`; the invalid
+  pairing in `/tmp/merged-typing-invalid.py` produces exactly the expected
+  argument-type error. No benchmarks, full-project type analysis, or unrelated
+  cleanup; existing native counting and enumeration limits remain.
+- Delivered on `refactor/04-query-sessions` through library PR #11; companion
+  PR #14 records the matching verification. Both remain open.

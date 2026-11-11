@@ -158,7 +158,12 @@ scope. An inactive atom is not queryable merely because it has an abstraction
 ID. Normalization accepts equivalent syntax when it produces the same canonical
 atom; it is not a general SMT equivalence check.
 
-Deduplicate assumptions after alignment. Contradictory assumptions return
+The session accepts clause/cube formulas, flattens them iteratively, and delegates
+aligned literal lists to the matching engine methods. Direct engines and custom
+`QueryEngine` implementations must accept flat `list[FNode]` clauses/cubes;
+formula inputs are no longer supported by engines. Assumption signatures are unchanged.
+Engines share constant handling and deduplication for assumptions and cubes, and
+validate every list entry before semantic shortcuts. Contradictory assumptions return
 `False` for satisfiability and `0` for counting, without asking the backend.
 Handle contradiction introduced by normalization as well as explicit `a` and
 `Not(a)`. A tautological clause is entailed; a contradictory cube is an

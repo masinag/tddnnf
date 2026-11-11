@@ -56,7 +56,7 @@ translators never allocate IDs. The old builders forward to this pipeline while
 preserving caller-supplied abstractions. `CompilationContext` remains an alias.
 Compilation sessions and normalizers support `with` and idempotent `close()`,
 including cleanup on exceptions and initialization failure. Closed sessions
-reject operations. Query-session lifecycle migration remains a later step.
+reject operations. Query sessions provide the same explicit lifecycle.
 
 ## Normalization and projection
 
@@ -86,22 +86,22 @@ Normalization occurs at both boundaries:
 
 - `TheoryCompilation` normalizes the input formula, projection atoms, and
   lemmas before compilation.
-- `QueryContext` normalizes query literals, clauses, and cubes before handing
-  them to a backend query engine.
+- `target.queries(Engine)` owns normalization and normalizes query literals,
+  clauses, and cubes before handing them to a backend query engine.
 
 Here, the _compiled formula_ is the Boolean abstraction of the
 strategy-specific combination of the normalized input formula and normalized
 theory lemmas: their conjunction for T-reduced compilation, or the input
 formula disjoined with the negated lemmas for T-extended compilation.
-Valid projection vocabularies contain only atoms occurring in the normalized
-input formula or in the supplied theory lemmas. The ordered
+Projection vocabularies may include atoms absent from the normalized input
+formula and supplied theory lemmas; these are unconstrained dimensions. The ordered
 `projection_atoms` tuple stored in `TheoryCompiledTarget` is the authoritative
 query vocabulary. Atoms from the input formula or lemmas that are not requested
 are existentially quantified away, and backend query engines reject query atoms
 outside this tuple.
 
-Query-only theory atoms need not occur in the input formula, but they must occur
-in the supplied lemmas. Include such atoms in `compilation.project_on` and pass
+Query-only theory atoms need not occur in the input formula. To constrain them
+by theory consistency, they must occur in the supplied lemmas. Include such atoms in `compilation.project_on` and pass
 the complete projection vocabulary to the external lemma enumerator as
 `atoms=compilation.project_on`. For T-reduced compilation, enumerate over
 `compilation.phi`; for T-extended compilation, enumerate over
@@ -221,34 +221,52 @@ if-then-else expansion over its SMT atom.
 
 ## Queries
 
-Each backend has a matching query engine: `D4Engine`, `SddEngine`, and
-`BddEngine`. All implement the `QueryEngine` protocol:
+`target.queries(BddEngine)`, `target.queries(SddEngine)`, and
+`target.queries(DdnnifeEngine)` open independent sessions over their matching
+public backend target classes. Strings, engine instances, and incompatible pairings raise
+`TypeError`. Engines and `QuerySession` are exported from `tddnnf.queries`.
 
-- `is_satisfiable(assumptions=None)` checks satisfiability, optionally under a
-  list of literals;
-- `count_truth_assignments(assumptions=None)` counts total assignments over the
-  projection vocabulary;
-- `is_valid()` checks whether every projected assignment satisfies the target;
-- `entails_clause(query_clause)` checks clausal entailment;
-- `is_implicant(query_cube)` checks whether a cube implies the target; and
-- `enumerate_truth_assignments()` yields total dictionaries from projection
-  atoms to Boolean values.
+Sessions expose the six `QueryEngine` operations: `is_satisfiable`,
+`count_truth_assignments`, `is_valid`, `entails_clause`, `is_implicant`, and
+`enumerate_truth_assignments`. Each session owns a normalizer bound to `target.env`,
+a canonical atom index, and its native adapter. Direct engines remain available;
+`QueryContext` and its normalizing wrapper have been removed in favor of sessions.
 
-Engines account for forgotten variables when counting and fill missing or
-unused projected variables during enumeration. Contradictory assumptions yield
-no models.
+Validation traverses all input literals before semantic shortcuts, rejects
+compound assumptions, malformed clauses/cubes, and inactive or unknown atoms.
+Canonical alignment preserves stored atoms and polarity and rejects ambiguous
+matches. Sessions accept clause/cube formulas and flatten and align literals once.
+Engines accept flat `list[FNode]` clauses/cubes and share constant, duplicate, and
+complement handling; assumptions use the same conjunction handling as cubes.
+Direct callers and custom engines must migrate former formula signatures to lists.
+Every engine input is validated before semantic shortcuts. CUDD/PySDD validity
+and conditioning remain native;
+d-DNNF validity and implicants derive from native counts. No alternate counter
+or backend is selected. CUDD floating-point precision, PySDD global-count
+overflow, and ddnnife buffering/u64 enumeration limits remain visible (see
+[REFACTOR.md](REFACTOR.md)).
 
-Backend engines operate on the target's exact atom objects. To make public
-queries robust to equivalent SMT syntax, construct a `QueryContext` from the
-compiled container and call `wrap_queries(engine)`. The resulting
-`NormalizingQueryEngine` aligns assumptions, clauses, and cubes before
-delegation.
+Adapters account for forgotten native dimensions, fixed assumptions, sparse IDs,
+and unconstrained active atoms. Enumeration returns total assignments keyed by
+the exact stored atoms in projection order. The SDD adapter deduplicates native assignments that differ only on forgotten
+dimensions. Nonconstant D4 artifacts map exactly the projection to dense native
+IDs, including atoms absent from the DAG; query engines assert this invariant.
 
-`QueryContext` indexes every projection atom by its positive canonical form and
-tracks polarity separately. It rejects ambiguous projection vocabularies whose
-distinct atoms normalize to the same form. Query atoms absent from the index
-raise `ValueError`; matching atoms are replaced with the exact objects stored in
-the target, with polarity preserved.
+Sessions support `with` and idempotent `close()`, including initialization failure
+and exceptions. Each enumeration call creates an independent generator. The session
+lazily creates and tracks its engine generator on first iteration, delegates
+assignments without copying, and unregisters it when iteration ends or the caller
+closes the generator. Unstarted enumerations use no engine resources and stop if
+started after session closure. Closing the session stops every active engine
+generator before releasing the native adapter (including d-DNNF temporary files)
+and normalizer, continuing cleanup even if a close raises. Query methods on a
+closed session raise `RuntimeError`; its enumerations raise `StopIteration`.
+Closing a session preserves the target and other sessions; finalizers are a fallback.
+
+`QueryEngine.enumerate_truth_assignments()` must return a closable
+`Generator[dict[FNode, bool], None, None]`, including for structural engines.
+Arbitrary iterators do not satisfy this contract. Engine `close()` must be
+idempotent; subclasses of `QueryEngine` inherit a no-op default.
 
 ## Persistence and reconstruction
 
@@ -294,7 +312,7 @@ input circuit, and running the external compiler.
 
 ```text
 tddnnf/
-├── context.py                  # TheoryCompilation and QueryContext
+├── context.py                  # TheoryCompilation
 ├── core/
 │   ├── abstraction.py         # Abstractor mapping and serialization
 │   ├── containers.py          # TheoryCompiledTarget
@@ -311,8 +329,8 @@ tddnnf/
 │   ├── pysdd.py               # PySDD compiler and target
 │   └── cudd.py                # CUDD OBDD compiler and target
 └── queries/
-    ├── normalizing.py         # NormalizingQueryEngine adapter
-    ├── d4_engine.py           # d-DNNF queries through ddnnife
+    ├── session.py             # Normalization, validation, lifecycle
+    ├── ddnnife_engine.py       # d-DNNF queries through ddnnife
     ├── sdd_engine.py          # SDD queries
     └── bdd_engine.py          # OBDD queries
 ```
