@@ -5,7 +5,7 @@ import json
 import pytest
 from pysdd.sdd import SddManager
 
-from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
+from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
 from tddnnf.core.abstraction import Abstractor
 from tests.support import equivalent
@@ -23,25 +23,27 @@ def test_sdd_requires_mapping(tmp_path):
         SddCompiledTarget.load(path)
 
 
-def test_sdd_roundtrip_preserves_sparse_atom_ids(mgr, a, b, tmp_path):
+@pytest.mark.parametrize("compiler", [SddCompiler, D4Compiler])
+def test_roundtrip_preserves_sparse_atom_ids(mgr, a, b, tmp_path, compiler):
     abstr = Abstractor({7: a, 1000: b})
     formula = mgr.And(a, mgr.Not(b))
-    target = SddCompiler().compile(formula, abstr)
+    target = compiler().compile(formula, abstr)
     path = tmp_path / "target"
-
     target.save(path)
-    loaded = SddCompiledTarget.load(path)
-
+    loaded = type(target).load(path)
+    assert loaded.remapping == target.remapping == {7: 1, 1000: 2}
     equivalent(mgr, loaded.to_pysmt(abstr, mgr), formula)
 
 
-def test_d4_roundtrip_preserves_sparse_atom_ids(mgr, a, b, tmp_path):
-    abstr = Abstractor({7: a, 1000: b})
-    formula = mgr.And(a, mgr.Not(b))
-    target = D4Compiler().compile(formula, abstr)
+@pytest.mark.parametrize("compiler", [SddCompiler, D4Compiler])
+def test_full_mapping_roundtrip_preserves_unused_entries(mgr, tmp_path, compiler):
+    a, forgotten, absent, unrelated = [mgr.Symbol(name) for name in ("a", "forgotten", "absent", "unrelated")]
+    abstr = Abstractor({7: forgotten, 1000: a, 2000: absent, 3000: unrelated})
+    target = compiler().compile(mgr.And(a, forgotten), abstr, project_on=[absent, a])
+    expected = {7: 1, 1000: 2, 2000: 3} if compiler is SddCompiler else {1000: 1, 2000: 2, 7: 3}
     path = tmp_path / "target"
-
     target.save(path)
-    loaded = D4CompiledTarget.load(path)
-
-    equivalent(mgr, loaded.to_pysmt(abstr, mgr), formula)
+    loaded = type(target).load(path)
+    assert json.loads((path / "metadata.json").read_text())["remapping"] == {str(k): v for k, v in expected.items()}
+    assert loaded.remapping == expected
+    equivalent(mgr, loaded.to_pysmt(abstr, mgr), a)

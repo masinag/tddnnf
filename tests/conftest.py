@@ -61,7 +61,7 @@ def c(mgr) -> FNode:
     return mgr.Symbol("c", BOOL)
 
 
-@pytest.fixture(params=FORMULA_BANK)
+@pytest.fixture(params=FORMULA_BANK, ids=[f"{fn.__name__}-{n}-{strategy}" for fn, n, strategy in FORMULA_BANK])
 def bank_case(request: pytest.FixtureRequest, mgr: FormulaManager) -> SolverGroundTruth:
     gen_fn, num_vars, strategy = request.param
     v = [mgr.Symbol(f"v{gen_fn.__name__}_{i}", BOOL) for i in range(num_vars)]

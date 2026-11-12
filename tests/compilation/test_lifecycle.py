@@ -24,7 +24,7 @@ def test_session_lifecycle(mgr, session_type):
             session.compile_treduced(BddCompiler(), [])
 
 
-def test_partial_initialization_cleanup(mgr, monkeypatch):
+def test_invalid_projection_closes_allocated_solver(mgr, monkeypatch):
     solver = Mock()
     solver.converter = Mock()
     monkeypatch.setattr(mgr.env.factory, "Solver", Mock(return_value=solver))
@@ -32,7 +32,8 @@ def test_partial_initialization_cleanup(mgr, monkeypatch):
         TheoryCompilation(mgr.TRUE(), project_on=[mgr.TRUE()], env=mgr.env)
     solver.exit.assert_called_once()
 
-    # Failure while reading the newly allocated solver's converter also cleans up.
+
+def test_converter_access_failure_closes_allocated_solver(mgr, monkeypatch):
     class BrokenSolver:
         exit = Mock()
 
@@ -45,6 +46,9 @@ def test_partial_initialization_cleanup(mgr, monkeypatch):
     with pytest.raises(RuntimeError, match="converter failure"):
         NormalizerWalker(mgr.env)
     broken.exit.assert_called_once()
+
+
+def test_solver_allocation_failure_propagates(mgr, monkeypatch):
     monkeypatch.setattr(mgr.env.factory, "Solver", Mock(side_effect=RuntimeError("allocation failure")))
     with pytest.raises(RuntimeError, match="allocation failure"):
         TheoryCompilation(mgr.TRUE(), env=mgr.env)

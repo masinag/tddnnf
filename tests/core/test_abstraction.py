@@ -1,8 +1,6 @@
 """Stable abstraction IDs, read-only mappings, and SMT-LIB serialization."""
 
 import pytest
-from pysmt.fnode import FNode
-from pysmt.formula import FormulaManager
 
 from tddnnf.core.abstraction import Abstractor
 
@@ -57,10 +55,7 @@ class TestAbstractor:
             abstr.get_id(mgr.And(a, b))
         assert abstr.var_count == 0
 
-    def test_get_atom_rejects_negative(self, mgr: FormulaManager, x: FNode, abstr: Abstractor) -> None:
+    @pytest.mark.parametrize("atom_id", [-1, 0], ids=["negative", "zero"])
+    def test_get_atom_rejects_nonpositive(self, abstr, atom_id):
         with pytest.raises(ValueError, match="positive"):
-            abstr.get_atom(-1)
-
-    def test_get_atom_rejects_zero(self, mgr: FormulaManager, x: FNode, abstr: Abstractor) -> None:
-        with pytest.raises(ValueError, match="positive"):
-            abstr.get_atom(0)
+            abstr.get_atom(atom_id)

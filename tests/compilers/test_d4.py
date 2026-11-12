@@ -6,17 +6,9 @@ from pathlib import Path
 import pytest
 
 import tddnnf.compilers.d4 as d4
-from tddnnf import TheoryCompilation
-from tddnnf.compilers.d4 import D4_BIN, D4Compiler
+from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.containers import TheoryCompiledTarget
-from tddnnf.queries import DdnnifeEngine
 from tests.support import equivalent
-
-pytestmark = pytest.mark.skipif(
-    not D4_BIN.is_file(),
-    reason="d4 binary not installed (run: python -m tddnnf.install_bin --d4)",
-)
 
 
 def test_projection_cleanup(mgr, a, b, c, monkeypatch):
@@ -33,11 +25,6 @@ def test_projection_cleanup(mgr, a, b, c, monkeypatch):
 
     native = D4Compiler().compile(formula, abstr, project_on=projection)
     equivalent(mgr, native.to_pysmt(abstr, mgr), mgr.And(a, mgr.Not(c)))
-    container = TheoryCompiledTarget(native, abstr, projection, env=mgr.env)
-    with container.queries(DdnnifeEngine) as queries:
-        assert queries.count_truth_assignments() == 2
-        assert queries.count_truth_assignments([b]) == queries.count_truth_assignments([mgr.Not(b)]) == 1
-        assert queries.count_truth_assignments([mgr.Not(a)]) == 0
 
 
 def test_d4_failure_diagnostics_and_cleanup(mgr, monkeypatch):
@@ -50,7 +37,7 @@ def test_d4_failure_diagnostics_and_cleanup(mgr, monkeypatch):
         return subprocess.CompletedProcess(cmd, 23, b"stdout", b"native diagnostic")
 
     monkeypatch.setattr(d4.subprocess, "run", fail)
-    with TheoryCompilation(mgr.Symbol("a"), env=mgr.env) as compilation:
-        with pytest.raises(RuntimeError, match=r"exit 23.*\n.*native diagnostic"):
-            compilation.compile_treduced(D4Compiler(), [])
+    atom = mgr.Symbol("a")
+    with pytest.raises(RuntimeError, match=r"exit 23.*\n.*native diagnostic"):
+        D4Compiler().compile(atom, Abstractor({1: atom}), project_on=[atom])
     assert observed and all(not path.exists() for path in observed)

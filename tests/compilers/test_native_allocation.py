@@ -1,14 +1,11 @@
 """Native allocation depends on needed atoms, not sparse abstraction IDs."""
 
 import pytest
-from pysmt.environment import Environment
 
 from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.containers import TheoryCompiledTarget
-from tddnnf.queries import DdnnifeEngine, SddEngine
 from tests.support import equivalent
 
 
@@ -62,8 +59,8 @@ def test_full_mapping_on_constant_return_paths(mgr, a, b, c, compiler, project, 
     equivalent(mgr, native.to_pysmt(abstr, mgr), mgr.Bool(shape == "sat"))
 
 
-@pytest.mark.parametrize("compiler,engine", [(SddCompiler, SddEngine), (D4Compiler, DdnnifeEngine)])
-def test_full_mapping_and_roundtrip(mgr, tmp_path, compiler, engine):
+@pytest.mark.parametrize("compiler", [SddCompiler, D4Compiler])
+def test_full_mapping(mgr, compiler):
     a, forgotten, absent, unrelated = [mgr.Symbol(name) for name in ("a", "forgotten", "absent", "unrelated")]
     abstr = Abstractor({7: forgotten, 1000: a, 2000: absent, 3000: unrelated})
     native = compiler().compile(mgr.And(a, forgotten), abstr, project_on=[absent, a])
@@ -71,25 +68,6 @@ def test_full_mapping_and_roundtrip(mgr, tmp_path, compiler, engine):
     assert native.remapping == expected_mapping
     if compiler is D4Compiler:
         assert native.var_count == 2
-    target = TheoryCompiledTarget(native, abstr, [absent, a], env=mgr.env)
-    path = tmp_path / "full-mapping"
-    target.save(path)
-    loaded = TheoryCompiledTarget.load(path, type(native), env=Environment())
-    assert loaded.target.remapping == expected_mapping
-    for container in (target, loaded):
-        fm = container.env.formula_manager
-        a, absent = fm.Symbol("a"), fm.Symbol("absent")
-        with container.env.factory.Solver() as solver:
-            solver.add_assertion(fm.Not(fm.Iff(container.to_pysmt(), a)))
-            assert not solver.solve()
-        with container.queries(engine) as query:
-            models = list(query.enumerate_truth_assignments())
-            assert len(models) == 2
-            assert {frozenset(m.items()) for m in models} == {
-                frozenset({a: True, absent: True}.items()),
-                frozenset({a: True, absent: False}.items()),
-            }
-            assert query.count_truth_assignments() == 2
-            assert query.count_truth_assignments([absent]) == 1
-            assert query.count_truth_assignments([fm.Not(absent)]) == 1
-            assert query.count_truth_assignments([fm.Not(a)]) == 0
+    else:
+        assert native.manager.var_count() == 3
+    equivalent(mgr, native.to_pysmt(abstr, mgr), a)

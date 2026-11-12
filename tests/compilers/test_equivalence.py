@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from pysmt.formula import FormulaManager
 
-from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import PropCompiler
 from tests.support import SolverGroundTruth
 
 
 def test_bank_compilation_equivalence(
-    mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, bank_case: SolverGroundTruth
+    mgr: FormulaManager, compiler: PropCompiler, bank_case: SolverGroundTruth
 ) -> None:
     abstr = bank_case.abstr
     target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
