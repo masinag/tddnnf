@@ -108,6 +108,36 @@ def test_exhaustive_engine_and_solver_space(
         assert not solver.solve(), "Engine counter-model state coverage is incomplete!"
 
 
+@pytest.mark.parametrize("sparse", [False, True])
+@pytest.mark.parametrize("project", [False, True])
+@pytest.mark.parametrize("shape", ["true", "false", "atom"])
+def test_projected_enumeration(mgr, a, b, c, compiler, engine_factory, sparse, project, shape):
+    abstr = Abstractor({3: a, 7: b, 11: c} if sparse else {1: a, 2: b, 3: c})
+    projection = [b, a] if project else []
+    formula = {"true": c, "false": mgr.FALSE(), "atom": mgr.And(a, c)}[shape]
+    native = compiler.compile(formula, abstr, project_on=projection)
+    target = TheoryCompiledTarget(native, abstr, projection, env=mgr.env)
+    if isinstance(native, D4CompiledTarget) and native.nnf_text in ("t 1\n", "f 1\n"):
+        with pytest.raises(ddnnife.InternalError):
+            engine_factory(target)
+        return
+    engine = engine_factory(target)
+    expected = []
+    if shape != "false":
+        expected = (
+            [
+                {a: value, b: unused}
+                for value in ([False, True] if shape == "true" else [True])
+                for unused in [False, True]
+            ]
+            if project
+            else [{}]
+        )
+    models = list(engine.enumerate_truth_assignments())
+    assert {frozenset(model.items()) for model in models} == {frozenset(model.items()) for model in expected}
+    assert len(models) == len(expected) == engine.count_truth_assignments()
+
+
 @pytest.mark.parametrize("reverse", [False, True])
 def test_enumeration_projection_order(mgr, compiler, a, b, reverse, engine_factory):
     projection = [b, a] if reverse else [a, b]
