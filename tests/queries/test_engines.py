@@ -7,6 +7,7 @@ import pytest
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 
+from tddnnf import TheoryCompilation
 from tddnnf.compilers.d4 import D4CompiledTarget
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
@@ -136,6 +137,28 @@ def test_projected_enumeration(mgr, a, b, c, compiler, engine_factory, sparse, p
     models = list(engine.enumerate_truth_assignments())
     assert {frozenset(model.items()) for model in models} == {frozenset(model.items()) for model in expected}
     assert len(models) == len(expected) == engine.count_truth_assignments()
+
+
+@pytest.mark.parametrize("sparse", [False, True])
+@pytest.mark.parametrize("project", [False, True])
+@pytest.mark.parametrize("shape", ["true", "false", "atom"])
+def test_count_uses_native_dimensions(mgr, compiler, engine_factory, sparse, project, shape):
+    a = mgr.Symbol("a")
+    abstr = Abstractor({7: a}) if sparse else Abstractor()
+    formula = {"true": mgr.TRUE(), "false": mgr.FALSE(), "atom": a}[shape]
+    projection = [a] if project else []
+    with TheoryCompilation(formula, projection, env=mgr.env) as compilation:
+        target = compilation.compile_treduced(compiler, [], abstractor=abstr)
+    if isinstance(target.target, D4CompiledTarget) and target.target.nnf_text in ("t 1\n", "f 1\n"):
+        with pytest.raises(ddnnife.InternalError):
+            engine_factory(target)
+        return
+    engine = engine_factory(target)
+    expected = 0 if shape == "false" else (2 if project and shape == "true" else 1)
+    assert engine.count_truth_assignments() == expected
+    if project:
+        assert engine.count_truth_assignments([a]) == (0 if shape == "false" else 1)
+        assert engine.count_truth_assignments([mgr.Not(a)]) == (1 if shape == "true" else 0)
 
 
 @pytest.mark.parametrize("reverse", [False, True])
