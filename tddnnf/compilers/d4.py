@@ -255,7 +255,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
 
     The formula is first translated to BC-S1.2 circuit format, then compiled
     by the d4 binary. Edge literals are restricted to the dense projection IDs;
-    metadata retains every projected dimension, including those absent from the DAG.
+    metadata retains formula and projection atoms, including forgotten atoms.
     This relies on the supported d4 circuit parser assigning sorted P variables first.
     """
 
@@ -350,20 +350,19 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
                     if nnf_raw.startswith("f"):
                         stats.log("n_atoms", len(all_atoms))
                         stats.log("n_proj_vars", 0)
-                        return D4CompiledTarget("f 1\n", 0, remapping={})
+                        return D4CompiledTarget("f 1\n", 0, remapping=remapping)
                     stats.log("n_atoms", len(all_atoms))
                     stats.log("n_proj_vars", 0)
-                    return D4CompiledTarget("t 1\n", 0, remapping={})
+                    return D4CompiledTarget("t 1\n", 0, remapping=remapping)
 
                 nnf_text = out_path.read_text()
                 if nnf_text.startswith("f"):
                     stats.log("n_atoms", len(all_atoms))
                     stats.log("n_proj_vars", len(projected_ids))
-                    return D4CompiledTarget("f 1\n", 0, remapping={})
+                    return D4CompiledTarget("f 1\n", 0, remapping=remapping)
 
             var_count = len(projected_ids)
             nnf_text = _clean_nnf(nnf_text, var_count)
-            projected_remapping = {aid: remapping[aid] for aid in sorted(projected_ids)}
             stats.log("n_atoms", len(all_atoms))
             stats.log("n_proj_vars", len(projected_ids))
-            return D4CompiledTarget(nnf_text, var_count, remapping=projected_remapping)
+            return D4CompiledTarget(nnf_text, var_count, remapping=remapping)

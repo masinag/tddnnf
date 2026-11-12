@@ -23,6 +23,8 @@ class SddEngine(QueryEngine[SddCompiledTarget]):
         self._abstr = container.abstr
         self._projection_atoms: tuple[FNode, ...] = container.projection_atoms
         self._projection_atom_set: set[FNode] = set(container.projection_atoms)
+        ids = {self._abstr.get_id(a) for a in self._projection_atoms}
+        assert ids <= self._target.remapping.keys(), "SDD mapping must cover the projection"
 
     def _condition_chain(self, lits: list[FNode], negate: bool = False, root=None):
         """Condition on validated literals, flipping each sign when negate is True.

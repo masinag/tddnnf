@@ -9,10 +9,12 @@ from pysmt.formula import FormulaManager
 
 from tddnnf import TheoryCompilation
 from tddnnf.compilers.d4 import D4CompiledTarget
+from tddnnf.compilers.pysdd import SddCompiledTarget
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import PropCompiler, QueryEngine
-from tests.support import SolverGroundTruth
+from tddnnf.queries import DdnnifeEngine
+from tests.support import PAIRINGS, SolverGroundTruth
 
 
 @pytest.fixture
@@ -303,3 +305,72 @@ def test_projected_assumption_on_forgotten_var_raises(
         engine.is_satisfiable(assumptions=[c])
     with pytest.raises(ValueError, match="not .*projection"):
         engine.count_truth_assignments(assumptions=[c])
+
+
+@pytest.mark.parametrize("compiler,engine_cls", PAIRINGS[1:])
+def test_rejects_missing_projection_mapping(mgr, a, b, compiler, engine_cls):
+    abstr = Abstractor({3: a, 7: b})
+    native = compiler().compile(a, abstr, project_on=[a, b])
+    mapping = {3: native.remapping[3]}
+    if isinstance(native, SddCompiledTarget):
+        native = SddCompiledTarget(native.root, native.manager, mapping)
+    else:
+        native = D4CompiledTarget(native.nnf_text, native.var_count, mapping)
+    container = TheoryCompiledTarget(native, abstr, [a, b], env=mgr.env)
+    with pytest.raises(AssertionError, match="mapping must cover the projection"):
+        engine_cls(container)
+
+
+@pytest.mark.parametrize("compiler,engine_cls", PAIRINGS)
+def test_absent_projection_atom(mgr, a, b, compiler, engine_cls):
+    abstr = Abstractor({3: a, 7: b})
+    native = compiler().compile(a, abstr, project_on=[a, b])
+    engine = engine_cls(TheoryCompiledTarget(native, abstr, [a, b], env=mgr.env))
+    try:
+        models = list(engine.enumerate_truth_assignments())
+        assert len(models) == 2
+        assert {frozenset(m.items()) for m in models} == {
+            frozenset({a: True, b: True}.items()),
+            frozenset({a: True, b: False}.items()),
+        }
+        assert engine.count_truth_assignments() == 2
+        for assumption in (b, mgr.Not(b)):
+            assert engine.is_satisfiable([assumption])
+            assert engine.count_truth_assignments([assumption]) == 1
+        assert not engine.is_satisfiable([b, mgr.Not(b)])
+        assert engine.count_truth_assignments([b, mgr.Not(b)]) == 0
+    finally:
+        engine.close()
+
+
+@pytest.mark.parametrize("compiler,engine_cls", PAIRINGS)
+@pytest.mark.parametrize("truth", [False, True])
+@pytest.mark.parametrize("active", [False, True])
+def test_constant_targets(mgr, a, compiler, engine_cls, truth, active):
+    projection = [a] if active else []
+    abstr = Abstractor({1: a})
+    native = compiler().compile(mgr.Bool(truth), abstr, project_on=projection)
+    container = TheoryCompiledTarget(native, abstr, projection, env=mgr.env)
+    if engine_cls is DdnnifeEngine and (not truth or not active):
+        with pytest.raises(ddnnife.InternalError):
+            engine_cls(container)
+        return
+    engine = engine_cls(container)
+    try:
+        assert engine.is_satisfiable() == truth
+        assert engine.is_valid() == truth
+        assert engine.count_truth_assignments() == (2 ** len(projection) if truth else 0)
+        if active:
+            assert engine.count_truth_assignments([a]) == int(truth)
+        assert engine.entails_clause([mgr.TRUE()])
+        assert engine.entails_clause([]) == (not truth)
+        assert engine.is_implicant([mgr.TRUE()]) == truth
+        assert engine.is_implicant([mgr.FALSE()])
+        models = list(engine.enumerate_truth_assignments())
+        expected = [{a: True}, {a: False}] if active else [{}]
+        if not truth:
+            expected = []
+        assert len(models) == len(expected)
+        assert {frozenset(m.items()) for m in models} == {frozenset(m.items()) for m in expected}
+    finally:
+        engine.close()

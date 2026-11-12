@@ -37,7 +37,7 @@ def test_projection_cleanup(mgr, a, b, c, monkeypatch, tmp_path, injected):
 
     native = D4Compiler().compile(formula, abstr, project_on=projection)
     assert native.var_count == 3
-    assert native.remapping == {3: 1, 7: 2, 11: 3}
+    assert native.remapping == {3: 1, 7: 2, 11: 3, 15: 4}
     if injected:
         assert native.nnf_text == cleaned
 
@@ -88,3 +88,16 @@ def test_projection_remaps_atoms_before_forgotten_atoms(mgr, a, b, c):
     with container.queries(DdnnifeEngine) as query:
         assert query.count_truth_assignments() == 2
         assert query.count_truth_assignments([mgr.Not(a)]) == 0
+
+
+@pytest.mark.parametrize("project", [False, True])
+@pytest.mark.parametrize("shape", ["sat", "unsat"])
+def test_full_mapping_on_constant_return_paths(mgr, a, b, c, project, shape):
+    abstr = Abstractor({3: a, 7: b, 11: c})
+    formula = a if shape == "sat" else mgr.And(a, mgr.Not(a))
+    projection = [b] if project else []
+    native = D4Compiler().compile(formula, abstr, project_on=projection)
+    assert native.remapping == ({7: 1, 3: 2} if project else {3: 1})
+    assert native.var_count == (1 if project and shape == "sat" else 0)
+    if not project or shape == "unsat":
+        assert native.nnf_text == ("t 1\n" if shape == "sat" else "f 1\n")

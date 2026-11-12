@@ -413,3 +413,8 @@ read-only `target.remapping` from shared abstraction IDs to native IDs. This
 mapping is required in schema v1 SDD artifacts. OBDD compilation declares only
 needed variable names. Neither backend changes shared abstraction IDs. Variables
 used during compilation and later forgotten remain allocated.
+
+SDD and D4 remappings retain exactly the formula and projection atoms, including
+forgotten atoms and excluding unrelated abstractor entries. D4 assigns projected
+IDs first; its `var_count` defines the counting universe independently of mapping
+size. Existing projection-only mappings remain accepted when they cover the projection.

@@ -37,9 +37,7 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         if nnf_text not in ("t 1\n", "f 1\n"):
             # Every projected dimension is mapped, even when absent from the DAG.
             ids = {self._abstr.get_id(a) for a in self._projection_atoms}
-            assert set(self._remapping) == ids, "D4 mapping must cover exactly the projection"
-            assert len(self._remapping) == self._var_count == len(self._projection_atoms)
-            assert set(self._remapping.values()) == set(range(1, self._var_count + 1))
+            assert ids <= self._remapping.keys(), "D4 mapping must cover the projection"
         self._tmpdir = tempfile.TemporaryDirectory(prefix="ddnnife_engine_")
         try:
             nnf_path = Path(self._tmpdir.name) / "circuit.nnf"
