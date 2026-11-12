@@ -1,5 +1,6 @@
 """The normalizer canonicalizes equivalent theory atoms and preserves Boolean structure."""
 
+import pytest
 from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
@@ -56,3 +57,14 @@ def test_normalizer_handles_no_theory_atoms(env: Environment, mgr: FormulaManage
 
         normal = norm.normalize(phi)
         assert normal == phi
+
+
+def test_normalizer_lifecycle(mgr):
+    session = NormalizerWalker(mgr.env)
+    with pytest.raises(LookupError), session:
+        raise LookupError("body failure")
+    session.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        session.normalize(mgr.TRUE())
+    with pytest.raises(RuntimeError, match="closed"):
+        session.__enter__()

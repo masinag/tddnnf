@@ -9,17 +9,6 @@ from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.normalization.normalizer import NormalizerWalker
 
 
-def test_normalizer_lifecycle(mgr):
-    session = NormalizerWalker(mgr.env)
-    with pytest.raises(LookupError), session:
-        raise LookupError("body failure")
-    session.close()
-    with pytest.raises(RuntimeError, match="closed"):
-        session.normalize(mgr.TRUE())
-    with pytest.raises(RuntimeError, match="closed"):
-        session.__enter__()
-
-
 def test_compilation_lifecycle(mgr):
     session = TheoryCompilation(mgr.TRUE(), env=mgr.env)
     with pytest.raises(LookupError), session:
