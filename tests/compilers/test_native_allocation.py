@@ -9,6 +9,7 @@ from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries import DdnnifeEngine, SddEngine
+from tests.support import equivalent
 
 
 def test_sdd_allocates_only_needed_variables(mgr, a, b, c):
@@ -45,6 +46,20 @@ def test_bdd_constant_allocates_no_variables(mgr, value):
     target = BddCompiler().compile(mgr.Bool(value), abstr, project_on=[])
 
     assert not target.manager.vars
+
+
+@pytest.mark.parametrize("compiler", [SddCompiler, D4Compiler])
+@pytest.mark.parametrize("project", [False, True], ids=["empty-projection", "nonempty-projection"])
+@pytest.mark.parametrize("shape", ["sat", "unsat"])
+def test_full_mapping_on_constant_return_paths(mgr, a, b, c, compiler, project, shape):
+    abstr = Abstractor({3: a, 7: b, 11: c})
+    formula = a if shape == "sat" else mgr.And(a, mgr.Not(a))
+    projection = [b] if project else []
+
+    native = compiler().compile(formula, abstr, project_on=projection)
+
+    assert set(native.remapping) == {abstr.get_id(atom) for atom in formula.get_atoms() | set(projection)}
+    equivalent(mgr, native.to_pysmt(abstr, mgr), mgr.Bool(shape == "sat"))
 
 
 @pytest.mark.parametrize("compiler,engine", [(SddCompiler, SddEngine), (D4Compiler, DdnnifeEngine)])
