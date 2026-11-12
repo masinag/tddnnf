@@ -9,6 +9,7 @@ import pytest
 from pysmt.typing import INT
 
 from tddnnf import TheoryCompilation
+from tddnnf.compilers.d4 import D4Compiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.normalization.normalizer import NormalizerWalker
 from tests.support import BACKENDS, STRATEGIES, equivalent
@@ -41,9 +42,11 @@ def test_node_id_atom_order(mgr, backend, strategy, explicit, theory):
 def test_compiler_reuse_preserves_independent_results(mgr, backend, strategy):
     p, q, absent, r = [mgr.Symbol(name) for name in ("p", "q", "absent", "r")]
     compiler = backend()
+    first_log, second_log = {}, {}
     with TheoryCompilation(p, [absent, q, p], env=mgr.env) as compilation:
-        first = getattr(compilation, strategy)(compiler, [q])
-        second = getattr(compilation, strategy)(compiler, [])
+        first = getattr(compilation, strategy)(compiler, [q], first_log)
+        snapshot = dict(first_log)
+        second = getattr(compilation, strategy)(compiler, [], second_log)
     with TheoryCompilation(r, env=mgr.env) as compilation:
         third = getattr(compilation, strategy)(compiler, [])
     expected = mgr.And(p, q) if strategy == "compile_treduced" else mgr.Or(p, mgr.Not(q))
@@ -55,6 +58,13 @@ def test_compiler_reuse_preserves_independent_results(mgr, backend, strategy):
     assert second.abstr is not first.abstr
     assert third.projection_atoms == (r,)
     assert dict(third.abstr.id_to_atom) == {1: r}
+    assert first_log == snapshot
+    assert first_log["n_lemmas"] == 1
+    assert second_log["n_lemmas"] == 0
+    assert first_log["n_projection_atoms"] == second_log["n_projection_atoms"] == 3
+    assert {"build_time", "compile_time", "n_atoms", "n_proj_vars"} <= first_log.keys()
+    if backend is D4Compiler:
+        assert {"register_atoms_time", "write_circuit_time", "run_d4_time"} <= first_log.keys()
 
 
 @pytest.mark.parametrize("strategy", STRATEGIES)

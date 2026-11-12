@@ -79,10 +79,11 @@ def test_normalizes_and_deduplicates_projection(mgr, backend, strategy, x, p):
     duplicate = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
     with TheoryCompilation(p, [absent, canonical_atom, mgr.Not(duplicate), p], env=mgr.env) as compilation:
         assert compilation.project_on == (absent, canonical_atom, p)
-        target = getattr(compilation, strategy)(backend(), [])
+        target = getattr(compilation, strategy)(backend(), [duplicate])
     assert target.projection_atoms == (absent, canonical_atom, p)
     assert dict(target.abstr.id_to_atom) == {1: absent, 2: canonical_atom, 3: p}
-    equivalent(mgr, target.to_pysmt(), p)
+    expected = mgr.And(p, canonical_atom) if strategy == "compile_treduced" else mgr.Or(p, mgr.Not(canonical_atom))
+    equivalent(mgr, target.to_pysmt(), expected)
 
 
 @pytest.mark.parametrize("entry", ["true", "false", "and", "or"])
@@ -93,3 +94,16 @@ def test_rejects_compound_and_constant_projection(mgr, entry, negated):
     value = mgr.Not(value) if negated else value
     with pytest.raises(ValueError, match="Projection entries"):
         TheoryCompilation(a, [value], env=mgr.env)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+@pytest.mark.parametrize("strategy", STRATEGIES)
+@pytest.mark.parametrize("value", [True, False])
+def test_constant_lemmas_with_empty_projection(mgr, backend, strategy, value):
+    phi = mgr.Or(mgr.Bool(value), mgr.FALSE())
+    lemmas = [mgr.TRUE(), mgr.Bool(value)]
+    expected = value if strategy == "compile_treduced" else True
+    with TheoryCompilation(phi, env=mgr.env) as compilation:
+        target = getattr(compilation, strategy)(backend(), lemmas)
+    equivalent(mgr, target.to_pysmt(), mgr.Bool(expected))
+    assert target.projection_atoms == ()
