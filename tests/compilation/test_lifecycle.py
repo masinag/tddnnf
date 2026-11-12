@@ -9,9 +9,8 @@ from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.normalization.normalizer import NormalizerWalker
 
 
-@pytest.mark.parametrize("session_type", [TheoryCompilation, NormalizerWalker])
-def test_session_lifecycle(mgr, session_type):
-    session = session_type(mgr.TRUE(), env=mgr.env) if session_type is TheoryCompilation else session_type(mgr.env)
+def test_normalizer_lifecycle(mgr):
+    session = NormalizerWalker(mgr.env)
     with pytest.raises(LookupError), session:
         raise LookupError("body failure")
     session.close()
@@ -19,9 +18,19 @@ def test_session_lifecycle(mgr, session_type):
         session.normalize(mgr.TRUE())
     with pytest.raises(RuntimeError, match="closed"):
         session.__enter__()
-    if session_type is TheoryCompilation:
-        with pytest.raises(RuntimeError, match="closed"):
-            session.compile_treduced(BddCompiler(), [])
+
+
+def test_compilation_lifecycle(mgr):
+    session = TheoryCompilation(mgr.TRUE(), env=mgr.env)
+    with pytest.raises(LookupError), session:
+        raise LookupError("body failure")
+    session.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        session.normalize(mgr.TRUE())
+    with pytest.raises(RuntimeError, match="closed"):
+        session.__enter__()
+    with pytest.raises(RuntimeError, match="closed"):
+        session.compile_treduced(BddCompiler(), [])
 
 
 def test_invalid_projection_closes_allocated_solver(mgr, monkeypatch):
