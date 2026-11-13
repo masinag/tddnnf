@@ -13,7 +13,7 @@ from tddnnf.normalization.normalizer import NormalizerWalker
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from tddnnf.core.containers import TheoryCompiledTarget
+    from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 
 
 class QuerySession(Generic[T_Target]):

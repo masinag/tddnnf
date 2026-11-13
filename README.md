@@ -337,7 +337,7 @@ from pathlib import Path
 from pysmt.shortcuts import And, read_smtlib, write_smtlib
 
 from tddnnf.compilers.d4 import D4CompiledTarget
-from tddnnf.core.containers import TheoryCompiledTarget
+from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 
 artifact_dir = Path("artifacts")
 artifact_dir.mkdir(exist_ok=True)
@@ -408,7 +408,7 @@ from pathlib import Path
 from pysmt.environment import Environment
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.containers import TheoryCompiledTarget
+from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tddnnf.core.interfaces import DagSize
 from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 

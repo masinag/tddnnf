@@ -10,7 +10,7 @@ from pysmt.formula import FormulaManager
 
 if TYPE_CHECKING:
     from tddnnf.core.abstraction import Abstractor
-    from tddnnf.core.containers import TheoryCompiledTarget
+    from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 
 
 @dataclass(frozen=True)

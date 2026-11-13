@@ -8,10 +8,10 @@ from pysmt.fnode import FNode
 from pysmt.shortcuts import get_env
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import PropCompiler, T_Target
 from tddnnf.core.pysmt_utils import is_atom
 from tddnnf.core.stats_collector import StatsCollector
+from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tddnnf.normalization.normalizer import NormalizerWalker
 
 

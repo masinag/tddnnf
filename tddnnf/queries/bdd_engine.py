@@ -8,7 +8,7 @@ from pysmt.fnode import FNode
 from tddnnf.compilers.cudd import BddCompiledTarget
 
 if TYPE_CHECKING:
-    from tddnnf.core.containers import TheoryCompiledTarget
+    from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tddnnf.core.interfaces import QueryEngine
 from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 

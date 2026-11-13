@@ -37,6 +37,7 @@ include = ["tddnnf"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["integration: complete workflows using real lemma enumeration and native backends"]
 
 [build-system]
 requires = ["hatchling"]

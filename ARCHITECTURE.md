@@ -121,7 +121,7 @@ the complete projection vocabulary to the external lemma enumerator as
 `Not(compilation.phi)`. This ensures that every query-only theory atom can occur
 in the generated lemmas before those lemmas are supplied to compilation.
 
-## Abstraction and compiled containers
+## Abstraction and compiled targets
 
 `Abstractor` maintains a bidirectional mapping between SMT atoms and positive
 integer IDs. `get_id()` validates atoms with `is_atom`, returns existing IDs,
@@ -371,7 +371,7 @@ tddnnf/
 ├── context.py                  # TheoryCompilation
 ├── core/
 │   ├── abstraction.py         # Abstractor mapping and serialization
-│   ├── containers.py          # TheoryCompiledTarget
+│   ├── theory_compiled_target.py          # TheoryCompiledTarget
 │   ├── interfaces.py          # Backend and query protocols, DagSize
 │   ├── pysmt_utils.py         # Atom, clause, cube, and assumption helpers
 │   └── stats_collector.py     # Optional timing and count instrumentation
