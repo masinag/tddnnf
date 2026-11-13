@@ -1,0 +1,99 @@
+import pytest
+from pysmt.shortcuts import FALSE, TRUE, And, Iff, Implies, Ite, Not, Or, Symbol
+
+from tddnnf.compilers.cudd import BddCompiler
+from tddnnf.compilers.d4 import D4Compiler
+from tddnnf.compilers.pysdd import SddCompiler
+from tddnnf.core.abstraction import Abstractor
+
+
+def compound_formula():
+    p, q, r, s, t = (Symbol(name) for name in ("p", "q", "r", "s", "t"))
+    return And(p, Or(q, r), Or(Not(q), s), Or(t, r))
+
+
+PLAIN_CASES = [
+    pytest.param(TRUE, id="true"),
+    pytest.param(FALSE, id="false"),
+    pytest.param(lambda: Symbol("p"), id="atom"),
+    pytest.param(lambda: Not(Symbol("p")), id="negation"),
+    pytest.param(lambda: And(Symbol("p"), Symbol("q")), id="conjunction"),
+    pytest.param(lambda: Or(Symbol("p"), Symbol("q")), id="disjunction"),
+    pytest.param(lambda: Implies(Symbol("p"), Symbol("q")), id="implication"),
+    pytest.param(lambda: Iff(Symbol("p"), Symbol("q")), id="equivalence"),
+    pytest.param(lambda: Ite(Symbol("p"), Symbol("q"), Symbol("r")), id="ite"),
+    pytest.param(
+        lambda: Ite(Symbol("p"), Iff(Symbol("q"), Symbol("r")), Implies(Symbol("s"), Symbol("t"))),
+        id="compound-ite",
+    ),
+    pytest.param(compound_formula, id="compound-conjunction"),
+]
+ELIMINATION_CASES = [
+    pytest.param(lambda: And(Symbol("p"), Or(Symbol("q"), Symbol("r"))), ("q",), id="one-variable"),
+    pytest.param(compound_formula, ("q", "t"), id="two-variables"),
+]
+
+
+def assert_equivalent(env, reconstructed, expected):
+    mgr = env.formula_manager
+    with env.factory.Solver(name="z3") as solver:
+        solver.add_assertion(mgr.Not(mgr.Iff(reconstructed, expected)))
+        assert not solver.solve()
+
+
+@pytest.mark.parametrize("compiler_type", [BddCompiler, SddCompiler, D4Compiler], ids=["bdd", "sdd", "d4"])
+@pytest.mark.parametrize("formula_factory", PLAIN_CASES)
+def test_plain_compilation_preserves_meaning(env, compiler_type, formula_factory):
+    formula = formula_factory()
+    atoms = sorted(formula.get_atoms(), key=lambda atom: atom.symbol_name())
+    abstractor = Abstractor()
+    for atom in atoms:
+        abstractor.get_id(atom)
+
+    target = compiler_type().compile(formula, abstractor, all_atoms=atoms)
+
+    assert_equivalent(env, target.to_pysmt(abstractor, env.formula_manager), formula)
+
+
+@pytest.mark.parametrize("compiler_type", [BddCompiler, SddCompiler, D4Compiler], ids=["bdd", "sdd", "d4"])
+@pytest.mark.parametrize("formula_factory, variable_names", ELIMINATION_CASES)
+def test_existential_elimination(env, compiler_type, formula_factory, variable_names):
+    formula = formula_factory()
+    atoms = sorted(formula.get_atoms(), key=lambda atom: atom.symbol_name())
+    variables = [Symbol(name) for name in variable_names]
+    abstractor = Abstractor()
+    for atom in atoms:
+        abstractor.get_id(atom)
+
+    target = compiler_type().compile(formula, abstractor, all_atoms=atoms, exists_atoms=variables)
+    reconstructed = target.to_pysmt(abstractor, env.formula_manager)
+
+    assert set(variables).isdisjoint(reconstructed.get_atoms())
+    assert_equivalent(env, reconstructed, env.formula_manager.Exists(variables, formula))
+
+
+@pytest.mark.parametrize("compiler_type", [BddCompiler, SddCompiler], ids=["bdd", "sdd"])
+@pytest.mark.parametrize("formula_factory, variable_names", ELIMINATION_CASES)
+def test_universal_elimination(env, compiler_type, formula_factory, variable_names):
+    formula = formula_factory()
+    atoms = sorted(formula.get_atoms(), key=lambda atom: atom.symbol_name())
+    variables = [Symbol(name) for name in variable_names]
+    abstractor = Abstractor()
+    for atom in atoms:
+        abstractor.get_id(atom)
+
+    target = compiler_type().compile(formula, abstractor, all_atoms=atoms, forall_atoms=variables)
+    reconstructed = target.to_pysmt(abstractor, env.formula_manager)
+
+    assert set(variables).isdisjoint(reconstructed.get_atoms())
+    assert_equivalent(env, reconstructed, env.formula_manager.ForAll(variables, formula))
+
+
+def test_d4_rejects_universal_elimination(env):
+    p, q = (Symbol(name) for name in ("p", "q"))
+    abstractor = Abstractor()
+    for atom in (p, q):
+        abstractor.get_id(atom)
+
+    with pytest.raises(NotImplementedError):
+        D4Compiler().compile(And(p, q), abstractor, all_atoms=[p, q], forall_atoms=[q])

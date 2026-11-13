@@ -12,7 +12,7 @@ including its current public migration: `TheoryCompilation` and
 
 The test tree below is proposed, except for the implemented core groups:
 Abstractor, PySMT utilities, TheoryCompiledTarget, persistence, and StatsCollector, plus the normalization
-and compilation input-ownership checks described below.
+and compilation input-ownership checks and Boolean compiler contracts described below.
 The removed suite remains unreplaced elsewhere; further cases will be decided
 one group at a time.
 
@@ -117,7 +117,31 @@ named nodes from distinct environments remain distinct inputs. Per the selected
 manager-membership check, input assertions check supplied nodes only; foreign
 descendants beneath a local root remain a caller precondition. Output tests still
 inspect every descendant. Assertions are disabled under Python's `-O` mode.
-Broader compilation behavior tests remain deferred.
+### Implemented Boolean compiler contracts
+
+`test_compiler_contract.py` uses real BDD, SDD, and d4 backends with the existing
+`env` fixture and formula factories evaluated inside that environment. Plain
+compilation covers eleven formulas: both constants, an atom and its negation,
+conjunction, disjunction, implication, equivalence, Boolean ITE, a compound ITE,
+and a five-symbol compound conjunction. Each formula's Boolean symbols are
+pre-registered in a fresh Abstractor.
+
+Existential elimination covers all three backends; universal elimination covers
+BDD and SDD. Both use `p & (q | r)` eliminating `q` and the compound conjunction
+eliminating `q, t`. Inputs remain quantifier-free; reconstruction is compared
+against PySMT `Exists` or `ForAll`, and eliminated symbols must be absent from
+its free variables. One separate test checks d4's `NotImplementedError` for
+universal elimination. One Z3 helper checks unsatisfiability of the negated
+biconditional for all successful compilation cases; `z3-solver` is a dev dependency.
+
+The focused run reproduced an intermittent CUDD shutdown reference warning. A
+read-only diagnostic found the BDD walker's bound-handler cycle retaining its
+manager and memoized native nodes until garbage collection; collection while the
+target remains alive exits cleanly. The full suite passed without that warning.
+Production cleanup changes and broader resource lifecycle coverage remain deferred.
+
+Theory atoms, unused vocabulary, elimination of all variables, persistence,
+sizes, metrics, and queries remain deferred for this compiler group.
 
 ## Organization
 
