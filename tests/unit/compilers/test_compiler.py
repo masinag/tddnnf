@@ -1,9 +1,9 @@
 import pytest
 from pysmt.shortcuts import FALSE, TRUE, And, Iff, Implies, Ite, Not, Or, Symbol
 
-from tddnnf.compilers.cudd import BddCompiler
-from tddnnf.compilers.d4 import D4Compiler
-from tddnnf.compilers.pysdd import SddCompiler
+from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
+from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
+from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
 from tddnnf.core.abstraction import Abstractor
 
 
@@ -97,3 +97,33 @@ def test_d4_rejects_universal_elimination(env):
 
     with pytest.raises(NotImplementedError):
         D4Compiler().compile(And(p, q), abstractor, all_atoms=[p, q], forall_atoms=[q])
+
+
+@pytest.mark.parametrize(
+    "compiler_type, target_type",
+    [(BddCompiler, BddCompiledTarget), (SddCompiler, SddCompiledTarget), (D4Compiler, D4CompiledTarget)],
+    ids=["bdd", "sdd", "d4"],
+)
+@pytest.mark.parametrize(
+    "formula_factory",
+    [
+        pytest.param(TRUE, id="true"),
+        pytest.param(FALSE, id="false"),
+        pytest.param(lambda: And(Symbol("p"), Or(Not(Symbol("q")), Symbol("r"))), id="compound"),
+    ],
+)
+def test_native_round_trip_preserves_meaning(env, tmp_path, compiler_type, target_type, formula_factory):
+    formula = formula_factory()
+    atoms = sorted(formula.get_atoms(), key=lambda atom: atom.symbol_name())
+    abstractor = Abstractor({7 * index: atom for index, atom in enumerate(atoms, 1)})
+    target = compiler_type().compile(formula, abstractor, all_atoms=atoms)
+
+    directory = tmp_path / "target"
+    target.save(directory)
+    loaded = target_type.load(directory)
+    mgr = env.formula_manager
+    reconstructed = loaded.to_pysmt(abstractor, mgr)
+
+    with env.factory.Solver(name="z3") as solver:
+        solver.add_assertion(mgr.Not(mgr.Iff(reconstructed, formula)))
+        assert not solver.solve()

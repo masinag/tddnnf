@@ -117,9 +117,9 @@ named nodes from distinct environments remain distinct inputs. Per the selected
 manager-membership check, input assertions check supplied nodes only; foreign
 descendants beneath a local root remain a caller precondition. Output tests still
 inspect every descendant. Assertions are disabled under Python's `-O` mode.
-### Implemented Boolean compiler contracts
+### Implemented compiler contracts
 
-`test_compiler_contract.py` uses real BDD, SDD, and d4 backends with the existing
+`test_compiler.py` uses real BDD, SDD, and d4 backends with the existing
 `env` fixture and formula factories evaluated inside that environment. Plain
 compilation covers eleven formulas: both constants, an atom and its negation,
 conjunction, disjunction, implication, equivalence, Boolean ITE, a compound ITE,
@@ -140,8 +140,21 @@ manager and memoized native nodes until garbage collection; collection while the
 target remains alive exits cleanly. The full suite passed without that warning.
 Production cleanup changes and broader resource lifecycle coverage remain deferred.
 
-Theory atoms, unused vocabulary, elimination of all variables, persistence,
-sizes, metrics, and queries remain deferred for this compiler group.
+Theory atoms, unused vocabulary, elimination of all variables, sizes, metrics,
+and queries remain deferred for this compiler group.
+
+The same module covers nine native compile/save/load round trips:
+BDD, SDD, and d4 crossed with `true`, `false`, and `p & (!q | r)`.
+Formula factories run inside the existing `env` fixture. Vocabulary comes from
+`get_atoms()`, with sparse abstraction IDs `7, 14, 21` assigned in symbol-name
+order and an empty Abstractor for constants. Each backend saves beneath
+`tmp_path` and loads through its native target class. Reconstruction uses the
+original Abstractor and environment; an inline Z3 check proves equivalence by
+finding the negated biconditional unsatisfiable.
+
+Sizes, malformed or missing artifacts, fresh-environment loading, queries, and
+lifecycle fixes remain deferred. Tests avoid serialized bytes and internal
+metadata assertions and leave native cleanup warnings visible.
 
 ## Organization
 
@@ -176,8 +189,7 @@ tests/
 │   ├── normalization/
 │   │   └── test_normalizer.py
 │   ├── compilers/
-│   │   ├── test_compiler_contract.py
-│   │   ├── test_target_contract.py
+│   │   ├── test_compiler.py
 │   │   ├── test_cudd.py
 │   │   ├── test_pysdd.py
 │   │   └── test_d4.py
@@ -218,8 +230,7 @@ holders such as `DagSize`; exercise their contracts through implementations.
 
 | File                        | Classes/group and proposed coverage                                                                                                                                                                                                                                                                                                                  |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `test_compiler_contract.py` | `BddCompiler`, `SddCompiler`, `D4Compiler`: compile Boolean structure and abstract theory atoms; preserve meaning; respect declared vocabulary and retained-variable order; existential or universal elimination; reject invalid declarations and requests mixing both quantifier kinds. Parametrize backend × relevant formula/quantification case. |
-| `test_target_contract.py`   | `BddCompiledTarget`, `SddCompiledTarget`, `D4CompiledTarget`: `to_pysmt` equivalence, save/load preservation of meaning and mappings, size metrics on deliberately tiny known DAGs. Do not expect different representations to have identical sizes or serialized bytes.                                                                             |
+| `test_compiler.py` | `BddCompiler`, `SddCompiler`, `D4Compiler` and their native targets: Boolean compilation, existential/universal elimination, and compile/save/load preservation of meaning. Further backend coverage remains deferred. |
 | `test_cudd.py`              | BDD-specific translation/representation cases, complemented edges, manager ownership, and persistence behavior not covered by shared contracts.                                                                                                                                                                                                      |
 | `test_pysdd.py`             | SDD-specific translation/representation cases, variable remapping, vtree/configuration behavior, and native-node ownership.                                                                                                                                                                                                                          |
 | `test_d4.py`                | BCS12 translation, d4 output parsing/cleanup and remapping, constant circuits, subprocess failures and missing executable. Mock the process only for process/error handling; use real d4 in semantic contract tests.                                                                                                                                 |
