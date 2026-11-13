@@ -62,8 +62,10 @@ environment or the active environment when omitted. Stored formula nodes must
 belong to that environment. Normalize the formula, supplied projection entries,
 and later the lemmas there. Callers must respect type hints and supply Boolean
 formulas/lemmas and DAGs entirely from that formula manager, including embedded
-nodes. These are caller preconditions; normalization relies on `DagWalker`
-memoization without repeated type checks or environment-validation traversals.
+nodes. Supplied-node environment membership is asserted before normalization
+or compilation, and when binding target abstraction/projection nodes. These
+assertions are disabled under Python's `-O` mode. Type hints and descendant
+ownership remain caller preconditions; normalization uses `DagWalker` memoization.
 
 Projection entries normalize to positive Boolean symbols or theory atoms;
 strip a normalized top-level negation and reject arbitrary Boolean formulas.
@@ -102,7 +104,7 @@ their existing IDs instead of applying the new allocation order.
 ## Target and resource ownership
 
 `TheoryCompiledTarget` binds a public backend compiled target, abstraction,
-ordered active vocabulary (`projection_atoms`), and owning PySMT environment.
+ordered active vocabulary (`atoms`), and owning PySMT environment.
 `BddCompiledTarget`, `SddCompiledTarget`, and `D4CompiledTarget` remain public
 classes, available through the supported read-only `.target` property.
 

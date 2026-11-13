@@ -10,8 +10,9 @@ This plan covers the `tddnnf` library in `/tmp/tddnnf-06-public-migration`,
 including its current public migration: `TheoryCompilation` and
 `TheoryCompiledTarget`. Benchmark harness tests are outside this plan.
 
-The test tree below is proposed, except for the implemented core groups,
-`tests/unit/core/test_abstraction.py` and `tests/unit/core/test_pysmt_utils.py`.
+The test tree below is proposed, except for the implemented core groups:
+Abstractor, PySMT utilities, and TheoryCompiledTarget, plus the normalization
+and compilation input-ownership checks described below.
 The removed suite remains unreplaced elsewhere; further cases will be decided
 one group at a time.
 
@@ -54,6 +55,40 @@ Type checking is suspended and restored on normal and exceptional exits in
 default and explicit environments. Tests use public formula construction and
 verify that explicit selection leaves the current environment's checking active.
 Production behavior and backend validation remain outside this group.
+
+### Implemented TheoryCompiledTarget group
+
+Tests use `env`, local formulas, and one small conjunction-target fake. They
+cover read-only bindings, copied atoms order, shared abstraction growth,
+default and explicit environments, and reconstruction/size delegation.
+Save/load preserves sparse IDs, later registrations, atoms order, the
+selected target type, and destination environment. Reconstruction tests check
+the returned formula and every descendant in default, explicit, and fresh load
+environments, alongside reconstruction and size expectations. Explicit selection
+leaves the globally active environment unchanged. A constant round trip covers
+empty vocabulary and preservation of backend metadata and payloads.
+
+Session creation and lifecycle belong to the QuerySession group. Persistence
+helper failures and native backends remain deferred. Constructor input assertions
+reject abstraction/atoms nodes from another manager, including identically
+named nodes. These input checks are separate from output-ownership tests;
+`to_pysmt()` has no runtime output-validation assertions.
+
+### Implemented normalization and compilation ownership checks
+
+Normalization tests check ownership of every result node for Boolean, integer,
+real, constant, and negated formulas. Default and explicit environments retain
+semantic equivalence and idempotence; equivalent arithmetic atoms share a
+canonical form. An explicit environment differs from the active environment,
+which remains unchanged.
+
+Input assertions reject foreign normalization roots, formulas, vocabulary entries,
+lemmas, and supplied abstraction atoms before backend compilation. Identically
+named nodes from distinct environments remain distinct inputs. Per the selected
+manager-membership check, input assertions check supplied nodes only; foreign
+descendants beneath a local root remain a caller precondition. Output tests still
+inspect every descendant. Assertions are disabled under Python's `-O` mode.
+Broader normalization lifecycle and compilation behavior tests remain deferred.
 
 ## Organization
 
@@ -121,7 +156,7 @@ holders such as `DagSize`; exercise their contracts through implementations.
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `test_abstraction.py`            | `Abstractor`: stable bidirectional IDs, repeated registration, supplied mappings, serialization round trips, reconstruction in an explicit environment.                                                                                                                                  |
 | `test_pysmt_utils.py`            | Atom/literal/clause/cube predicates; flat query-literal validation and simplification; duplicates, constants, complementary literals, unknown projection atoms; compilation vocabulary validation and retained order. `SuspendTypeChecking`: restoration on normal and exceptional exit. |
-| `test_theory_compiled_target.py` | `TheoryCompiledTarget`: association of target, abstraction, projection, and environment; delegation of reconstruction/size; creation of independent query sessions. Use small fakes where backend semantics are irrelevant.                                                              |
+| `test_theory_compiled_target.py` | `TheoryCompiledTarget`: association of target, abstraction, atoms, and environment; delegation of reconstruction/size; save/load of abstraction and atoms. Session creation is deferred to the QuerySession group. Use small fakes where backend semantics are irrelevant.                                                              |
 | `test_persistence.py`            | Shared artifact helpers: metadata version checks, malformed or missing metadata, successful atomic save, cleanup after failure, refusal to overwrite an existing destination.                                                                                                            |
 | `test_stats_collector.py`        | `StatsCollector`: behavior with/without a supplied logger, recorded values, timed regions using a controlled clock. Agree exception behavior before asserting it.                                                                                                                        |
 | `test_normalizer.py`             | `NormalizerWalker`: semantic preservation, canonicalization of equivalent supported theory atoms, polarity, idempotence, Boolean structure, explicit environment, close/context-manager behavior. Parametrize by formula family.                                                         |

@@ -8,14 +8,15 @@ from pysmt.shortcuts import get_env
 from pysmt.solvers.msat import MathSAT5Solver, MSatConverter
 from pysmt.walkers import DagWalker, handles
 
-from tddnnf.core.pysmt_utils import SuspendTypeChecking
+from tddnnf.core.pysmt_utils import SuspendTypeChecking, owns_dags
 
 
 class NormalizerWalker(DagWalker):
     """Normalize theory atoms through MathSAT, using DagWalker's memoization.
 
     Callers must supply Boolean FNodes whose entire DAG belongs to the selected
-    environment. Type hints and this environment precondition are trusted.
+    environment. Root ownership is asserted before walking; type hints and
+    descendant ownership remain caller preconditions.
     """
 
     def __init__(self, env: Environment | None = None) -> None:
@@ -70,6 +71,7 @@ class NormalizerWalker(DagWalker):
     def walk(self, formula: FNode, **kwargs: object) -> FNode:
         if self._closed:
             raise RuntimeError("Normalizer is closed")
+        assert owns_dags(self.env, (formula,)), "Formula must belong to the selected environment"
         with SuspendTypeChecking(self.env):
             return super().walk(formula, **kwargs)
 

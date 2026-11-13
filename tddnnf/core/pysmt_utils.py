@@ -1,10 +1,15 @@
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from typing import Any
 
 from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.shortcuts import get_env
 from pysmt.typing import BOOL
+
+
+def owns_dags(env: Environment, formulas: Iterable[FNode]) -> bool:
+    """Check that the supplied formulas belong to the selected manager."""
+    return all(formula in env.formula_manager for formula in formulas)
 
 
 class SuspendTypeChecking:

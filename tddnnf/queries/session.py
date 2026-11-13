@@ -25,7 +25,7 @@ class QuerySession(Generic[T_Target]):
         self._inner = None
         self._atom_index = {}
         self._iterators: set[Generator[dict[FNode, bool], None, None]] = set()
-        self._atoms = target.projection_atoms
+        self._atoms = target.atoms
         self._mgr = target.env.formula_manager
         try:
             if not isinstance(engine_type, type) or not issubclass(engine_type, QueryEngine):
@@ -130,7 +130,7 @@ class QuerySession(Generic[T_Target]):
         index: dict[FNode, tuple[FNode, bool]] = {}
         for target_atom in atoms:
             canonical, target_negated = self._normalize_with_polarity(target_atom)
-            assert not canonical.is_bool_constant(), "Projection atoms must not normalize to constants"
+            assert not canonical.is_bool_constant(), "Target atoms must not normalize to constants"
             previous = index.get(canonical)
             if previous is not None and previous[0] != target_atom:
                 raise ValueError(f"Ambiguous normalized atom {canonical}: {previous[0]}, {target_atom}")
@@ -148,7 +148,7 @@ class QuerySession(Generic[T_Target]):
         try:
             return self._atom_index[canonical]
         except KeyError as exc:
-            raise ValueError(f"Query atom not in target projection_atoms: {query_atom.serialize()}") from exc
+            raise ValueError(f"Query atom not in target atoms: {query_atom.serialize()}") from exc
 
     def _align_literal(self, literal: FNode) -> FNode:
         """Normalize one literal and replace its atom with the target atom."""

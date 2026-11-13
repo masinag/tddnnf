@@ -23,7 +23,7 @@ Querying:
    and
 2. use a backend-specific propositional query engine to answer them.
 
-Here, the vocabulary is the target’s `projection_atoms`: the normalized SMT atoms
+Here, the vocabulary is the target’s `atoms`: the normalized SMT atoms
 selected for projection and available to queries.
 
 ## Compilation flow
@@ -74,8 +74,10 @@ reject operations. Query sessions provide the same explicit lifecycle.
 
 Callers must respect the annotated Python types and provide Boolean formulas
 from the selected environment, including every descendant. The normalizer
-trusts these preconditions and uses `DagWalker` memoization without a separate
-validation traversal. SDD configuration types are likewise caller preconditions;
+asserts supplied-node environment membership and uses `DagWalker` memoization.
+Supplied abstraction and target projection nodes are also checked. Assertions
+are disabled under Python's `-O` mode; type hints and descendant ownership remain
+caller preconditions. SDD configuration types are likewise caller preconditions;
 unsupported vtree names still raise `ValueError` before entering native code.
 
 The architecture requires theory atoms to be in some canonical forms.
@@ -107,7 +109,7 @@ theory lemmas: their conjunction for T-reduced compilation, or the input
 formula disjoined with the negated lemmas for T-extended compilation.
 Projection vocabularies may include atoms absent from the normalized input
 formula and supplied theory lemmas; these are unconstrained dimensions. The ordered
-`projection_atoms` tuple stored in `TheoryCompiledTarget` is the authoritative
+`atoms` tuple stored in `TheoryCompiledTarget` is the authoritative
 query vocabulary. All normalized input atoms must be declared. Generated
 lemma atoms are existentially eliminated for reduced compilation and universally
 eliminated for extended compilation. Backend query engines reject atoms outside
@@ -154,7 +156,7 @@ when none is supplied.
 
 - `target`: the backend-specific compiled DAG;
 - `abstr`: its SMT-atom-to-integer mapping; and
-- `projection_atoms`: the ordered, externally visible tuple; and
+- `atoms`: the ordered, externally visible tuple; and
 - `env`: the owning PySMT environment.
 
 Projection order and membership define the target's query dimensions. Storing
@@ -297,7 +299,7 @@ idempotent; subclasses of `QueryEngine` inherit a no-op default.
 
 `TheoryCompiledTarget.save(directory)` writes a versioned artifact containing
 `abstraction.json` (SMT-LIB atom scripts, original IDs, and ordered
-`projection_atom_ids`), `metadata.json`, and the native payload. Standalone backend
+`atom_ids`), `metadata.json`, and the native payload. Standalone backend
 `save()` and `load()` use their native libraries and the same metadata format
 without the abstraction file. External targets implement `PropCompiledTarget`
 without registration; each backend supplies its codec and complete payload file
