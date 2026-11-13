@@ -1287,3 +1287,28 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   [comparison and evidence](https://github.com/masinag/tddnnf-testbench/blob/refactor/06-public-migration/validation/step06/README.md)
   includes original per-cell measurements, archived artifacts and independent reviews.
   Both remain open; no merge or final integration PR was performed.
+
+## Complete theory compilation vocabulary migration
+
+`TheoryCompilation` replaces `project_on` or `all_vars` with `atoms`
+without a compatibility alias. Normalize explicit atoms, strip negation,
+deduplicate in first-occurrence order, and discard entries normalizing to
+constants. Default to normalized formula atoms in node-ID order. Require all
+normalized input atoms; additional query atoms and absent free dimensions remain
+supported. Atoms mean Boolean symbols or theory relations, not SMT term symbols.
+Reject quantified formula and lemma inputs using the selected environment's
+quantifier oracle before normalization.
+
+Enumerators receive quantifier-free `compilation.phi` (reduced) or its negation
+(extended), with `atoms=compilation.atoms`. For normalized lemma conjunction
+L and W = Atoms(L) - atoms, compile exists W.(phi and L) or
+forall W.(phi or not L), respectively. Original-atom projection and a projected
+formula API are unsupported. Native compilers require complete declarations and
+prepared abstractions, allow only one nonempty quantifier list, and use
+`all_atoms`, `exists_atoms`, `forall_atoms` in place of `all_vars`,
+`exists_vars`, `forall_vars`, with no aliases. d4 rejects universals before execution.
+Native targets, query engines, persistence schemas and logging keys are unchanged.
+
+The quantified compilation changes are integrated into public migration with its
+reorganized tests. Companion caller migration is separate work; local dirty
+worktree specifications remain unchanged.

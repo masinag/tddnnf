@@ -10,7 +10,9 @@ from tddnnf.core.abstraction import Abstractor
 def test_sparse_projection_growth(mgr, a, b, c, pairing):
     forgotten = mgr.Symbol("forgotten", BOOL)
     abstr = Abstractor({3: a, 7: b, 11: c, 15: forgotten})
-    native = pairing[0]().compile(mgr.And(a, forgotten), abstr, project_on=[c, b, a])
+    native = pairing[0]().compile(
+        mgr.And(a, forgotten), abstr, all_atoms=[a, forgotten, c, b], exists_atoms=[forgotten]
+    )
     target = TheoryCompiledTarget(native, abstr, [c, b, a], env=mgr.env)
     with target.queries(pairing[1]) as q:
         abstr.get_id(mgr.Symbol("later", BOOL))

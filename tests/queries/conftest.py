@@ -26,5 +26,5 @@ def engine_factory(pairing):
 @pytest.fixture
 def engine(compiler: PropCompiler, mgr: FormulaManager, a: FNode, b: FNode, engine_factory) -> QueryEngine:
     abstr = Abstractor({1: a, 2: b})
-    target = compiler.compile(mgr.And(a, b), abstr)
+    target = compiler.compile(mgr.And(a, b), abstr, all_atoms=[a, b])
     return engine_factory(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b], env=mgr.env))

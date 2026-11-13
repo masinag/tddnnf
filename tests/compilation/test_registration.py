@@ -31,10 +31,14 @@ def test_node_id_atom_order(mgr, backend, strategy, explicit, theory):
         raw = [z, a, y, b]
     projection = [raw[1], mgr.Not(raw[0]), raw[1]] if explicit else None
     with TheoryCompilation(mgr.And(*raw[:2]), projection, env=mgr.env) as compilation:
-        assert compilation.project_on == ((a, z) if explicit else (z, a))
+        assert compilation.atoms == ((a, z) if explicit else (z, a))
+        if backend is D4Compiler and strategy == "compile_textended":
+            with pytest.raises(NotImplementedError, match="universal"):
+                compilation.compile_textended(backend(), [mgr.And(*raw[2:])])
+            return
         target = getattr(compilation, strategy)(backend(), [mgr.And(*raw[2:])])
-        assert target.projection_atoms == compilation.project_on
-        assert dict(target.abstr.id_to_atom) == dict(enumerate((*compilation.project_on, y, b), 1))
+        assert target.projection_atoms == compilation.atoms
+        assert dict(target.abstr.id_to_atom) == dict(enumerate((*compilation.atoms, y, b), 1))
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -96,10 +100,15 @@ atoms = {name: Symbol(name) for name in ["z", "a", "m", "absent", "lemma"]}
 results = []
 for backend in [BddCompiler, SddCompiler, D4Compiler]:
     for strategy in ["compile_treduced", "compile_textended"]:
-        for projection in [None, [atoms["absent"], atoms["m"]]]:
+        for projection in [None, [atoms["absent"], atoms["m"], atoms["z"], atoms["a"]]]:
             with TheoryCompilation(And(atoms["z"], Or(atoms["a"], atoms["m"])), projection) as c:
-                t = getattr(c, strategy)(backend(), [atoms["lemma"]])
-                results.append([ [str(a) for a in t.projection_atoms], t.abstr.to_dict() ])
+                try:
+                    t = getattr(c, strategy)(backend(), [atoms["lemma"]])
+                except NotImplementedError:
+                    assert backend is D4Compiler and strategy == "compile_textended"
+                    results.append(None)
+                else:
+                    results.append([ [str(a) for a in t.projection_atoms], t.abstr.to_dict() ])
 print(json.dumps(results, sort_keys=True))
 """
     outputs = [
@@ -110,4 +119,6 @@ print(json.dumps(results, sort_keys=True))
     ]
     assert outputs[0] == outputs[1] == outputs[2]
     rows = json.loads(outputs[0])
-    assert rows[:4] == rows[4:8] == rows[8:]
+    assert rows[:4] == rows[4:8]
+    assert rows[8:10] == rows[:2]
+    assert rows[10:] == [None, None]

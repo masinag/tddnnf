@@ -77,3 +77,10 @@ def pairing(request):
 @pytest.fixture
 def compiler(pairing):
     return pairing[0]()
+
+
+def evaluate(mgr, formula, assignment):
+    result = mgr.env.substituter.substitute(formula, {atom: mgr.Bool(value) for atom, value in assignment.items()})
+    result = mgr.env.simplifier.simplify(result)
+    assert result.is_bool_constant()
+    return result.is_true()

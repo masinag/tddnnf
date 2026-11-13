@@ -15,7 +15,7 @@ def test_sdd_native_options(mgr, options):
     a, b, c = [mgr.Symbol(name) for name in ("a", "b", "c")]
     phi = mgr.And(mgr.Or(a, b), c)
     abstr = Abstractor({1: a, 2: b, 3: c})
-    target = compiler.compile(phi, abstr)
+    target = compiler.compile(phi, abstr, all_atoms=sorted(phi.get_atoms(), key=lambda atom: atom.node_id()))
     manager = target.manager
     assert bool(manager.is_auto_gc_and_minimize_on()) is options.get("auto_gc_and_minimize", True)
     expected = SddManager.from_vtree(Vtree(var_count=3, vtree_type="right"))
@@ -27,7 +27,7 @@ def test_sdd_native_options(mgr, options):
 def test_backend_requires_prepared_abstraction(mgr, backend):
     abstractor = Abstractor()
     with pytest.raises(AssertionError, match="prepared"):
-        backend().compile(mgr.Symbol("a"), abstractor)
+        backend().compile(mgr.Symbol("a"), abstractor, all_atoms=[mgr.Symbol("a")])
     assert abstractor.var_count == 0
 
 
@@ -41,5 +41,7 @@ def test_sdd_rejects_invalid_vtree_type(value):
 def test_sdd_supported_vtree_types(mgr, vtree_type):
     phi = mgr.And(mgr.Symbol("a"), mgr.Symbol("b"))
     abstr = Abstractor({1: mgr.Symbol("a"), 2: mgr.Symbol("b")})
-    target = SddCompiler(vtree_type=vtree_type).compile(phi, abstr)
+    target = SddCompiler(vtree_type=vtree_type).compile(
+        phi, abstr, all_atoms=sorted(phi.get_atoms(), key=lambda atom: atom.node_id())
+    )
     equivalent(mgr, target.to_pysmt(abstr, mgr), phi)

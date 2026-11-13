@@ -13,8 +13,8 @@ configured compiler instances, and query engine classes. The public
 workflow is:
 
 ```python
-with TheoryCompilation(phi, project_on=atoms, env=env) as compilation:
-    enumerator.check_all_sat(compilation.phi, atoms=compilation.project_on)
+with TheoryCompilation(phi, atoms=atoms, env=env) as compilation:
+    enumerator.check_all_sat(compilation.phi, atoms=compilation.atoms)
     lemmas = enumerator.get_theory_lemmas()
     target = compilation.compile_treduced(D4Compiler(), lemmas)
 
@@ -57,7 +57,7 @@ acceptance check exposes an adapter defect.
 
 ## Atoms, environment, and stable IDs
 
-`TheoryCompilation(phi, project_on=None, env=None)` selects the supplied PySMT
+`TheoryCompilation(phi, atoms=None, env=None)` selects the supplied PySMT
 environment or the active environment when omitted. Stored formula nodes must
 belong to that environment. Normalize the formula, supplied projection entries,
 and later the lemmas there. Callers must respect type hints and supply Boolean
@@ -69,7 +69,11 @@ Projection entries normalize to positive Boolean symbols or theory atoms;
 strip a normalized top-level negation and reject arbitrary Boolean formulas.
 Deduplicate after normalization, retaining explicit first-occurrence order.
 When projection is omitted, sort normalized formula atoms by `FNode.node_id()`.
-An explicit empty projection remains empty.
+The declaration must contain every normalized formula atom; an empty declaration
+is valid only for atom-free formulas. Atoms are Boolean symbols or theory relations,
+not underlying SMT symbols. Formula and lemma inputs must be quantifier-free; the normalizer raises
+`UnsupportedOperatorError` for quantified inputs.
+Entries normalizing to constants are discarded.
 
 **Projection atoms may be absent from both the formula and the lemmas.** Register
 them anyway: they are unconstrained variables in the represented propositional
@@ -85,8 +89,12 @@ existing IDs and register new atoms above the current maximum, in this order:
 Node IDs are sorting keys only; new abstraction IDs remain sequential above the
 current maximum. Ordering is reproducible given the same node creation history
 in the environment and starting abstraction, independently of set iteration,
-hash randomization, and backend traversal. Existentially eliminate every
-non-projection atom and encoding auxiliary. Keep abstraction IDs distinct from native variable IDs, NNF IDs,
+hash randomization, and backend traversal. Let `V = compilation.atoms`,
+`L` be the normalized lemma conjunction, and `W = Atoms(L) - V`.
+Reduced compilation computes `exists W. (phi and L)`; extended compilation
+computes `forall W. (phi or not L)`. No input atom may be omitted.
+Native compilers accept at most one nonempty quantifier list. d4 rejects
+nonempty universal declarations. Keep abstraction IDs distinct from native variable IDs, NNF IDs,
 and OBDD levels; explicit mappings connect them. A backend may renumber or
 reorder without changing the public vocabulary. Migrated artifacts retain
 their existing IDs instead of applying the new allocation order.

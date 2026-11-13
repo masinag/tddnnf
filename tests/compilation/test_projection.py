@@ -5,27 +5,37 @@ from pysmt.fnode import FNode
 from pysmt.typing import INT
 
 from tddnnf import TheoryCompilation
+from tddnnf.compilers.d4 import D4Compiler
 from tests.support import BACKENDS, STRATEGIES, equivalent, shannon_forget
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("strategy", STRATEGIES)
-@pytest.mark.parametrize("projection", [None, [], ["b"], ["absent", "b", "absent"]])
+@pytest.mark.parametrize("projection", [None, ["a", "b"], ["absent", "b", "a", "absent"]])
 @pytest.mark.parametrize("constant", [None, True, False])
 def test_projected_semantics(mgr, backend, strategy, projection, constant):
     a, b, c, absent = [mgr.Symbol(name) for name in ("a", "b", "c", "absent")]
     phi = mgr.And(a, b) if constant is None else mgr.Bool(constant)
     lemmas = [mgr.Or(b, c)] if constant is None else []
     selected = None if projection is None else [mgr.Symbol(name) for name in projection]
-    with TheoryCompilation(phi, project_on=selected, env=mgr.env) as compilation:
+    with TheoryCompilation(phi, atoms=selected, env=mgr.env) as compilation:
+        generated = set().union(*(lemma.get_atoms() for lemma in lemmas)) - (phi.get_atoms() | set(compilation.atoms))
+        if backend is D4Compiler and strategy == "compile_textended" and generated:
+            with pytest.raises(NotImplementedError, match="universal"):
+                compilation.compile_textended(backend(), lemmas)
+            return
         target = getattr(compilation, strategy)(backend(), lemmas)
         combined = (
             mgr.And(phi, *lemmas)
             if strategy == "compile_treduced"
             else mgr.Or(phi, *(mgr.Not(lemma) for lemma in lemmas))
         )
-        forgotten = [atom for atom in combined.get_atoms() if atom not in compilation.project_on]
+        forgotten = [atom for atom in combined.get_atoms() if atom not in compilation.atoms]
+        if strategy == "compile_textended":
+            combined = mgr.Not(shannon_forget(mgr, mgr.Not(combined), list(generated)))
+            forgotten = [atom for atom in forgotten if atom not in generated]
         expected = shannon_forget(mgr, combined, forgotten)
+        equivalent(mgr, target.to_pysmt(), expected)
         vocabulary = (
             list(dict.fromkeys(selected)) if selected is not None else sorted(phi.get_atoms(), key=FNode.node_id)
         )
@@ -49,7 +59,7 @@ def test_constant_normalizing_projection_atoms(mgr, backend, strategy, negated):
     entries = [mgr.Not(atom) for atom in atoms] if negated else atoms
     with TheoryCompilation(p, [*entries, p], env=mgr.env) as compilation:
         assert [compilation.normalize(atom) for atom in atoms] == [mgr.TRUE(), mgr.FALSE()]
-        assert compilation.project_on == (p,)
+        assert compilation.atoms == (p,)
         target = getattr(compilation, strategy)(backend(), [])
         assert target.projection_atoms == (p,)
         assert target.abstr.var_count == 1
@@ -63,12 +73,12 @@ def test_normalizes_input_and_default_projection(mgr, x, p):
     canonical_atom = mgr.GE(x, mgr.Int(2))
     with TheoryCompilation(mgr.And(p, raw_atom), env=mgr.env) as compilation:
         assert compilation.phi == mgr.And(p, canonical_atom)
-        assert set(compilation.project_on) == {p, canonical_atom}
+        assert set(compilation.atoms) == {p, canonical_atom}
 
 
 def test_normalizes_projection_to_positive_atom(mgr, x, p):
-    with TheoryCompilation(p, [mgr.LT(x, mgr.Int(2))], env=mgr.env) as compilation:
-        assert compilation.project_on == (mgr.GE(x, mgr.Int(2)),)
+    with TheoryCompilation(p, [mgr.LT(x, mgr.Int(2)), p], env=mgr.env) as compilation:
+        assert compilation.atoms == (mgr.GE(x, mgr.Int(2)), p)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -78,7 +88,7 @@ def test_normalizes_and_deduplicates_projection(mgr, backend, strategy, x, p):
     canonical_atom = mgr.GE(x, mgr.Int(2))
     duplicate = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
     with TheoryCompilation(p, [absent, canonical_atom, mgr.Not(duplicate), p], env=mgr.env) as compilation:
-        assert compilation.project_on == (absent, canonical_atom, p)
+        assert compilation.atoms == (absent, canonical_atom, p)
         target = getattr(compilation, strategy)(backend(), [duplicate])
     assert target.projection_atoms == (absent, canonical_atom, p)
     assert dict(target.abstr.id_to_atom) == {1: absent, 2: canonical_atom, 3: p}
@@ -92,7 +102,7 @@ def test_rejects_compound_and_constant_projection(mgr, entry, negated):
     a, b = mgr.Symbol("a"), mgr.Symbol("b")
     value = {"true": mgr.TRUE(), "false": mgr.FALSE(), "and": mgr.And(a, b), "or": mgr.Or(a, b)}[entry]
     value = mgr.Not(value) if negated else value
-    with pytest.raises(ValueError, match="Projection entries"):
+    with pytest.raises(ValueError, match="Vocabulary entries"):
         TheoryCompilation(a, [value], env=mgr.env)
 
 
@@ -107,3 +117,16 @@ def test_constant_lemmas_with_empty_projection(mgr, backend, strategy, value):
         target = getattr(compilation, strategy)(backend(), lemmas)
     equivalent(mgr, target.to_pysmt(), mgr.Bool(expected))
     assert target.projection_atoms == ()
+
+
+@pytest.mark.parametrize("declaration", [[], ["a"], ["x"]])
+def test_rejects_missing_original_atoms(mgr, declaration):
+    a, x = mgr.Symbol("a"), mgr.Symbol("x")
+    with pytest.raises(ValueError, match="formula atoms"):
+        TheoryCompilation(mgr.And(a, x), atoms=[mgr.Symbol(name) for name in declaration], env=mgr.env)
+
+
+def test_rejects_missing_normalized_atom(mgr):
+    x = mgr.Symbol("x", INT)
+    with pytest.raises(ValueError, match="formula atoms"):
+        TheoryCompilation(mgr.GE(x, mgr.Int(2)), [mgr.GE(x, mgr.Int(3))], env=mgr.env)

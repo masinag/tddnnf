@@ -27,7 +27,7 @@ def test_sdd_requires_mapping(tmp_path):
 def test_roundtrip_preserves_sparse_atom_ids(mgr, a, b, tmp_path, compiler):
     abstr = Abstractor({7: a, 1000: b})
     formula = mgr.And(a, mgr.Not(b))
-    target = compiler().compile(formula, abstr)
+    target = compiler().compile(formula, abstr, all_atoms=sorted(formula.get_atoms(), key=lambda atom: atom.node_id()))
     path = tmp_path / "target"
     target.save(path)
     loaded = type(target).load(path)
@@ -39,7 +39,9 @@ def test_roundtrip_preserves_sparse_atom_ids(mgr, a, b, tmp_path, compiler):
 def test_full_mapping_roundtrip_preserves_unused_entries(mgr, tmp_path, compiler):
     a, forgotten, absent, unrelated = [mgr.Symbol(name) for name in ("a", "forgotten", "absent", "unrelated")]
     abstr = Abstractor({7: forgotten, 1000: a, 2000: absent, 3000: unrelated})
-    target = compiler().compile(mgr.And(a, forgotten), abstr, project_on=[absent, a])
+    target = compiler().compile(
+        mgr.And(a, forgotten), abstr, all_atoms=[a, forgotten, absent], exists_atoms=[forgotten]
+    )
     expected = {7: 1, 1000: 2, 2000: 3} if compiler is SddCompiler else {1000: 1, 2000: 2, 7: 3}
     path = tmp_path / "target"
     target.save(path)

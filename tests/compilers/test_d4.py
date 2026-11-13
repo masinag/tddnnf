@@ -23,7 +23,7 @@ def test_projection_cleanup(mgr, a, b, c, monkeypatch):
 
     monkeypatch.setattr(D4Compiler, "_run_d4", staticmethod(run_d4))
 
-    native = D4Compiler().compile(formula, abstr, project_on=projection)
+    native = D4Compiler().compile(formula, abstr, all_atoms=[*projection, forgotten], exists_atoms=[forgotten])
     equivalent(mgr, native.to_pysmt(abstr, mgr), mgr.And(a, mgr.Not(c)))
 
 
@@ -39,5 +39,5 @@ def test_d4_failure_diagnostics_and_cleanup(mgr, monkeypatch):
     monkeypatch.setattr(d4.subprocess, "run", fail)
     atom = mgr.Symbol("a")
     with pytest.raises(RuntimeError, match=r"exit 23.*\n.*native diagnostic"):
-        D4Compiler().compile(atom, Abstractor({1: atom}), project_on=[atom])
+        D4Compiler().compile(atom, Abstractor({1: atom}), all_atoms=[atom])
     assert observed and all(not path.exists() for path in observed)

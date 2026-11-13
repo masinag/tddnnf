@@ -17,7 +17,7 @@ def test_equivalent_syntax_and_polarity(mgr, pairing):
     atom, opposite = mgr.LE(y, x), mgr.LT(x, y)
     scaled = mgr.LE(mgr.Times(mgr.Int(2), y), mgr.Times(mgr.Int(2), x))
     abstr = Abstractor({1: atom})
-    native = pairing[0]().compile(atom, abstr, project_on=[atom])
+    native = pairing[0]().compile(atom, abstr, all_atoms=[atom])
     target = TheoryCompiledTarget(native, abstr, [atom], env=mgr.env)
     with target.queries(pairing[1]) as q:
         assert q.is_satisfiable([scaled])
@@ -34,7 +34,7 @@ def test_canonical_literal_delegation(mgr, pairing, monkeypatch, operation):
     atom, opposite = mgr.LE(y, x), mgr.LT(x, y)
     scaled = mgr.LE(mgr.Times(mgr.Int(2), y), mgr.Times(mgr.Int(2), x))
     abstr = Abstractor({1: atom})
-    native = pairing[0]().compile(atom, abstr, project_on=[atom])
+    native = pairing[0]().compile(atom, abstr, all_atoms=[atom])
     target = TheoryCompiledTarget(native, abstr, [atom], env=mgr.env)
     formula = mgr.Or(scaled, opposite) if operation == "entails_clause" else mgr.And(scaled, mgr.Not(opposite))
     expected = [atom, mgr.Not(atom)] if operation == "entails_clause" else [atom, atom]
@@ -49,7 +49,7 @@ def test_ambiguous_projection_is_rejected(mgr, pairing):
     x, y = mgr.Symbol("session_x", INT), mgr.Symbol("session_y", INT)
     atom, opposite = mgr.LE(y, x), mgr.LT(x, y)
     abstr = Abstractor({1: atom})
-    native = pairing[0]().compile(atom, abstr, project_on=[atom])
+    native = pairing[0]().compile(atom, abstr, all_atoms=[atom])
     ambiguous = TheoryCompiledTarget(native, abstr, [atom, opposite], env=mgr.env)
     with pytest.raises(ValueError, match="Ambiguous"):
         ambiguous.queries(pairing[1])
@@ -114,7 +114,7 @@ def test_rejects_stored_atoms_normalizing_to_constants(mgr, pairing, truth, monk
     x = mgr.Symbol("stored_constant_x", INT)
     atom = mgr.Equals(x, x if truth else mgr.Plus(x, mgr.Int(1)))
     abstr = Abstractor({1: atom})
-    native = pairing[0]().compile(atom, abstr, project_on=[atom])
+    native = pairing[0]().compile(atom, abstr, all_atoms=[atom])
     target = TheoryCompiledTarget(native, abstr, [atom], env=mgr.env)
     contexts = []
     original = QuerySession._index_atoms

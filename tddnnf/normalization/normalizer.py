@@ -20,11 +20,11 @@ class NormalizerWalker(DagWalker):
 
     def __init__(self, env: Environment | None = None) -> None:
         self._closed = False
-        self._solver = None
+        self._solver: MathSAT5Solver | None = None
         self._env = env if env is not None else get_env()
         DagWalker.__init__(self, self._env)
         try:
-            self._solver: MathSAT5Solver = self._env.factory.Solver("msat")
+            self._solver = cast(MathSAT5Solver, self._env.factory.Solver("msat"))
             self._converter = cast(MSatConverter, self._solver.converter)
         except BaseException:
             self.close()

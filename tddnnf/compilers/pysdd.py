@@ -16,6 +16,7 @@ from pysmt.walkers import DagWalker, handles
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
+from tddnnf.core.pysmt_utils import compilation_vocabulary
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -217,16 +218,16 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        project_on: Sequence[FNode] | None = None,
+        all_atoms: Sequence[FNode],
+        exists_atoms: Sequence[FNode] = (),
+        forall_atoms: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
     ) -> SddCompiledTarget:
+        retained = compilation_vocabulary(formula, all_atoms, exists_atoms, forall_atoms)
+        assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
-            atoms = set(formula.get_atoms())
-            if project_on is not None:
-                atoms.update(project_on)
-            atoms = list(atoms)
-            assert all(atom in abstractor for atom in atoms), "Abstraction must be prepared before compilation"
+            atoms = all_atoms
             ids = sorted(abstractor.get_id(atom) for atom in atoms)
             remapping = {idx: native for native, idx in enumerate(ids, 1)}
             var_count = max(len(ids), 1)
@@ -238,19 +239,17 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
                 mgr.auto_gc_and_minimize_off()
             walker = SddWalker(mgr, abstractor, remapping)
             root = walker.translate(formula)
-            n_proj_vars: int
-            if project_on is not None:
-                project_set = set(project_on)
-                exists_map = array("i", [0]) * (mgr.var_count() + 1)
-                for atom in atoms:
-                    if atom not in project_set:
-                        vid = abstractor.get_id(atom)
-                        exists_map[remapping[vid]] = 1
-                with stats.track_time("forget_time"):
-                    root = mgr.exists_multiple(exists_map, root)
-                n_proj_vars = len(project_set)
-            else:
-                n_proj_vars = len(atoms)
+            with stats.track_time("forget_time"):
+                quantified = forall_atoms or exists_atoms
+                if quantified:
+                    exists_map = array("i", [0]) * (mgr.var_count() + 1)
+                    for atom in quantified:
+                        exists_map[remapping[abstractor.get_id(atom)]] = 1
+                    root = (
+                        ~mgr.exists_multiple(exists_map, ~root)
+                        if forall_atoms
+                        else mgr.exists_multiple(exists_map, root)
+                    )
             stats.log("n_atoms", len(atoms))
-            stats.log("n_proj_vars", n_proj_vars)
+            stats.log("n_proj_vars", len(retained))
             return SddCompiledTarget(root, mgr, remapping)

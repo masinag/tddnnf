@@ -26,8 +26,8 @@ def test_invalid_projection_closes_allocated_solver(mgr, monkeypatch):
     solver = Mock()
     solver.converter = Mock()
     monkeypatch.setattr(mgr.env.factory, "Solver", Mock(return_value=solver))
-    with pytest.raises(ValueError, match="Projection entries"):
-        TheoryCompilation(mgr.TRUE(), project_on=[mgr.TRUE()], env=mgr.env)
+    with pytest.raises(ValueError, match="Vocabulary entries"):
+        TheoryCompilation(mgr.TRUE(), atoms=[mgr.TRUE()], env=mgr.env)
     solver.exit.assert_called_once()
 
 

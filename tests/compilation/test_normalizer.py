@@ -2,10 +2,15 @@
 
 import pytest
 from pysmt.environment import Environment
+from pysmt.exceptions import UnsupportedOperatorError
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
+from pysmt.typing import INT
 
+from tddnnf import TheoryCompilation
+from tddnnf.compilers.cudd import BddCompiler
 from tddnnf.normalization.normalizer import NormalizerWalker
+from tests.support import STRATEGIES
 
 
 def test_normalizer_canonicalizes_equivalent_atoms(
@@ -68,3 +73,18 @@ def test_normalizer_lifecycle(mgr):
         session.normalize(mgr.TRUE())
     with pytest.raises(RuntimeError, match="closed"):
         session.__enter__()
+
+
+@pytest.mark.parametrize("kind", ["forall", "exists"])
+@pytest.mark.parametrize("position", ["formula", "lemma"])
+def test_normalizer_rejects_quantified_inputs(mgr, kind, position):
+    x = mgr.Symbol("x", INT)
+    quantified = getattr(mgr, "ForAll" if kind == "forall" else "Exists")([x], mgr.GE(x, mgr.Int(0)))
+    if position == "formula":
+        with pytest.raises(UnsupportedOperatorError):
+            TheoryCompilation(quantified, env=mgr.env)
+    else:
+        with TheoryCompilation(mgr.TRUE(), env=mgr.env) as compilation:
+            for strategy in STRATEGIES:
+                with pytest.raises(UnsupportedOperatorError):
+                    getattr(compilation, strategy)(BddCompiler(), [quantified])

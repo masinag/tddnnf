@@ -22,7 +22,7 @@ def test_cleaned_d4_query_counts(mgr, a, b, c, monkeypatch):
 
     monkeypatch.setattr(D4Compiler, "_run_d4", staticmethod(run_d4))
 
-    native = D4Compiler().compile(formula, abstr, project_on=projection)
+    native = D4Compiler().compile(formula, abstr, all_atoms=[a, b, c, forgotten], exists_atoms=[forgotten])
     container = TheoryCompiledTarget(native, abstr, projection, env=mgr.env)
     with container.queries(DdnnifeEngine) as queries:
         assert queries.count_truth_assignments() == 2
@@ -34,7 +34,9 @@ def test_cleaned_d4_query_counts(mgr, a, b, c, monkeypatch):
 def test_full_mapping_roundtrip_queries(mgr, tmp_path, compiler, engine):
     a, forgotten, absent, unrelated = [mgr.Symbol(name) for name in ("a", "forgotten", "absent", "unrelated")]
     abstr = Abstractor({7: forgotten, 1000: a, 2000: absent, 3000: unrelated})
-    native = compiler().compile(mgr.And(a, forgotten), abstr, project_on=[absent, a])
+    native = compiler().compile(
+        mgr.And(a, forgotten), abstr, all_atoms=[a, forgotten, absent], exists_atoms=[forgotten]
+    )
     target = TheoryCompiledTarget(native, abstr, [absent, a], env=mgr.env)
     path = tmp_path / "full-mapping"
     target.save(path)

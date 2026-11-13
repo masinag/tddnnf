@@ -17,6 +17,7 @@ from pysmt.walkers import DagWalker, handles
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
+from tddnnf.core.pysmt_utils import compilation_vocabulary
 from tddnnf.core.stats_collector import StatsCollector
 
 D4_BIN = Path(__file__).resolve().parent.parent / "bin" / "d4.bin"
@@ -305,13 +306,19 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        project_on: Sequence[FNode] | None = None,
+        all_atoms: Sequence[FNode],
+        exists_atoms: Sequence[FNode] = (),
+        forall_atoms: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
     ) -> D4CompiledTarget:
+        retained = compilation_vocabulary(formula, all_atoms, exists_atoms, forall_atoms)
+        assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"
+        if forall_atoms:
+            raise NotImplementedError("d4 does not support universal variable elimination")
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
-            atoms = list(formula.get_atoms())
-            if not atoms and (project_on is None or len(project_on) == 0):
+            atoms = list(all_atoms)
+            if not atoms:
                 if formula.is_true():
                     stats.log("n_atoms", 0)
                     stats.log("n_proj_vars", 0)
@@ -322,13 +329,10 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
                     return D4CompiledTarget("f 1\n", 0)
 
             with stats.track_time("register_atoms_time"):
-                proj_set = set(atoms if project_on is None else project_on)
-                assert all(a in abstractor for a in atoms + list(proj_set)), "Abstraction must be prepared"
+                proj_set = set(retained)
 
-            all_atoms = set(atoms)
-            if project_on is not None:
-                all_atoms.update(project_on)
-            all_atom_ids = sorted({abstractor.get_id(a) for a in all_atoms})
+            declared_atoms = set(all_atoms)
+            all_atom_ids = sorted(abstractor.get_id(a) for a in all_atoms)
 
             projected_ids = {abstractor.get_id(a) for a in proj_set}
             # d4 assigns projected variables first; match that order before translation.
@@ -348,7 +352,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
                 if len(projected_ids) == 0:
                     nnf_raw = out_path.read_text()
                     if nnf_raw.startswith("f"):
-                        stats.log("n_atoms", len(all_atoms))
+                        stats.log("n_atoms", len(declared_atoms))
                         stats.log("n_proj_vars", 0)
                         return D4CompiledTarget("f 1\n", 0, remapping=remapping)
                     stats.log("n_atoms", len(all_atoms))
@@ -357,7 +361,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
 
                 nnf_text = out_path.read_text()
                 if nnf_text.startswith("f"):
-                    stats.log("n_atoms", len(all_atoms))
+                    stats.log("n_atoms", len(declared_atoms))
                     stats.log("n_proj_vars", len(projected_ids))
                     return D4CompiledTarget("f 1\n", 0, remapping=remapping)
 

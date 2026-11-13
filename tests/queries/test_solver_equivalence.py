@@ -10,7 +10,12 @@ from tests.queries.support import solver_models
 
 
 def test_exhaustive_engine_and_solver_space(engine_factory, mgr, compiler, bank_case):
-    target = compiler.compile(bank_case.original_formula, bank_case.abstr, project_on=bank_case.project_on)
+    target = compiler.compile(
+        bank_case.original_formula,
+        bank_case.abstr,
+        all_atoms=bank_case.all_atoms,
+        exists_atoms=bank_case.vars_to_forget,
+    )
     if isinstance(target, D4CompiledTarget) and target.nnf_text in ("t 1\n", "f 1\n"):
         pytest.skip("ddnnife rejects constant circuits with zero native features; dedicated exception tests cover this")
     container = TheoryCompiledTarget(target, bank_case.abstr, bank_case.project_on, env=mgr.env)
@@ -30,7 +35,12 @@ def test_exhaustive_engine_and_solver_space(engine_factory, mgr, compiler, bank_
 
 
 def test_queries_with_assumptions(engine_factory, mgr, compiler, bank_case):
-    target = compiler.compile(bank_case.original_formula, bank_case.abstr, project_on=bank_case.project_on)
+    target = compiler.compile(
+        bank_case.original_formula,
+        bank_case.abstr,
+        all_atoms=bank_case.all_atoms,
+        exists_atoms=bank_case.vars_to_forget,
+    )
     if isinstance(target, D4CompiledTarget) and target.nnf_text in ("t 1\n", "f 1\n"):
         pytest.skip("ddnnife rejects constant circuits with zero native features; dedicated exception tests cover this")
     engine = engine_factory(TheoryCompiledTarget(target, bank_case.abstr, bank_case.project_on, env=mgr.env))

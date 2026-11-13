@@ -3,7 +3,6 @@
 import ddnnife
 import pytest
 
-from tddnnf import TheoryCompilation
 from tddnnf.compilers.d4 import D4CompiledTarget
 from tddnnf.compilers.pysdd import SddCompiledTarget
 from tddnnf.core.abstraction import Abstractor
@@ -19,7 +18,12 @@ def test_projected_enumeration(mgr, a, b, c, compiler, engine_factory, sparse, p
     abstr = Abstractor({3: a, 7: b, 11: c} if sparse else {1: a, 2: b, 3: c})
     projection = [b, a] if project else []
     formula = {"true": c, "false": mgr.FALSE(), "atom": mgr.And(a, c)}[shape]
-    native = compiler.compile(formula, abstr, project_on=projection)
+    native = compiler.compile(
+        formula,
+        abstr,
+        all_atoms=list(dict.fromkeys([*projection, *formula.get_atoms()])),
+        exists_atoms=[atom for atom in formula.get_atoms() if atom not in projection],
+    )
     target = TheoryCompiledTarget(native, abstr, projection, env=mgr.env)
     if isinstance(native, D4CompiledTarget) and native.nnf_text in ("t 1\n", "f 1\n"):
         with pytest.raises(ddnnife.InternalError):
@@ -50,8 +54,16 @@ def test_count_uses_native_dimensions(mgr, compiler, engine_factory, sparse, pro
     abstr = Abstractor({7: a}) if sparse else Abstractor()
     formula = {"true": mgr.TRUE(), "false": mgr.FALSE(), "atom": a}[shape]
     projection = [a] if project else []
-    with TheoryCompilation(formula, projection, env=mgr.env) as compilation:
-        target = compilation.compile_treduced(compiler, [], abstractor=abstr)
+    all_atoms = list(dict.fromkeys([*projection, *formula.get_atoms()]))
+    for atom in all_atoms:
+        abstr.get_id(atom)
+    native = compiler.compile(
+        formula,
+        abstr,
+        all_atoms=all_atoms,
+        exists_atoms=[atom for atom in all_atoms if atom not in projection],
+    )
+    target = TheoryCompiledTarget(native, abstr, projection, env=mgr.env)
     if isinstance(target.target, D4CompiledTarget) and target.target.nnf_text in ("t 1\n", "f 1\n"):
         with pytest.raises(ddnnife.InternalError):
             engine_factory(target)
@@ -68,7 +80,7 @@ def test_count_uses_native_dimensions(mgr, compiler, engine_factory, sparse, pro
 def test_enumeration_projection_order(mgr, compiler, a, b, reverse, engine_factory):
     projection = [b, a] if reverse else [a, b]
     abstr = Abstractor({1: a, 2: b})
-    native = compiler.compile(mgr.Or(a, b), abstr, project_on=projection)
+    native = compiler.compile(mgr.Or(a, b), abstr, all_atoms=projection)
     engine = engine_factory(TheoryCompiledTarget(native, abstr, projection, env=mgr.env))
     models = list(engine.enumerate_truth_assignments())
     assert len(models) == 3
@@ -78,7 +90,7 @@ def test_enumeration_projection_order(mgr, compiler, a, b, reverse, engine_facto
 @pytest.mark.parametrize("pairing", PAIRINGS[1:])
 def test_rejects_missing_projection_mapping(mgr, a, b, compiler, pairing, engine_factory):
     abstr = Abstractor({3: a, 7: b})
-    native = compiler.compile(a, abstr, project_on=[a, b])
+    native = compiler.compile(a, abstr, all_atoms=[a, b])
     mapping = {3: native.remapping[3]}
     if isinstance(native, SddCompiledTarget):
         native = SddCompiledTarget(native.root, native.manager, mapping)
@@ -91,7 +103,7 @@ def test_rejects_missing_projection_mapping(mgr, a, b, compiler, pairing, engine
 
 def test_absent_projection_atom(mgr, a, b, compiler, engine_factory):
     abstr = Abstractor({3: a, 7: b})
-    native = compiler.compile(a, abstr, project_on=[a, b])
+    native = compiler.compile(a, abstr, all_atoms=[a, b])
     engine = engine_factory(TheoryCompiledTarget(native, abstr, [a, b], env=mgr.env))
     models = list(engine.enumerate_truth_assignments())
     assert len(models) == 2
@@ -112,7 +124,7 @@ def test_absent_projection_atom(mgr, a, b, compiler, engine_factory):
 def test_constant_targets(mgr, a, compiler, pairing, engine_factory, truth, active):
     projection = [a] if active else []
     abstr = Abstractor({1: a})
-    native = compiler.compile(mgr.Bool(truth), abstr, project_on=projection)
+    native = compiler.compile(mgr.Bool(truth), abstr, all_atoms=projection)
     container = TheoryCompiledTarget(native, abstr, projection, env=mgr.env)
     if pairing[1] is DdnnifeEngine and (not truth or not active):
         with pytest.raises(ddnnife.InternalError):

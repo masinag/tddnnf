@@ -24,7 +24,7 @@ def test_normalized_assumptions(
     expected_count: int,
 ) -> None:
     abstr = Abstractor({1: a, 2: b})
-    target = compiler.compile(mgr.Or(a, b), abstr)
+    target = compiler.compile(mgr.Or(a, b), abstr, all_atoms=[a, b])
     engine = engine_factory(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b], env=mgr.env))
     assumptions = None if polarities is None else [a if positive else mgr.Not(a) for positive in polarities]
     assert engine.is_satisfiable(assumptions) == (expected_count > 0)
@@ -96,7 +96,7 @@ def test_projected_assumption_on_forgotten_var_raises(
     c: FNode,
 ) -> None:
     abstr = Abstractor({1: a, 2: b, 3: c})
-    target = compiler.compile(mgr.And(a, mgr.Or(b, c)), abstr, project_on=[a, b])
+    target = compiler.compile(mgr.And(a, mgr.Or(b, c)), abstr, all_atoms=[a, b, c], exists_atoms=[c])
     engine = engine_factory(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b], env=mgr.env))
     with pytest.raises(ValueError, match="not .*projection"):
         engine.is_satisfiable(assumptions=[c])
