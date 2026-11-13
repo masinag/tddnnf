@@ -437,7 +437,7 @@ used during compilation and later forgotten remain allocated.
 
 ## Test specification
 
-The executable integration corpus is in [`tests/theory_corpus.py`](tests/theory_corpus.py).
+The executable integration corpus is in [`tests/bank_cases.py`](tests/bank_cases.py).
 It preserves all 27 supplied inline expressions and full/theory-projected reference
 counts: Boolean, equality, LRA, mixed integer/real arithmetic, bit vectors, and
 arrays. Partition counts are intentionally ignored. The four file-backed examples
@@ -445,7 +445,7 @@ arrays. Partition counts are intentionally ignored. The four file-backed example
 Bool-only projected reference zero denotes no theory projection; a satisfiable
 formula projected onto an empty vocabulary has one Boolean assignment.
 
-[`tests/test_theory_corpus.py`](tests/test_theory_corpus.py) exercises every inline
+[`tests/test_bank_cases.py`](tests/test_bank_cases.py) exercises every inline
 formula with both theory constructions, complete vocabularies and the
 three native backend/engine pairs. Independent exhaustive SMT checks determine
 consistency of original-atom valuations. Reduced truth is `phi and consistent`;
@@ -478,7 +478,7 @@ reproduced results should be reported as such.
 Current inventory: **18 test modules**, **113 test function/method definitions**
 (including definitions in the two shared base modules, counted once), and
 **1,299 collected test cases** after inheritance and parametrization. Support
-modules `conftest.py`, `formula_bank.py`, and `theory_corpus.py` supply fixtures
+modules `conftest.py`, `formula_bank.py`, and `bank_cases.py` supply fixtures
 and formulas.
 
 | Integration boundary | Test definitions | Collected cases |

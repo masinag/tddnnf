@@ -17,7 +17,7 @@ class TCase:
     model_count: int
 
 
-THEORY_CASES = [
+BANK_CASES = [
     TCase("Bool only", lambda s: (s["A"] | s["B"]) & (~s["A"] | ~s["B"]), 2),
     TCase("Eq unsat", lambda s: s["x"].Equals(s["y"]) & s["x"].Equals(s["z"]) & ~s["y"].Equals(s["z"]), 0),
     TCase("LRA unsat", lambda s: (s["x"] <= 0) & (s["x"] >= 1), 0),

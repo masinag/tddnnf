@@ -89,15 +89,13 @@ class TheoryCompilation:
         lemmas: Iterable[FNode],
         computation_logger: dict[str, object] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
-        """Compile exists W. (phi and L), eliminating lemma atoms outside self.atoms.
+        """Compile exists W. (phi and L), eliminating only lemma atoms outside atoms.
 
-        phi is the normalized input formula; its atoms belong to self.atoms.
-        L is the normalized conjunction of the supplied quantifier-free lemmas,
-        which must rule out theory-inconsistent assignments satisfying phi
-        propositionally. Enumerate phi with atoms=self.atoms.
-        W contains the atoms in L outside self.atoms, including Boolean symbols,
-        rather than underlying SMT symbols.
-        """
+        Here:
+        - phi is the formula to be compiled. The set of atoms in phi must be a subset of the atoms of TheoryCompilation.
+        - L is the conjuction of the supplied lemmas, that must rule out the theory-inconsistent truth assignments propositionally satisfy phi
+        - W is the subset of theory atoms appearing in L but not in atoms.
+        """  # noqa: E501
         return self._compile(compiler, lemmas, False, computation_logger)
 
     def compile_textended(
@@ -106,15 +104,13 @@ class TheoryCompilation:
         lemmas: Iterable[FNode],
         computation_logger: dict[str, object] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
-        """Compile forall W. (phi or not L), eliminating lemma atoms outside self.atoms.
+        """Compile forall W. (phi or not L).
 
-        phi is the normalized input formula; its atoms belong to self.atoms.
-        L is the normalized conjunction of the supplied quantifier-free lemmas,
-        which must rule out theory-inconsistent assignments satisfying Not(phi)
-        propositionally. Enumerate Not(phi) with atoms=self.atoms.
-        W contains the atoms in L outside self.atoms, including Boolean symbols,
-        rather than underlying SMT symbols.
-        """
+        Here:
+        - phi is the formula to be compiled. The set of atoms in phi must be a subset of the atoms of TheoryCompilation.
+        - L is the conjuction of the supplied lemmas, that must rule out the theory-inconsistent truth assignments propositionally satisfy (not phi)
+        - W is the subset of theory atoms appearing in L but not in atoms.
+        """  # noqa: E501
         return self._compile(compiler, lemmas, True, computation_logger)
 
     def _compile(
