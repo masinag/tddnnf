@@ -11,7 +11,7 @@ including its current public migration: `TheoryCompilation` and
 `TheoryCompiledTarget`. Benchmark harness tests are outside this plan.
 
 The test tree below is proposed, except for the implemented core groups:
-Abstractor, PySMT utilities, and TheoryCompiledTarget, plus the normalization
+Abstractor, PySMT utilities, TheoryCompiledTarget, and persistence, plus the normalization
 and compilation input-ownership checks described below.
 The removed suite remains unreplaced elsewhere; further cases will be decided
 one group at a time.
@@ -68,11 +68,22 @@ environments, alongside reconstruction and size expectations. Explicit selection
 leaves the globally active environment unchanged. A constant round trip covers
 empty vocabulary and preservation of backend metadata and payloads.
 
-Session creation and lifecycle belong to the QuerySession group. Persistence
-helper failures and native backends remain deferred. Constructor input assertions
+Session creation and lifecycle belong to the QuerySession group. Native backends
+remain deferred. Constructor input assertions
 reject abstraction/atoms nodes from another manager, including identically
 named nodes. These input checks are separate from output-ownership tests;
 `to_pysmt()` has no runtime output-validation assertions.
+
+### Implemented persistence group
+
+`test_persistence.py` uses `tmp_path` and direct assertions for metadata round
+trips, missing and unsupported schema versions (integer, string, Boolean, and
+float), and propagation of missing-file and malformed-JSON errors. Saving tests
+cover publication only after context exit, exception propagation and cleanup,
+and refusal of an existing directory while preserving its contents. Assertions
+avoid JSON formatting, exact error messages, and temporary directory names.
+Mocks, shared fixtures, native backends, symlinks, concurrent saves, and other
+metadata shapes remain outside this group.
 
 ### Implemented normalization and compilation ownership checks
 
