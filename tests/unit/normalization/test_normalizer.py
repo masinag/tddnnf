@@ -52,3 +52,46 @@ def test_rejects_foreign_inputs(env, entry):
     with NormalizerWalker(env) as normalizer:
         with pytest.raises(AssertionError, match="selected environment"):
             getattr(normalizer, entry)(foreign)
+
+
+def test_context_returns_same_instance_and_closes_on_normal_exit(env):
+    normalizer = NormalizerWalker(env)
+    with normalizer as entered:
+        assert entered is normalizer
+
+    with pytest.raises(RuntimeError):
+        normalizer.normalize(env.formula_manager.Symbol("p"))
+
+
+def test_context_propagates_exception_and_closes(env):
+    normalizer = NormalizerWalker(env)
+    error = ValueError("context body failed")
+
+    with pytest.raises(ValueError) as caught:
+        with normalizer:
+            raise error
+
+    assert caught.value is error
+    with pytest.raises(RuntimeError):
+        normalizer.normalize(env.formula_manager.Symbol("p"))
+
+
+def test_close_is_idempotent(env):
+    normalizer = NormalizerWalker(env)
+    normalizer.close()
+    normalizer.close()
+
+
+def test_closed_normalizer_rejects_cached_input_and_context_entry(env):
+    symbol = env.formula_manager.Symbol("p")
+    normalizer = NormalizerWalker(env)
+    assert normalizer.normalize(symbol) is symbol
+    normalizer.close()
+
+    with pytest.raises(RuntimeError):
+        normalizer.walk(symbol)
+    with pytest.raises(RuntimeError):
+        normalizer.normalize(symbol)
+    with pytest.raises(RuntimeError):
+        with normalizer:
+            pass

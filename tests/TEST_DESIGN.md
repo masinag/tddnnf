@@ -103,13 +103,21 @@ semantic equivalence and idempotence; equivalent arithmetic atoms share a
 canonical form. An explicit environment differs from the active environment,
 which remains unchanged.
 
+Lifecycle tests use real normalizers and the existing `env` fixture to check
+context-entry identity, closure after normal and exceptional exits, propagation
+of the same exception, repeated close, and rejection of `walk()`, `normalize()`,
+and context entry after close, including previously normalized Boolean input.
+They assert public behavior without assuming an internal solver dependency.
+Constructor failures, destructor behavior, internal resource-release counts, and
+additional normalization semantics remain untested.
+
 Input assertions reject foreign normalization roots, formulas, vocabulary entries,
 lemmas, and supplied abstraction atoms before backend compilation. Identically
 named nodes from distinct environments remain distinct inputs. Per the selected
 manager-membership check, input assertions check supplied nodes only; foreign
 descendants beneath a local root remain a caller precondition. Output tests still
 inspect every descendant. Assertions are disabled under Python's `-O` mode.
-Broader normalization lifecycle and compilation behavior tests remain deferred.
+Broader compilation behavior tests remain deferred.
 
 ## Organization
 
