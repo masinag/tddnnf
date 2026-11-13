@@ -68,8 +68,8 @@ Deduplicate after normalization, retaining explicit first-occurrence order.
 When projection is omitted, sort normalized formula atoms by `FNode.node_id()`.
 The declaration must contain every normalized formula atom; an empty declaration
 is valid only for atom-free formulas. Atoms are Boolean symbols or theory relations,
-not underlying SMT symbols. Formula and lemma inputs must be quantifier-free,
-checked with the selected environment quantifier oracle before normalization.
+not underlying SMT symbols. Formula and lemma inputs must be quantifier-free; the normalizer raises
+`UnsupportedOperatorError` for quantified inputs.
 Entries normalizing to constants are discarded.
 
 **Projection atoms may be absent from both the formula and the lemmas.** Register

@@ -98,3 +98,10 @@ def bank_case(request: pytest.FixtureRequest, mgr: FormulaManager) -> SolverGrou
     v = [mgr.Symbol(f"v{gen_fn.__name__}_{i}", BOOL) for i in range(num_vars)]
     formula = gen_fn(mgr, v)
     return SolverGroundTruth(mgr, formula, v, strategy)
+
+
+def evaluate(mgr, formula, assignment):
+    result = mgr.env.substituter.substitute(formula, {atom: mgr.Bool(value) for atom, value in assignment.items()})
+    result = mgr.env.simplifier.simplify(result)
+    assert result.is_bool_constant()
+    return result.is_true()

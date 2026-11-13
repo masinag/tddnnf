@@ -84,7 +84,8 @@ entries are normalized, made positive, deduplicated in first-occurrence order,
 and discarded if they normalize to constants. Missing normalized input atoms
 raise `ValueError`. Atoms are Boolean symbols or theory relations such as
 `x < 2`, not underlying SMT symbols such as `x`. Formula and lemma inputs must
-be quantifier-free; the selected environment's oracle checks this before normalization.
+be quantifier-free; the normalizer raises
+`UnsupportedOperatorError` for quantified inputs.
 
 ```python
 compilation = TheoryCompilation(phi)
@@ -448,8 +449,7 @@ formula projected onto an empty vocabulary has one Boolean assignment.
 formula with both theory constructions, complete vocabularies and the
 three native backend/engine pairs. Independent exhaustive SMT checks determine
 consistency of original-atom valuations. Reduced truth is `phi and consistent`;
-extended truth is `phi or not consistent`. Theory-only declarations that omit
-Boolean input atoms are rejection cases; projected counts remain independent oracle checks. Supplied model counts refer to theory-consistent reduced
+extended truth is `phi or not consistent`. Supplied model counts refer to theory-consistent reduced
 models, not the extended Boolean completion. The oracle checks reconstruction,
 counts, satisfiability, validity, enumeration, literal clause entailment and cube
 implication, before and after save/load. d4 cases requiring universal elimination
@@ -460,8 +460,7 @@ exclusions remain; this change does not expand constant handling.
 independently enumerates Boolean truth tables for existential, universal,
 and unquantified compilation, with mixed requests rejected. It covers empty retained and declared vocabularies, absent free
 dimensions, sparse IDs, invalid declarations, and d4 rejection before execution.
-A generated-atom extended regression checks reconstruction, validity, cube
-implication, and BDD/SDD persistence.
+A generated-atom extended regression checks reconstruction and BDD/SDD persistence.
 
 The migration map is: shared native compiler fixtures declare `all_atoms` and
 existential omissions; theory pipeline tests distinguish generated from original
@@ -478,18 +477,18 @@ reproduced results should be reported as such.
 
 Current inventory: **18 test modules**, **113 test function/method definitions**
 (including definitions in the two shared base modules, counted once), and
-**1,461 collected test cases** after inheritance and parametrization. Support
+**1,299 collected test cases** after inheritance and parametrization. Support
 modules `conftest.py`, `formula_bank.py`, and `theory_corpus.py` supply fixtures
 and formulas.
 
 | Integration boundary | Test definitions | Collected cases |
 | --- | ---: | ---: |
 | Native quantifiers and generated-atom regression | 5 | 194 |
-| Supplied theory corpus | 1 | 324 |
+| Supplied theory corpus | 1 | 162 |
 | Existing compiler, engine, pipeline, normalization, ownership, metrics and persistence checks | 107 | 943 |
 
 
-Verification: all **1,461 tests passed**, including all 27 inline corpus formulas,
-324 corpus combinations (including rejection cases), and independent native
+Verification: all **1,299 tests passed**, including all 27 inline corpus formulas,
+162 corpus combinations, and independent native
 quantifier truth tables. Ruff lint/format, basedpyright and diff checks passed.
 The run emitted PySMT/MathSAT warnings and CUDD cleanup warnings.

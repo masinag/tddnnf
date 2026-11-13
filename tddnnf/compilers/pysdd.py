@@ -235,10 +235,10 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
             walker = SddWalker(mgr, abstractor, remapping)
             root = walker.translate(formula)
             with stats.track_time("forget_time"):
-                variables = forall_atoms or exists_atoms
-                if variables:
+                quantified = forall_atoms or exists_atoms
+                if quantified:
                     exists_map = array("i", [0]) * (mgr.var_count() + 1)
-                    for atom in variables:
+                    for atom in quantified:
                         exists_map[remapping[abstractor.get_id(atom)]] = 1
                     root = (
                         ~mgr.exists_multiple(exists_map, ~root)

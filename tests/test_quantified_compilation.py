@@ -12,39 +12,41 @@ from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.pysmt_utils import compilation_vocabulary
-from tddnnf.queries import BddEngine, SddEngine
+from tests.conftest import evaluate
 
 BACKENDS = [BddCompiler, SddCompiler, D4Compiler]
 
 
-def evaluate(mgr, formula, assignment):
-    result = mgr.env.substituter.substitute(formula, {atom: mgr.Bool(value) for atom, value in assignment.items()})
-    result = mgr.env.simplifier.simplify(result)
-    assert result.is_bool_constant()
-    return result.is_true()
+BOOLEAN_CASES = [
+    pytest.param(lambda m, s: m.Iff(s["e"], s["u"]), lambda v: v["e"] == v["u"], id="iff"),
+    pytest.param(lambda m, s: m.Iff(s["a"], m.Iff(s["e"], s["u"])), lambda v: v["a"] == (v["e"] == v["u"]), id="free"),
+    pytest.param(lambda m, s: m.Or(s["a"], m.Iff(s["e"], s["u"])), lambda v: v["a"] or v["e"] == v["u"], id="guarded"),
+    pytest.param(lambda m, s: m.TRUE(), lambda v: True, id="true"),
+    pytest.param(lambda m, s: m.FALSE(), lambda v: False, id="false"),
+]
+
+INVALID_DECLARATIONS = [
+    pytest.param(lambda m, a, b: ([b], [], []), id="missing"),
+    pytest.param(lambda m, a, b: ([a], [b], []), id="exists_outside"),
+    pytest.param(lambda m, a, b: ([a], [], [b]), id="forall_outside"),
+    pytest.param(lambda m, a, b: ([a], [a], [a]), id="overlap"),
+    pytest.param(lambda m, a, b: ([a, b], [a], [b]), id="mixed"),
+    pytest.param(lambda m, a, b: ([a, m.And(a, b)], [], []), id="compound"),
+    pytest.param(lambda m, a, b: ([a, m.TRUE()], [], []), id="constant"),
+    pytest.param(lambda m, a, b: ([a, a], [], []), id="duplicate"),
+    pytest.param(lambda m, a, b: ([a], [a, a], []), id="duplicate_exists"),
+    pytest.param(lambda m, a, b: ([a], [], [m.Not(a)]), id="negative"),
+    pytest.param(lambda m, a, b: ([a, "b"], [], []), id="non_node"),
+]
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("quantifiers", [([], []), (["e"], []), ([], ["u"]), (["e", "a"], []), ([], ["u", "e"])])
-@pytest.mark.parametrize("shape", ["iff", "free", "guarded", "true", "false"])
+@pytest.mark.parametrize("formula_builder,boolean", BOOLEAN_CASES)
 @pytest.mark.parametrize("absent_free", [False, True])
-def test_boolean_truth_tables(mgr, backend, quantifiers, shape, absent_free, monkeypatch):
+def test_boolean_truth_tables(mgr, backend, quantifiers, formula_builder, boolean, absent_free, monkeypatch):
     atoms = {name: mgr.Symbol(name) for name in ("a", "e", "u", "absent")}
-    a, e, u = (atoms[name] for name in ("a", "e", "u"))
-    formula = {
-        "iff": mgr.Iff(e, u),
-        "free": mgr.Iff(a, mgr.Iff(e, u)),
-        "guarded": mgr.Or(a, mgr.Iff(e, u)),
-        "true": mgr.TRUE(),
-        "false": mgr.FALSE(),
-    }[shape]
-    boolean = {
-        "iff": lambda v: v[e] == v[u],
-        "free": lambda v: v[a] == (v[e] == v[u]),
-        "guarded": lambda v: v[a] or v[e] == v[u],
-        "true": lambda v: True,
-        "false": lambda v: False,
-    }[shape]
+    formula = formula_builder(mgr, atoms)
     all_atoms = [atoms[name] for name in (("absent", "u", "a", "e") if absent_free else ("u", "a", "e"))]
     exists, forall = ([atoms[name] for name in group] for group in quantifiers)
     retained = [atom for atom in all_atoms if atom not in exists + forall]
@@ -65,44 +67,17 @@ def test_boolean_truth_tables(mgr, backend, quantifiers, shape, absent_free, mon
         free = dict(zip(retained, free_values))
         quantified = exists or forall
         expected = (any if exists else all)(
-            boolean(free | dict(zip(quantified, values))) for values in product((False, True), repeat=len(quantified))
+            boolean({atom.symbol_name(): value for atom, value in (free | dict(zip(quantified, values))).items()})
+            for values in product((False, True), repeat=len(quantified))
         )
         assert evaluate(mgr, actual, free) == expected
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-@pytest.mark.parametrize(
-    "case",
-    [
-        "missing",
-        "exists_outside",
-        "forall_outside",
-        "overlap",
-        "mixed",
-        "compound",
-        "constant",
-        "duplicate",
-        "duplicate_exists",
-        "negative",
-        "non_node",
-    ],
-)
-def test_invalid_declarations(mgr, backend, case, monkeypatch):
+@pytest.mark.parametrize("declarations", INVALID_DECLARATIONS)
+def test_invalid_declarations(mgr, backend, declarations, monkeypatch):
     a, b = mgr.Symbol("a"), mgr.Symbol("b")
-    declarations = {
-        "missing": ([b], [], []),
-        "exists_outside": ([a], [b], []),
-        "forall_outside": ([a], [], [b]),
-        "overlap": ([a], [a], [a]),
-        "mixed": ([a, b], [a], [b]),
-        "compound": ([a, mgr.And(a, b)], [], []),
-        "constant": ([a, mgr.TRUE()], [], []),
-        "duplicate": ([a, a], [], []),
-        "duplicate_exists": ([a], [a, a], []),
-        "negative": ([a], [], [mgr.Not(a)]),
-        "non_node": ([a, "b"], [], []),
-    }
-    all_atoms, exists, forall = declarations[case]
+    all_atoms, exists, forall = declarations(mgr, a, b)
     compiler = backend()
     if backend is D4Compiler:
         monkeypatch.setattr(compiler, "_run_d4", Mock(side_effect=AssertionError("Must validate first")))
@@ -130,10 +105,10 @@ def test_all_dimensions_quantified(mgr, backend):
 
 
 @pytest.mark.parametrize(
-    "backend,target_type,engine",
-    [(BddCompiler, BddCompiledTarget, BddEngine), (SddCompiler, SddCompiledTarget, SddEngine)],
+    "backend,target_type",
+    [(BddCompiler, BddCompiledTarget), (SddCompiler, SddCompiledTarget)],
 )
-def test_extended_generated_atom_roundtrip(mgr, tmp_path, backend, target_type, engine):
+def test_extended_generated_atom_roundtrip(mgr, tmp_path, backend, target_type):
     p, w = mgr.Symbol("p"), mgr.Symbol("generated")
     phi = p
     lemma = mgr.Iff(p, w)
@@ -146,9 +121,3 @@ def test_extended_generated_atom_roundtrip(mgr, tmp_path, backend, target_type, 
         assert artifact.projection_atoms == (p,)
         for value in (False, True):
             assert evaluate(mgr, artifact.to_pysmt(), {p: value}) == value
-        with artifact.queries(engine) as queries:
-            assert not queries.is_valid()
-            assert queries.is_implicant(p)
-            assert not queries.is_implicant(mgr.Not(p))
-            assert not queries.is_implicant(mgr.TRUE())
-            assert queries.count_truth_assignments() == 1

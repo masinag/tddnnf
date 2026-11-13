@@ -43,8 +43,8 @@ a top-level negation is removed so the vocabulary contains positive atoms, and
 duplicates are removed while preserving their first occurrence. Entries that
 normalize to constants are discarded. Missing normalized input atoms raise
 `ValueError`. Atoms are Boolean symbols or theory relations, not underlying
-SMT symbols. Formula and lemma inputs must be quantifier-free, checked with
-the selected environment quantifier oracle before normalization.
+SMT symbols. Formula and lemma inputs must be quantifier-free; the normalizer raises
+`UnsupportedOperatorError` for quantified inputs.
 
 Both constructions use one private pipeline to normalize lemmas,
 combine them with the formula, prepare an abstraction, compile, and log

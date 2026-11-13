@@ -80,8 +80,6 @@ class TheoryCompilation:
     def normalize(self, formula: FNode) -> FNode:
         """Normalize a Boolean FNode supplied in this session's environment."""
         self._ensure_open()
-        if not self._env.qfo.is_qf(formula):
-            raise ValueError("Theory compilation requires quantifier-free inputs")
         assert self._normalizer is not None
         return self._normalizer.normalize(formula)
 
@@ -91,11 +89,14 @@ class TheoryCompilation:
         lemmas: Iterable[FNode],
         computation_logger: dict[str, object] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
-        """Compile exists W. (phi and L), eliminating only lemma atoms outside atoms.
+        """Compile exists W. (phi and L), eliminating lemma atoms outside self.atoms.
 
-        Enumerate quantifier-free phi with atoms=self.atoms. Lemmas must be
-        quantifier-free; L is their normalized conjunction. W contains atoms,
-        not underlying SMT symbols. Every normalized phi atom remains declared.
+        phi is the normalized input formula; its atoms belong to self.atoms.
+        L is the normalized conjunction of the supplied quantifier-free lemmas,
+        which must rule out theory-inconsistent assignments satisfying phi
+        propositionally. Enumerate phi with atoms=self.atoms.
+        W contains the atoms in L outside self.atoms, including Boolean symbols,
+        rather than underlying SMT symbols.
         """
         return self._compile(compiler, lemmas, False, computation_logger)
 
@@ -105,11 +106,14 @@ class TheoryCompilation:
         lemmas: Iterable[FNode],
         computation_logger: dict[str, object] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
-        """Compile forall W. (phi or not L), eliminating lemma atoms outside atoms.
+        """Compile forall W. (phi or not L), eliminating lemma atoms outside self.atoms.
 
-        Enumerate quantifier-free Not(phi) with atoms=self.atoms. Lemmas must
-        be quantifier-free; L is their normalized conjunction. W contains atoms,
-        not underlying SMT symbols. Every normalized phi atom remains declared.
+        phi is the normalized input formula; its atoms belong to self.atoms.
+        L is the normalized conjunction of the supplied quantifier-free lemmas,
+        which must rule out theory-inconsistent assignments satisfying Not(phi)
+        propositionally. Enumerate Not(phi) with atoms=self.atoms.
+        W contains the atoms in L outside self.atoms, including Boolean symbols,
+        rather than underlying SMT symbols.
         """
         return self._compile(compiler, lemmas, True, computation_logger)
 
@@ -135,16 +139,16 @@ class TheoryCompilation:
             )
             if abstractor is None:
                 abstractor = Abstractor()
-            generated = tuple(sorted(combined.get_atoms() - set(self.atoms), key=FNode.node_id))
-            all_atoms = (*self.atoms, *generated)
+            quantified = tuple(sorted(combined.get_atoms() - set(self.atoms), key=FNode.node_id))
+            all_atoms = (*self.atoms, *quantified)
             for atom in all_atoms:
                 abstractor.get_id(atom)
             artifact = compiler.compile(
                 combined,
                 abstractor,
                 all_atoms=all_atoms,
-                exists_atoms=() if extended else generated,
-                forall_atoms=generated if extended else (),
+                exists_atoms=() if extended else quantified,
+                forall_atoms=quantified if extended else (),
                 computation_logger=computation_logger,
             )
         stats.log("n_lemmas", len(normalized_lemmas))

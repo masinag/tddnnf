@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+from pysmt.exceptions import UnsupportedOperatorError
 from pysmt.fnode import FNode
 from pysmt.typing import INT
 
@@ -349,21 +350,14 @@ def test_rejects_missing_normalized_atom(mgr):
 
 @pytest.mark.parametrize("kind", ["forall", "exists"])
 @pytest.mark.parametrize("position", ["formula", "lemma"])
-def test_rejects_quantified_inputs_before_normalization(mgr, monkeypatch, kind, position):
+def test_normalizer_rejects_quantified_inputs(mgr, kind, position):
     x = mgr.Symbol("x", INT)
     quantified = getattr(mgr, "ForAll" if kind == "forall" else "Exists")([x], mgr.GE(x, mgr.Int(0)))
-    original = NormalizerWalker.normalize
-
-    def checked_normalize(self, formula):
-        assert mgr.env.qfo.is_qf(formula), "Quantifiers reached the normalizer"
-        return original(self, formula)
-
-    monkeypatch.setattr(NormalizerWalker, "normalize", checked_normalize)
     if position == "formula":
-        with pytest.raises(ValueError, match="quantifier-free"):
+        with pytest.raises(UnsupportedOperatorError):
             TheoryCompilation(quantified, env=mgr.env)
     else:
         with TheoryCompilation(mgr.TRUE(), env=mgr.env) as compilation:
             for strategy in STRATEGIES:
-                with pytest.raises(ValueError, match="quantifier-free"):
+                with pytest.raises(UnsupportedOperatorError):
                     getattr(compilation, strategy)(BddCompiler(), [quantified])

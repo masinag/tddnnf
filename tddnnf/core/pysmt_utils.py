@@ -89,14 +89,15 @@ def compilation_vocabulary(
     """Validate a single quantifier kind and retain declaration order."""
     if exists_atoms and forall_atoms:
         raise ValueError("Cannot combine existential and universal declarations")
-    for variables in (all_atoms, exists_atoms, forall_atoms):
-        if any(not isinstance(atom, FNode) or not is_atom(atom) or atom.is_bool_constant() for atom in variables):
-            raise ValueError("Variable declarations must contain Boolean symbols or theory atoms")
-        if len(set(variables)) != len(variables):
-            raise ValueError("Variable declarations must not contain duplicates")
+    for atoms in (all_atoms, exists_atoms, forall_atoms):
+        if any(not isinstance(atom, FNode) or not is_atom(atom) or atom.is_bool_constant() for atom in atoms):
+            raise ValueError("Atom declarations must contain Boolean symbols or theory atoms")
+        if len(set(atoms)) != len(atoms):
+            raise ValueError("Atom declarations must not contain duplicates")
     declared, existential, universal = set(all_atoms), set(exists_atoms), set(forall_atoms)
     if not formula.get_atoms() <= declared:
         raise ValueError("Formula atoms must belong to all_atoms")
-    if not (existential | universal) <= declared or existential & universal:
-        raise ValueError("Quantified variables must be disjoint subsets of all_atoms")
-    return tuple(atom for atom in all_atoms if atom not in existential | universal)
+    quantified = existential | universal
+    if not quantified <= declared or existential & universal:
+        raise ValueError("Quantified atoms must be disjoint subsets of all_atoms")
+    return tuple(atom for atom in all_atoms if atom not in quantified)
