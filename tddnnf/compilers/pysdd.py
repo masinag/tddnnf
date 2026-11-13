@@ -213,16 +213,16 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        all_vars: Sequence[FNode],
-        exists_vars: Sequence[FNode] = (),
-        forall_vars: Sequence[FNode] = (),
+        all_atoms: Sequence[FNode],
+        exists_atoms: Sequence[FNode] = (),
+        forall_atoms: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
     ) -> SddCompiledTarget:
-        retained = compilation_vocabulary(formula, all_vars, exists_vars, forall_vars)
-        assert all(atom in abstractor for atom in all_vars), "Abstraction must be prepared before compilation"
+        retained = compilation_vocabulary(formula, all_atoms, exists_atoms, forall_atoms)
+        assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
-            atoms = all_vars
+            atoms = all_atoms
             ids = sorted(abstractor.get_id(atom) for atom in atoms)
             remapping = {idx: native for native, idx in enumerate(ids, 1)}
             var_count = max(len(ids), 1)
@@ -235,14 +235,14 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
             walker = SddWalker(mgr, abstractor, remapping)
             root = walker.translate(formula)
             with stats.track_time("forget_time"):
-                variables = forall_vars or exists_vars
+                variables = forall_atoms or exists_atoms
                 if variables:
                     exists_map = array("i", [0]) * (mgr.var_count() + 1)
                     for atom in variables:
                         exists_map[remapping[abstractor.get_id(atom)]] = 1
                     root = (
                         ~mgr.exists_multiple(exists_map, ~root)
-                        if forall_vars
+                        if forall_atoms
                         else mgr.exists_multiple(exists_map, root)
                     )
             stats.log("n_atoms", len(atoms))

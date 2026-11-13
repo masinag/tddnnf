@@ -49,7 +49,7 @@ def test_corpus_semantics_and_queries(theory_case, compiler, engine, strategy, p
         return
     with TheoryCompilation(raw_phi, projection_atoms, env=env) as compilation:
         phi = compilation.phi
-        selected = compilation.all_vars
+        selected = compilation.atoms
         atoms = tuple(sorted(phi.get_atoms() | set(selected), key=lambda atom: atom.node_id()))
         rows = []
         with env.factory.Solver(name="msat") as solver:
@@ -72,9 +72,7 @@ def test_corpus_semantics_and_queries(theory_case, compiler, engine, strategy, p
         }
         enumerator = MathSATTotalEnumerator()
         try:
-            enumerator.check_all_sat(
-                phi if strategy == "compile_treduced" else mgr.Not(phi), atoms=compilation.all_vars
-            )
+            enumerator.check_all_sat(phi if strategy == "compile_treduced" else mgr.Not(phi), atoms=compilation.atoms)
             lemmas = enumerator.get_theory_lemmas()
         finally:
             enumerator._solver.exit()

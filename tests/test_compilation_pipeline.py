@@ -40,10 +40,8 @@ def test_projected_semantics(mgr, backend, strategy, projection, constant):
     phi = mgr.And(a, b) if constant is None else mgr.Bool(constant)
     lemmas = [mgr.Or(b, c)] if constant is None else []
     selected = None if projection is None else [mgr.Symbol(name) for name in projection]
-    with TheoryCompilation(phi, all_vars=selected, env=mgr.env) as compilation:
-        generated = set().union(*(lemma.get_atoms() for lemma in lemmas)) - (
-            phi.get_atoms() | set(compilation.all_vars)
-        )
+    with TheoryCompilation(phi, atoms=selected, env=mgr.env) as compilation:
+        generated = set().union(*(lemma.get_atoms() for lemma in lemmas)) - (phi.get_atoms() | set(compilation.atoms))
         if backend is D4Compiler and strategy == "compile_textended" and generated:
             with pytest.raises(NotImplementedError, match="universal"):
                 compilation.compile_textended(backend(), lemmas)
@@ -54,7 +52,7 @@ def test_projected_semantics(mgr, backend, strategy, projection, constant):
             if strategy == "compile_treduced"
             else mgr.Or(phi, *(mgr.Not(lemma) for lemma in lemmas))
         )
-        forgotten = [atom for atom in combined.get_atoms() if atom not in compilation.all_vars]
+        forgotten = [atom for atom in combined.get_atoms() if atom not in compilation.atoms]
         if strategy == "compile_textended":
             combined = mgr.Not(shannon_forget(mgr, mgr.Not(combined), list(generated)))
             forgotten = [atom for atom in forgotten if atom not in generated]
@@ -89,14 +87,14 @@ def test_node_id_atom_order(mgr, backend, strategy, explicit, theory):
         raw = [z, a, y, b]
     projection = [raw[1], mgr.Not(raw[0]), raw[1]] if explicit else None
     with TheoryCompilation(mgr.And(*raw[:2]), projection, env=mgr.env) as compilation:
-        assert compilation.all_vars == ((a, z) if explicit else (z, a))
+        assert compilation.atoms == ((a, z) if explicit else (z, a))
         if backend is D4Compiler and strategy == "compile_textended":
             with pytest.raises(NotImplementedError, match="universal"):
                 compilation.compile_textended(backend(), [mgr.And(*raw[2:])])
             return
         target = getattr(compilation, strategy)(backend(), [mgr.And(*raw[2:])])
-        assert target.projection_atoms == compilation.all_vars
-        assert dict(target.abstr.id_to_atom) == dict(enumerate((*compilation.all_vars, y, b), 1))
+        assert target.projection_atoms == compilation.atoms
+        assert dict(target.abstr.id_to_atom) == dict(enumerate((*compilation.atoms, y, b), 1))
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -109,7 +107,7 @@ def test_constant_normalizing_projection_atoms(mgr, backend, strategy, negated):
     entries = [mgr.Not(atom) for atom in atoms] if negated else atoms
     with TheoryCompilation(p, [*entries, p], env=mgr.env) as compilation:
         assert [compilation.normalize(atom) for atom in atoms] == [mgr.TRUE(), mgr.FALSE()]
-        assert compilation.all_vars == (p,)
+        assert compilation.atoms == (p,)
         target = getattr(compilation, strategy)(backend(), [])
         assert target.projection_atoms == (p,)
         assert target.abstr.var_count == 1
@@ -226,7 +224,7 @@ def test_partial_initialization_cleanup(mgr, monkeypatch):
     solver.converter = Mock()
     monkeypatch.setattr(mgr.env.factory, "Solver", Mock(return_value=solver))
     with pytest.raises(ValueError, match="Vocabulary entries"):
-        TheoryCompilation(mgr.TRUE(), all_vars=[mgr.TRUE()], env=mgr.env)
+        TheoryCompilation(mgr.TRUE(), atoms=[mgr.TRUE()], env=mgr.env)
     solver.exit.assert_called_once()
 
     # Failure while reading the newly allocated solver's converter also cleans up.
@@ -305,7 +303,7 @@ print(json.dumps(results, sort_keys=True))
 def test_backend_requires_prepared_abstraction(mgr, backend):
     abstractor = Abstractor()
     with pytest.raises(AssertionError, match="prepared"):
-        backend().compile(mgr.Symbol("a"), abstractor, all_vars=[mgr.Symbol("a")])
+        backend().compile(mgr.Symbol("a"), abstractor, all_atoms=[mgr.Symbol("a")])
     assert abstractor.var_count == 0
 
 
@@ -340,7 +338,7 @@ def test_sdd_supported_vtree_types(mgr, vtree_type):
 def test_rejects_missing_original_atoms(mgr, declaration):
     a, x = mgr.Symbol("a"), mgr.Symbol("x")
     with pytest.raises(ValueError, match="formula atoms"):
-        TheoryCompilation(mgr.And(a, x), all_vars=[mgr.Symbol(name) for name in declaration], env=mgr.env)
+        TheoryCompilation(mgr.And(a, x), atoms=[mgr.Symbol(name) for name in declaration], env=mgr.env)
 
 
 def test_rejects_missing_normalized_atom(mgr):

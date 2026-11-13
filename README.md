@@ -77,7 +77,7 @@ from pysmt.shortcuts import read_smtlib
 phi = read_smtlib("formula.smt2")
 ```
 
-Create the compilation context. Its `all_vars` vocabulary contains every atom
+Create the compilation context. Its `atoms` vocabulary contains every atom
 of normalized `phi`, plus optional query atoms and absent free dimensions.
 Omitting it defaults to normalized formula atoms in node-ID order. Explicit
 entries are normalized, made positive, deduplicated in first-occurrence order,
@@ -91,7 +91,7 @@ compilation = TheoryCompilation(phi)
 ```
 
 Enumerate theory lemmas for the normalized formula, passing the complete
-projection vocabulary through `atoms=compilation.all_vars`. This allows the
+projection vocabulary through `atoms=compilation.atoms`. This allows the
 enumerator to generate lemmas involving query-only theory atoms that do not
 occur in `phi`.
 
@@ -100,7 +100,7 @@ enumerator = MathSATDivideAndConquerEnumerator(
     parallel_procs=4,
     divide_strategy=DivideByProjectedEnumerationStrategy(),
 )
-enumerator.check_all_sat(compilation.phi, atoms=compilation.all_vars)
+enumerator.check_all_sat(compilation.phi, atoms=compilation.atoms)
 lemmas = enumerator.get_theory_lemmas()
 ```
 
@@ -199,7 +199,7 @@ formula and lemmas remain free dimensions. Each compile call registers declared
 atoms first, then lemma atoms outside that vocabulary in node-ID order. Existing
 abstraction IDs remain unchanged.
 
-Let `V = compilation.all_vars`, `L` be the normalized lemma conjunction, and
+Let `V = compilation.atoms`, `L` be the normalized lemma conjunction, and
 `W = Atoms(L) - V`. Every normalized input atom must belong to `V`:
 
 - Reduced: `exists W. (phi and L)`.
@@ -213,33 +213,36 @@ The native compiler contract is:
 ```python
 compiler.compile(
     formula, abstractor,
-    all_vars=all_vars,
-    exists_vars=(),
-    forall_vars=(),
+    all_atoms=all_atoms,
+    exists_atoms=(),
+    forall_atoms=(),
     computation_logger=None,
 )
 ```
 
-It compiles either `exists E. formula` or `forall U. formula`. `all_vars` declares the
+It compiles either `exists E. formula` or `forall U. formula`. `all_atoms` declares the
 complete atom vocabulary, including absent free dimensions. The retained vocabulary
-is `all_vars` with both quantified sets removed, preserving declaration order.
+is `all_atoms` with both quantified sets removed, preserving declaration order.
 Declarations must contain distinct positive Boolean symbols or theory atoms;
-formula atoms must belong to `all_vars`, and quantified sets must be disjoint
+formula atoms must belong to `all_atoms`, and quantified sets must be disjoint
 subsets, and both lists cannot be nonempty. Invalid declarations raise `ValueError`. Every declared atom must already
 be registered in the supplied abstraction (otherwise `AssertionError`). Sparse
 supplied IDs are preserved. BDD and SDD support existential elimination and universal elimination via
 `not exists U. not formula`. d4 supports existential
-elimination and rejects every nonempty valid `forall_vars` declaration before
+elimination and rejects every nonempty valid `forall_atoms` declaration before
 launching its external compiler. Universal elimination can cause substantial
 intermediate growth. Native target classes, query engines, and persistence schemas
 are unchanged.
 
 Native callers migrating from `all_vars=P` must supply the complete vocabulary
-as `all_vars=V` and `exists_vars=[a for a in V if a not in P]`. Native calls without
-projection now also require `all_vars`. Theory callers and legacy builders must rename `project_on` to `all_vars`
+as `all_atoms=V` and `exists_atoms=[a for a in V if a not in P]`. Native calls without
+projection now also require `all_atoms`. Rename native `exists_vars` and
+`forall_vars` to `exists_atoms` and `forall_atoms`. Theory callers and legacy
+builders must rename `project_on` or `all_vars` to `atoms` and read `.atoms`
+in place of `.all_vars`
 and include every normalized input atom. There is no compatibility alias or
 original-atom projection API. For example, compiling `a and x` with
-`all_vars=[a]` raises `ValueError`.
+`atoms=[a]` raises `ValueError`.
 
 ### Compilation strategies
 
@@ -460,11 +463,11 @@ dimensions, sparse IDs, invalid declarations, and d4 rejection before execution.
 A generated-atom extended regression checks reconstruction, validity, cube
 implication, and BDD/SDD persistence.
 
-The migration map is: shared native compiler fixtures declare `all_vars` and
+The migration map is: shared native compiler fixtures declare `all_atoms` and
 existential omissions; theory pipeline tests distinguish generated from original
 atoms; engine, ownership and allocation fixtures use the new native signature;
-public theory callers use `all_vars`. No compatibility alias is provided for
-the removed `project_on` keyword.
+public theory callers use `atoms`. No compatibility alias is provided for
+the removed `project_on`, `all_vars`, `exists_vars`, or `forall_vars` keywords.
 
 Acceptance requires the independent quantifier tables, the theory corpus,
 existing small exhaustive SMT oracles, the affected adapter/session/persistence

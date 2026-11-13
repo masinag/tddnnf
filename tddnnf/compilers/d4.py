@@ -302,18 +302,18 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        all_vars: Sequence[FNode],
-        exists_vars: Sequence[FNode] = (),
-        forall_vars: Sequence[FNode] = (),
+        all_atoms: Sequence[FNode],
+        exists_atoms: Sequence[FNode] = (),
+        forall_atoms: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
     ) -> D4CompiledTarget:
-        retained = compilation_vocabulary(formula, all_vars, exists_vars, forall_vars)
-        assert all(atom in abstractor for atom in all_vars), "Abstraction must be prepared before compilation"
-        if forall_vars:
+        retained = compilation_vocabulary(formula, all_atoms, exists_atoms, forall_atoms)
+        assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"
+        if forall_atoms:
             raise NotImplementedError("d4 does not support universal variable elimination")
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
-            atoms = list(all_vars)
+            atoms = list(all_atoms)
             if not atoms:
                 if formula.is_true():
                     stats.log("n_atoms", 0)
@@ -327,8 +327,8 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
             with stats.track_time("register_atoms_time"):
                 proj_set = set(retained)
 
-            all_atoms = set(all_vars)
-            all_atom_ids = sorted(abstractor.get_id(a) for a in all_vars)
+            declared_atoms = set(all_atoms)
+            all_atom_ids = sorted(abstractor.get_id(a) for a in all_atoms)
 
             projected_ids = {abstractor.get_id(a) for a in proj_set}
 
@@ -345,22 +345,22 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
                 if len(projected_ids) == 0:
                     nnf_raw = out_path.read_text()
                     if nnf_raw.startswith("f"):
-                        stats.log("n_atoms", len(all_atoms))
+                        stats.log("n_atoms", len(declared_atoms))
                         stats.log("n_proj_vars", 0)
                         return D4CompiledTarget("f 1\n", 0, remapping={})
-                    stats.log("n_atoms", len(all_atoms))
+                    stats.log("n_atoms", len(declared_atoms))
                     stats.log("n_proj_vars", 0)
                     return D4CompiledTarget("t 1\n", 0, remapping={})
 
                 nnf_text = out_path.read_text()
                 if nnf_text.startswith("f"):
-                    stats.log("n_atoms", len(all_atoms))
+                    stats.log("n_atoms", len(declared_atoms))
                     stats.log("n_proj_vars", len(projected_ids))
                     return D4CompiledTarget("f 1\n", 0, remapping={})
 
             var_count = len(projected_ids)
             nnf_text = _clean_nnf(nnf_text, var_count)
             remapping = {aid: i + 1 for i, aid in enumerate(sorted(projected_ids))}
-            stats.log("n_atoms", len(all_atoms))
+            stats.log("n_atoms", len(declared_atoms))
             stats.log("n_proj_vars", len(projected_ids))
             return D4CompiledTarget(nnf_text, var_count, remapping=remapping)

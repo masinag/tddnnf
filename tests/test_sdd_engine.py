@@ -21,7 +21,7 @@ def test_count_uses_native_dimensions(mgr, sparse, project, shape):
     formula = {"true": mgr.TRUE(), "false": mgr.FALSE(), "atom": a}[shape]
     projection = [a] if project else []
     abstr.get_id(a)
-    native = SddCompiler().compile(formula, abstr, all_vars=[a], exists_vars=[] if project else [a])
+    native = SddCompiler().compile(formula, abstr, all_atoms=[a], exists_atoms=[] if project else [a])
     target = TheoryCompiledTarget(native, abstr, projection_atoms=projection, env=mgr.env)
     engine = SddEngine(target)
     expected = 0 if shape == "false" else (2 if project and shape == "true" else 1)

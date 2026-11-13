@@ -18,9 +18,9 @@ def test_sparse_allocation_and_roundtrip(mgr, tmp_path, compiler, engine, projec
     a, b, absent = [mgr.Symbol(name) for name in ("a", "b", "absent")]
     abstr = Abstractor({7: a, 1000: b, 2000: absent})
     project = {"a": [a], "absent": [absent, a], "empty": []}[projection]
-    all_vars = [a, b, absent] if projection == "absent" else [a, b]
+    all_atoms = [a, b, absent] if projection == "absent" else [a, b]
     native = compiler().compile(
-        mgr.And(a, b), abstr, all_vars=all_vars, exists_vars=[atom for atom in all_vars if atom not in project]
+        mgr.And(a, b), abstr, all_atoms=all_atoms, exists_atoms=[atom for atom in all_atoms if atom not in project]
     )
     target = TheoryCompiledTarget(native, abstr, projection_atoms=project, env=mgr.env)
     needed = {7, 1000} | ({2000} if projection == "absent" else set())
@@ -71,7 +71,7 @@ def test_sdd_requires_mapping(tmp_path):
 @pytest.mark.parametrize("value", [False, True])
 def test_constant_allocation(mgr, compiler, value):
     abstr = Abstractor({1000: mgr.Symbol("unused")})
-    target = compiler().compile(mgr.Bool(value), abstr, all_vars=[])
+    target = compiler().compile(mgr.Bool(value), abstr, all_atoms=[])
     if compiler is SddCompiler:
         assert target.manager.var_count() == 1
         assert dict(target.remapping) == {}

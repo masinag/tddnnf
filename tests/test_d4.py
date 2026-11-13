@@ -36,8 +36,8 @@ def test_projection_cleanup(mgr, a, b, c, monkeypatch, tmp_path, injected):
     native = D4Compiler().compile(
         formula,
         abstr,
-        all_vars=tuple(abstr.atom_to_id),
-        exists_vars=[atom for atom in abstr.atom_to_id if atom not in projection],
+        all_atoms=tuple(abstr.atom_to_id),
+        exists_atoms=[atom for atom in abstr.atom_to_id if atom not in projection],
     )
     assert native.var_count == 3
     assert native.remapping == {3: 1, 7: 2, 11: 3}

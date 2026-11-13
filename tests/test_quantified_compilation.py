@@ -45,20 +45,20 @@ def test_boolean_truth_tables(mgr, backend, quantifiers, shape, absent_free, mon
         "true": lambda v: True,
         "false": lambda v: False,
     }[shape]
-    all_vars = [atoms[name] for name in (("absent", "u", "a", "e") if absent_free else ("u", "a", "e"))]
+    all_atoms = [atoms[name] for name in (("absent", "u", "a", "e") if absent_free else ("u", "a", "e"))]
     exists, forall = ([atoms[name] for name in group] for group in quantifiers)
-    retained = [atom for atom in all_vars if atom not in exists + forall]
-    assert compilation_vocabulary(formula, all_vars, exists, forall) == tuple(retained)
-    abstraction = Abstractor({7 + 11 * i: atom for i, atom in enumerate(all_vars)})
+    retained = [atom for atom in all_atoms if atom not in exists + forall]
+    assert compilation_vocabulary(formula, all_atoms, exists, forall) == tuple(retained)
+    abstraction = Abstractor({7 + 11 * i: atom for i, atom in enumerate(all_atoms)})
     compiler = backend()
     if backend is D4Compiler and forall:
         run = Mock(side_effect=AssertionError("External compiler must not run"))
         monkeypatch.setattr(compiler, "_run_d4", run)
         with pytest.raises(NotImplementedError, match="universal"):
-            compiler.compile(formula, abstraction, all_vars=all_vars, exists_vars=exists, forall_vars=forall)
+            compiler.compile(formula, abstraction, all_atoms=all_atoms, exists_atoms=exists, forall_atoms=forall)
         run.assert_not_called()
         return
-    target = compiler.compile(formula, abstraction, all_vars=all_vars, exists_vars=exists, forall_vars=forall)
+    target = compiler.compile(formula, abstraction, all_atoms=all_atoms, exists_atoms=exists, forall_atoms=forall)
     actual = target.to_pysmt(abstraction, mgr)
     assert actual.get_atoms() <= set(retained)
     for free_values in product((False, True), repeat=len(retained)):
@@ -102,18 +102,18 @@ def test_invalid_declarations(mgr, backend, case, monkeypatch):
         "negative": ([a], [], [mgr.Not(a)]),
         "non_node": ([a, "b"], [], []),
     }
-    all_vars, exists, forall = declarations[case]
+    all_atoms, exists, forall = declarations[case]
     compiler = backend()
     if backend is D4Compiler:
         monkeypatch.setattr(compiler, "_run_d4", Mock(side_effect=AssertionError("Must validate first")))
     with pytest.raises(ValueError):
-        compiler.compile(a, Abstractor({1: a, 2: b}), all_vars=all_vars, exists_vars=exists, forall_vars=forall)
+        compiler.compile(a, Abstractor({1: a, 2: b}), all_atoms=all_atoms, exists_atoms=exists, forall_atoms=forall)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("truth", [False, True])
 def test_empty_vocabulary(mgr, backend, truth):
-    target = backend().compile(mgr.Bool(truth), Abstractor(), all_vars=[])
+    target = backend().compile(mgr.Bool(truth), Abstractor(), all_atoms=[])
     assert evaluate(mgr, target.to_pysmt(Abstractor(), mgr), {}) == truth
 
 
@@ -124,7 +124,7 @@ def test_all_dimensions_quantified(mgr, backend):
     universal = [] if backend is D4Compiler else [e, u]
     existential = [e, u] if backend is D4Compiler else []
     target = backend().compile(
-        mgr.Iff(e, u), abstraction, all_vars=[u, e], exists_vars=existential, forall_vars=universal
+        mgr.Iff(e, u), abstraction, all_atoms=[u, e], exists_atoms=existential, forall_atoms=universal
     )
     assert evaluate(mgr, target.to_pysmt(abstraction, mgr), {}) == (backend is D4Compiler)
 
@@ -137,7 +137,7 @@ def test_extended_generated_atom_roundtrip(mgr, tmp_path, backend, target_type, 
     p, w = mgr.Symbol("p"), mgr.Symbol("generated")
     phi = p
     lemma = mgr.Iff(p, w)
-    with TheoryCompilation(phi, all_vars=[p], env=mgr.env) as compilation:
+    with TheoryCompilation(phi, atoms=[p], env=mgr.env) as compilation:
         target = compilation.compile_textended(backend(), [lemma])
     path = tmp_path / "compiled"
     target.save(path)

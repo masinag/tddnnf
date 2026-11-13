@@ -24,7 +24,7 @@ class BaseTestCompiler:
     ) -> None:
         abstr = bank_case.abstr
         target = compiler.compile(
-            bank_case.original_formula, abstr, all_vars=bank_case.all_vars, exists_vars=bank_case.vars_to_forget
+            bank_case.original_formula, abstr, all_atoms=bank_case.all_atoms, exists_atoms=bank_case.vars_to_forget
         )
         compiled_pysmt = target.to_pysmt(abstr, mgr)
 
@@ -38,7 +38,7 @@ class BaseTestCompiler:
     ) -> None:
         abstr = bank_case.abstr
         target = compiler.compile(
-            bank_case.original_formula, abstr, all_vars=bank_case.all_vars, exists_vars=bank_case.vars_to_forget
+            bank_case.original_formula, abstr, all_atoms=bank_case.all_atoms, exists_atoms=bank_case.vars_to_forget
         )
         original_pysmt = target.to_pysmt(abstr, mgr)
 

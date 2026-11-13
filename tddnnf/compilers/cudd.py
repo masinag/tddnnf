@@ -178,24 +178,24 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        all_vars: Sequence[FNode],
-        exists_vars: Sequence[FNode] = (),
-        forall_vars: Sequence[FNode] = (),
+        all_atoms: Sequence[FNode],
+        exists_atoms: Sequence[FNode] = (),
+        forall_atoms: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
     ) -> BddCompiledTarget:
-        retained = compilation_vocabulary(formula, all_vars, exists_vars, forall_vars)
-        assert all(atom in abstractor for atom in all_vars), "Abstraction must be prepared before compilation"
+        retained = compilation_vocabulary(formula, all_atoms, exists_atoms, forall_atoms)
+        assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
-            atoms = all_vars
+            atoms = all_atoms
             mgr = BDD()
             for i in sorted(abstractor.get_id(atom) for atom in atoms):
                 mgr.declare(f"b{i}")
             walker = BddWalker(mgr, abstractor)
             root = walker.translate(formula)
             with stats.track_time("forget_time"):
-                universal = [f"b{abstractor.get_id(atom)}" for atom in forall_vars]
-                existential = [f"b{abstractor.get_id(atom)}" for atom in exists_vars]
+                universal = [f"b{abstractor.get_id(atom)}" for atom in forall_atoms]
+                existential = [f"b{abstractor.get_id(atom)}" for atom in exists_atoms]
                 if universal:
                     root = ~(~root).exist(*universal)
                 if existential:

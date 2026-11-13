@@ -33,11 +33,11 @@ PySMT environment and a `NormalizerWalker`, normalizes the input formula at
 construction time, and builds the projection vocabulary.
 
 ```python
-context = TheoryCompilation(phi, all_vars=atoms)
+context = TheoryCompilation(phi, atoms=atoms)
 target = context.compile_treduced(D4Compiler(), lemmas)
 ```
 
-When `all_vars` is omitted, the projection consists of the atoms in the
+When `atoms` is omitted, the projection consists of the atoms in the
 normalized input formula. When supplied, every projection atom is normalized,
 a top-level negation is removed so the vocabulary contains positive atoms, and
 duplicates are removed while preserving their first occurrence. Entries that
@@ -110,9 +110,9 @@ eliminated for extended compilation. Backend query engines reject atoms outside
 this tuple.
 
 Query-only theory atoms need not occur in the input formula. To constrain them
-by theory consistency, they must occur in the supplied lemmas. Include such atoms in `compilation.all_vars` and pass
+by theory consistency, they must occur in the supplied lemmas. Include such atoms in `compilation.atoms` and pass
 the complete projection vocabulary to the external lemma enumerator as
-`atoms=compilation.all_vars`. For T-reduced compilation, enumerate over
+`atoms=compilation.atoms`. For T-reduced compilation, enumerate over
 `compilation.phi`; for T-extended compilation, enumerate over
 `Not(compilation.phi)`. This ensures that every query-only theory atom can occur
 in the generated lemmas before those lemmas are supplied to compilation.
@@ -189,7 +189,7 @@ $$
 Its lemmas $\mathit{Cl}$ rule out theory-consistent propositional assignments
 satisfying $\neg\varphi$.
 
-Each builder accepts the same complete `all_vars` vocabulary as
+Each builder accepts the same complete `atoms` vocabulary as
 `TheoryCompilation`, defaulting to normalized input atoms in node-ID order.
 Only lemma atoms outside that vocabulary are eliminated: existentially for
 reduced compilation, universally for extended compilation.
@@ -219,7 +219,7 @@ by default. After translation it eliminates declared universal variables using
 
 `SddCompiledTarget` retains the `SddNode` root, `SddManager`, and a read-only
 abstraction-to-native `remapping`. Compilation allocates dense native IDs in
-ascending abstraction-ID order for declared `all_vars` atoms only. Queries,
+ascending abstraction-ID order for declared `all_atoms` only. Queries,
 forgetting, reconstruction, and persistence use this correspondence. Constants
 retain a one-variable manager. Forgotten variables remain in the manager. It provides DAG
 statistics and reconstructs decision nodes as disjunctions of prime/sub
@@ -342,7 +342,7 @@ base class:
 - `PropCompiledTarget` requires `dag_size()`, `save()`, `load()`, and
   `to_pysmt()`;
 - `PropCompiler[T]` requires a
-  `compile(formula, abstractor, *, all_vars, exists_vars=(), forall_vars=(), computation_logger=None)`
+  `compile(formula, abstractor, *, all_atoms, exists_atoms=(), forall_atoms=(), computation_logger=None)`
   method implementing `exists E. F` or `forall U. F`, rejecting mixed requests. The complete declared vocabulary
   includes absent free dimensions; quantified variables must be disjoint subsets
   and every formula atom must be declared. Invalid declarations raise `ValueError`,

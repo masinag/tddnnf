@@ -18,7 +18,7 @@ class TestDdnnifeEngine(BaseTestEngine[D4CompiledTarget]):
 def test_constant_targets(mgr, a, truth, active):
     projection = [a] if active else []
     abstr = Abstractor({1: a})
-    native = D4Compiler().compile(mgr.Bool(truth), abstr, all_vars=projection)
+    native = D4Compiler().compile(mgr.Bool(truth), abstr, all_atoms=projection)
     container = TheoryCompiledTarget(native, abstr, projection, env=mgr.env)
     if not truth or not active:
         with pytest.raises(ddnnife.InternalError):

@@ -14,8 +14,8 @@ configured compiler instances, and configured reasoner instances. The intended
 workflow is:
 
 ```python
-with TheoryCompilation(phi, all_vars=atoms, env=env) as compilation:
-    enumerator.check_all_sat(compilation.phi, atoms=compilation.all_vars)
+with TheoryCompilation(phi, atoms=atoms, env=env) as compilation:
+    enumerator.check_all_sat(compilation.phi, atoms=compilation.atoms)
     lemmas = enumerator.get_theory_lemmas()
     target = compilation.compile_treduced(D4Compiler(), lemmas)
 
@@ -54,7 +54,7 @@ acceptance check exposes an adapter defect.
 
 ## Atoms, environment, and stable IDs
 
-`TheoryCompilation(phi, all_vars=None, env=None)` selects the supplied PySMT
+`TheoryCompilation(phi, atoms=None, env=None)` selects the supplied PySMT
 environment or the active environment when omitted. Stored formula nodes must
 belong to that environment. Normalize the formula, supplied projection entries,
 and later the lemmas there. Callers must respect type hints and supply Boolean
@@ -86,7 +86,7 @@ existing IDs and register new atoms above the current maximum, in this order:
 Node IDs are sorting keys only; new abstraction IDs remain sequential above the
 current maximum. Ordering is reproducible given the same node creation history
 in the environment and starting abstraction, independently of set iteration,
-hash randomization, and backend traversal. Let `V = compilation.all_vars`,
+hash randomization, and backend traversal. Let `V = compilation.atoms`,
 `L` be the normalized lemma conjunction, and `W = Atoms(L) - V`.
 Reduced compilation computes `exists W. (phi and L)`; extended compilation
 computes `forall W. (phi or not L)`. No input atom may be omitted.

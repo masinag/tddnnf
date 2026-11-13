@@ -21,7 +21,7 @@ class TheoryCompilation:
     Callers must provide Boolean FNodes for phi and lemmas, with all input DAGs
     (including vocabulary entries) belonging to the selected environment.
     These type and environment preconditions are not checked at runtime.
-    Formula and lemma inputs must be quantifier-free. all_vars declares Boolean
+    Formula and lemma inputs must be quantifier-free. atoms declares Boolean
     symbols and theory atoms (such as x < 2), not underlying SMT symbols (x).
     It must contain every normalized phi atom; extra query atoms and absent free
     dimensions are supported. By default atoms follow normalized node-ID order.
@@ -32,10 +32,10 @@ class TheoryCompilation:
     def __init__(
         self,
         phi: FNode,
-        all_vars: Sequence[FNode] | None = None,
+        atoms: Sequence[FNode] | None = None,
         env: Environment | None = None,
     ) -> None:
-        """Create a session with the complete normalized atom vocabulary all_vars.
+        """Create a session with the complete normalized atom vocabulary atoms.
 
         Default to normalized phi atoms in node-ID order. Explicit entries are
         normalized, made positive, deduplicated in first-occurrence order, and
@@ -50,12 +50,12 @@ class TheoryCompilation:
         try:
             self._normalizer = NormalizerWalker(self._env)
             self.phi = self.normalize(phi)
-            atoms = sorted(self.phi.get_atoms(), key=FNode.node_id) if all_vars is None else all_vars
-            self.all_vars = tuple(
+            atoms = sorted(self.phi.get_atoms(), key=FNode.node_id) if atoms is None else atoms
+            self.atoms = tuple(
                 dict.fromkeys(normalized for atom in atoms if (normalized := self._normalize_atom(atom)) is not None)
             )
-            if not self.phi.get_atoms() <= set(self.all_vars):
-                raise ValueError("Normalized formula atoms must belong to all_vars")
+            if not self.phi.get_atoms() <= set(self.atoms):
+                raise ValueError("Normalized formula atoms must belong to atoms")
         except BaseException:
             self.close()
             raise
@@ -91,9 +91,9 @@ class TheoryCompilation:
         lemmas: Iterable[FNode],
         computation_logger: dict[str, object] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
-        """Compile exists W. (phi and L), eliminating only lemma atoms outside all_vars.
+        """Compile exists W. (phi and L), eliminating only lemma atoms outside atoms.
 
-        Enumerate quantifier-free phi with atoms=self.all_vars. Lemmas must be
+        Enumerate quantifier-free phi with atoms=self.atoms. Lemmas must be
         quantifier-free; L is their normalized conjunction. W contains atoms,
         not underlying SMT symbols. Every normalized phi atom remains declared.
         """
@@ -105,9 +105,9 @@ class TheoryCompilation:
         lemmas: Iterable[FNode],
         computation_logger: dict[str, object] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
-        """Compile forall W. (phi or not L), eliminating lemma atoms outside all_vars.
+        """Compile forall W. (phi or not L), eliminating lemma atoms outside atoms.
 
-        Enumerate quantifier-free Not(phi) with atoms=self.all_vars. Lemmas must
+        Enumerate quantifier-free Not(phi) with atoms=self.atoms. Lemmas must
         be quantifier-free; L is their normalized conjunction. W contains atoms,
         not underlying SMT symbols. Every normalized phi atom remains declared.
         """
@@ -135,21 +135,21 @@ class TheoryCompilation:
             )
             if abstractor is None:
                 abstractor = Abstractor()
-            generated = tuple(sorted(combined.get_atoms() - set(self.all_vars), key=FNode.node_id))
-            all_vars = (*self.all_vars, *generated)
-            for atom in all_vars:
+            generated = tuple(sorted(combined.get_atoms() - set(self.atoms), key=FNode.node_id))
+            all_atoms = (*self.atoms, *generated)
+            for atom in all_atoms:
                 abstractor.get_id(atom)
             artifact = compiler.compile(
                 combined,
                 abstractor,
-                all_vars=all_vars,
-                exists_vars=() if extended else generated,
-                forall_vars=generated if extended else (),
+                all_atoms=all_atoms,
+                exists_atoms=() if extended else generated,
+                forall_atoms=generated if extended else (),
                 computation_logger=computation_logger,
             )
         stats.log("n_lemmas", len(normalized_lemmas))
-        stats.log("n_projection_atoms", len(self.all_vars))
-        return TheoryCompiledTarget(artifact, abstractor, projection_atoms=self.all_vars, env=self._env)
+        stats.log("n_projection_atoms", len(self.atoms))
+        return TheoryCompiledTarget(artifact, abstractor, projection_atoms=self.atoms, env=self._env)
 
     def _normalize_atom(self, atom: FNode) -> FNode | None:
         positive = atom.arg(0) if atom.is_not() else atom

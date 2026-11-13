@@ -84,19 +84,19 @@ def cube_lits(cube: list[FNode], projection_atoms: Collection[FNode]) -> list[FN
 
 
 def compilation_vocabulary(
-    formula: FNode, all_vars: Sequence[FNode], exists_vars: Sequence[FNode], forall_vars: Sequence[FNode]
+    formula: FNode, all_atoms: Sequence[FNode], exists_atoms: Sequence[FNode], forall_atoms: Sequence[FNode]
 ) -> tuple[FNode, ...]:
     """Validate a single quantifier kind and retain declaration order."""
-    if exists_vars and forall_vars:
+    if exists_atoms and forall_atoms:
         raise ValueError("Cannot combine existential and universal declarations")
-    for variables in (all_vars, exists_vars, forall_vars):
+    for variables in (all_atoms, exists_atoms, forall_atoms):
         if any(not isinstance(atom, FNode) or not is_atom(atom) or atom.is_bool_constant() for atom in variables):
             raise ValueError("Variable declarations must contain Boolean symbols or theory atoms")
         if len(set(variables)) != len(variables):
             raise ValueError("Variable declarations must not contain duplicates")
-    declared, existential, universal = set(all_vars), set(exists_vars), set(forall_vars)
+    declared, existential, universal = set(all_atoms), set(exists_atoms), set(forall_atoms)
     if not formula.get_atoms() <= declared:
-        raise ValueError("Formula atoms must belong to all_vars")
+        raise ValueError("Formula atoms must belong to all_atoms")
     if not (existential | universal) <= declared or existential & universal:
-        raise ValueError("Quantified variables must be disjoint subsets of all_vars")
-    return tuple(atom for atom in all_vars if atom not in existential | universal)
+        raise ValueError("Quantified variables must be disjoint subsets of all_atoms")
+    return tuple(atom for atom in all_atoms if atom not in existential | universal)

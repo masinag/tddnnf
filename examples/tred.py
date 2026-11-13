@@ -28,11 +28,11 @@ atoms = [xgt5, xgt0, ygt5, xpygt5]
 
 # ---- COMPILATION CONTEXT ----
 
-with TheoryCompilation(phi, all_vars=atoms) as compilation:
+with TheoryCompilation(phi, atoms=atoms) as compilation:
     # ---- LEMMA ENUMERATION ----
 
     enumerator = MathSATTotalEnumerator()
-    enumerator.check_all_sat(compilation.phi, atoms=compilation.all_vars)
+    enumerator.check_all_sat(compilation.phi, atoms=compilation.atoms)
     lemmas = enumerator.get_theory_lemmas()
 
     # ---- OUTPUT ----

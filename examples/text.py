@@ -27,11 +27,11 @@ atoms = list(phi.get_atoms() | cube.get_atoms())
 
 # ---- COMPILATION CONTEXT ----
 
-with TheoryCompilation(phi, all_vars=atoms) as compilation:
+with TheoryCompilation(phi, atoms=atoms) as compilation:
     # ---- LEMMA ENUMERATION ----
 
     enumerator = MathSATTotalEnumerator()
-    enumerator.check_all_sat(Not(compilation.phi), atoms=compilation.all_vars)
+    enumerator.check_all_sat(Not(compilation.phi), atoms=compilation.atoms)
     lemmas = enumerator.get_theory_lemmas()
 
     # ---- OUTPUT ----

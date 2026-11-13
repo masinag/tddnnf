@@ -31,7 +31,7 @@ class TReducedBuilder(Generic[T_Target]):
         phi: FNode,
         lemmas: list[FNode],
         abstractor: Abstractor,
-        all_vars: Sequence[FNode] | None = None,
+        atoms: Sequence[FNode] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
         r"""Compile a T-Reduced Target form of phi as
             sel.compiler($\phi \wedge \bigwedge \ell$).
@@ -41,7 +41,7 @@ class TReducedBuilder(Generic[T_Target]):
             lemmas: Theory lemmas ruling out T-consistent truth assignments propositionally
                 satisfying $\phi$.
             abstractor: Maps SMT atoms to integer IDs.
-            all_vars: Complete normalized formula atom vocabulary, plus optional
+            atoms: Complete normalized formula atom vocabulary, plus optional
                 query atoms or absent dimensions; defaults to formula atoms in
                 node-ID order. Entries are normalized and deduplicated. Only
                 lemma atoms outside this vocabulary are quantified away.
@@ -50,5 +50,5 @@ class TReducedBuilder(Generic[T_Target]):
         Returns:
             Compiled target bundled with the abstractor.
         """
-        with TheoryCompilation(phi, all_vars=all_vars, env=self._env) as compilation:
+        with TheoryCompilation(phi, atoms=atoms, env=self._env) as compilation:
             return compilation._compile(self._compiler, lemmas, False, self._computation_logger, abstractor)
