@@ -126,6 +126,10 @@ in the generated lemmas before those lemmas are supplied to compilation.
 `Abstractor` maintains a bidirectional mapping between SMT atoms and positive
 integer IDs. `get_id()` validates atoms with `is_atom`, returns existing IDs,
 and registers new atoms above the current maximum ID, including sparse mappings.
+Boolean constants raise `ValueError` in constructor mappings, `get_id()`, and
+`from_dict()`, which reuses constructor validation. Rejected registrations leave
+both mappings and the next available ID unchanged. The shared `is_atom()`
+predicate still accepts constants for other formula and query helpers.
 `get_atom()` performs the reverse lookup. `var_count` reports the number of
 mapped atoms and `max_var` reports the largest assigned ID. Constructor mappings
 are copied; `id_to_atom` and `atom_to_id` are read-only views of private dictionaries.

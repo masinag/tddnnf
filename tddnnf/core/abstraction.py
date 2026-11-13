@@ -17,6 +17,8 @@ class Abstractor:
 
     def __init__(self, abstraction: Mapping[int, FNode] | None = None) -> None:
         atoms = dict(abstraction) if abstraction is not None else {}
+        if any(atom.is_bool_constant() for atom in atoms.values()):
+            raise ValueError("Boolean constants cannot be abstracted")
         self._id_to_atom = atoms
         self._atom_to_id = {atom: idx for idx, atom in atoms.items()}
 
@@ -40,6 +42,8 @@ class Abstractor:
         return smt_atom in self._atom_to_id
 
     def get_id(self, smt_atom: FNode) -> int:
+        if smt_atom.is_bool_constant():
+            raise ValueError("Boolean constants cannot be abstracted")
         assert is_atom(smt_atom), f"expected atom, got {smt_atom}"
         if smt_atom not in self._atom_to_id:
             idx = self.max_var + 1

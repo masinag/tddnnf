@@ -10,8 +10,30 @@ This plan covers the `tddnnf` library in `/tmp/tddnnf-06-public-migration`,
 including its current public migration: `TheoryCompilation` and
 `TheoryCompiledTarget`. Benchmark harness tests are outside this plan.
 
-The test tree below is proposed. This step does not restore deleted tests or
-implement new tests; exact cases will be decided interactively.
+The test tree below is proposed, except for the first implemented core group,
+`tests/unit/core/test_abstraction.py`. The removed suite remains unreplaced
+elsewhere; further cases will be decided one group at a time.
+
+### Implemented Abstractor group
+
+Tests use the function-scoped `env` fixture in `tests/conftest.py`, which enters
+an isolated PySMT environment and restores the previous environment on cleanup.
+Atoms stay local to `test_abstraction.py`: Boolean `p` and `q`,
+real `x <= 0`, and integer `n = 1`. They cover empty mappings, stable registration,
+distinct and sparse IDs, membership, bidirectional lookup, constructor copying,
+and read-only live mapping views. Nonpositive lookup IDs raise `ValueError`;
+unknown positive IDs raise `KeyError`.
+
+Empty and populated serialization round trips preserve atoms and IDs in default
+and explicit destination environments. Assertions compare destination formulas,
+not exact SMT-LIB text. Boolean constants (`True` and `False`) raise `ValueError`
+in constructor mappings, `get_id()`, and `from_dict()`, including standalone
+constant scripts. Deserialization reuses constructor validation, and failed
+registrations leave both maps, counts, and subsequent ID allocation unchanged.
+The shared `is_atom()` predicate remains unchanged.
+
+No shared formula bank or backend fixtures are introduced yet. Broader malformed
+mapping validation, other core modules, and backend tests remain deferred.
 
 ## Organization
 
