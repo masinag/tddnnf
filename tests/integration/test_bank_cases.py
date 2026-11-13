@@ -1,4 +1,4 @@
-"""Exercise real MathSAT lemmas on the supplied theory corpus."""
+"""Check compilation, persistence, and queries across formulas and backends."""
 
 from itertools import product
 
@@ -14,8 +14,8 @@ from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
 from tddnnf.compilers.pysdd import SddCompiler
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
-from tests.bank_cases import BANK_CASES
 from tests.conftest import evaluate
+from tests.integration.bank_cases import BANK_CASES
 
 PAIRINGS = [(BddCompiler, BddEngine), (SddCompiler, SddEngine), (D4Compiler, DdnnifeEngine)]
 

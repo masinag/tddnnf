@@ -1,4 +1,4 @@
-"""The 27 inline formulas supplied for integration verification; partition counts omitted."""
+"""Formula builders and expected model counts for integration tests."""
 
 from collections.abc import Callable
 from dataclasses import dataclass

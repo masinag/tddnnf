@@ -464,7 +464,7 @@ size. Existing projection-only mappings remain accepted when they cover the proj
 
 ## Test specification
 
-The executable integration corpus is in [`tests/bank_cases.py`](tests/bank_cases.py).
+The executable integration corpus is in [`tests/integration/bank_cases.py`](tests/integration/bank_cases.py).
 It preserves all 27 supplied inline expressions and full/theory-projected reference
 counts: Boolean, equality, LRA, mixed integer/real arithmetic, bit vectors, and
 arrays. Partition counts are intentionally ignored. The four file-backed examples
@@ -472,7 +472,7 @@ arrays. Partition counts are intentionally ignored. The four file-backed example
 Bool-only projected reference zero denotes no theory projection; a satisfiable
 formula projected onto an empty vocabulary has one Boolean assignment.
 
-[`tests/test_bank_cases.py`](tests/test_bank_cases.py) exercises every inline
+[`tests/integration/test_bank_cases.py`](tests/integration/test_bank_cases.py) exercises every inline
 formula with both theory constructions, complete vocabularies and the
 three native backend/engine pairs. Independent exhaustive SMT checks determine
 consistency of original-atom valuations. Reduced truth is `phi and consistent`;
@@ -483,11 +483,13 @@ implication, before and after save/load. d4 cases requiring universal eliminatio
 must raise its capability exception. Existing ddnnife terminal-circuit query
 exclusions remain; this change does not expand constant handling.
 
-[`tests/test_quantified_compilation.py`](tests/test_quantified_compilation.py)
+[`tests/compilers/test_compilers.py`](tests/compilers/test_compilers.py)
 independently enumerates Boolean truth tables for existential, universal,
 and unquantified compilation, with mixed requests rejected. It covers empty retained and declared vocabularies, absent free
 dimensions, sparse IDs, invalid declarations, and d4 rejection before execution.
-A generated-atom extended regression checks reconstruction and BDD/SDD persistence.
+A generated-atom extended regression in
+[`tests/integration/test_projection_roundtrip.py`](tests/integration/test_projection_roundtrip.py)
+checks reconstruction and BDD/SDD persistence.
 
 The migration map is: shared native compiler fixtures declare `all_atoms` and
 existential omissions; theory pipeline tests distinguish generated from original

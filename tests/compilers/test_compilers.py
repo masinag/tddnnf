@@ -1,20 +1,34 @@
-"""Check single-kind quantification against independent Boolean truth tables."""
+"""Native compilers preserve Boolean semantics and enforce quantifier contracts."""
+
+from __future__ import annotations
 
 from itertools import product
 from unittest.mock import Mock
 
 import pytest
+from pysmt.formula import FormulaManager
 
-from tddnnf import TheoryCompilation
-from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
-from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.containers import TheoryCompiledTarget
+from tddnnf.core.interfaces import PropCompiler
 from tddnnf.core.pysmt_utils import compilation_vocabulary
 from tests.conftest import evaluate
+from tests.support import BACKENDS, SolverGroundTruth
 
-BACKENDS = [BddCompiler, SddCompiler, D4Compiler]
+
+def test_bank_compilation_equivalence(
+    mgr: FormulaManager, compiler: PropCompiler, bank_case: SolverGroundTruth
+) -> None:
+    abstr = bank_case.abstr
+    target = compiler.compile(
+        bank_case.original_formula, abstr, all_atoms=bank_case.all_atoms, exists_atoms=bank_case.vars_to_forget
+    )
+    compiled_pysmt = target.to_pysmt(abstr, mgr)
+
+    not_equivalent = mgr.Not(mgr.Iff(compiled_pysmt, bank_case.expected_formula))
+    with mgr.env.factory.Solver() as solver:
+        solver.add_assertion(not_equivalent)
+        assert not solver.solve(), f"Compilation equivalence failed for {bank_case.original_formula}"
 
 
 BOOLEAN_CASES = [
@@ -102,22 +116,3 @@ def test_all_dimensions_quantified(mgr, backend):
         mgr.Iff(e, u), abstraction, all_atoms=[u, e], exists_atoms=existential, forall_atoms=universal
     )
     assert evaluate(mgr, target.to_pysmt(abstraction, mgr), {}) == (backend is D4Compiler)
-
-
-@pytest.mark.parametrize(
-    "backend,target_type",
-    [(BddCompiler, BddCompiledTarget), (SddCompiler, SddCompiledTarget)],
-)
-def test_extended_generated_atom_roundtrip(mgr, tmp_path, backend, target_type):
-    p, w = mgr.Symbol("p"), mgr.Symbol("generated")
-    phi = p
-    lemma = mgr.Iff(p, w)
-    with TheoryCompilation(phi, atoms=[p], env=mgr.env) as compilation:
-        target = compilation.compile_textended(backend(), [lemma])
-    path = tmp_path / "compiled"
-    target.save(path)
-    loaded = TheoryCompiledTarget.load(path, target_type, env=mgr.env)
-    for artifact in (target, loaded):
-        assert artifact.projection_atoms == (p,)
-        for value in (False, True):
-            assert evaluate(mgr, artifact.to_pysmt(), {p: value}) == value

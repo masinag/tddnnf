@@ -3,11 +3,14 @@
 import pytest
 from pysmt.environment import Environment
 
+from tddnnf import TheoryCompilation
+from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
 from tddnnf.compilers.d4 import D4Compiler
-from tddnnf.compilers.pysdd import SddCompiler
+from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.queries import DdnnifeEngine, SddEngine
+from tests.conftest import evaluate
 
 
 def test_cleaned_d4_query_counts(mgr, a, b, c, monkeypatch):
@@ -55,3 +58,22 @@ def test_full_mapping_roundtrip_queries(mgr, tmp_path, compiler, engine):
             assert query.count_truth_assignments([absent]) == 1
             assert query.count_truth_assignments([fm.Not(absent)]) == 1
             assert query.count_truth_assignments([fm.Not(a)]) == 0
+
+
+@pytest.mark.parametrize(
+    "backend,target_type",
+    [(BddCompiler, BddCompiledTarget), (SddCompiler, SddCompiledTarget)],
+)
+def test_extended_generated_atom_roundtrip(mgr, tmp_path, backend, target_type):
+    p, w = mgr.Symbol("p"), mgr.Symbol("generated")
+    phi = p
+    lemma = mgr.Iff(p, w)
+    with TheoryCompilation(phi, atoms=[p], env=mgr.env) as compilation:
+        target = compilation.compile_textended(backend(), [lemma])
+    path = tmp_path / "compiled"
+    target.save(path)
+    loaded = TheoryCompiledTarget.load(path, target_type, env=mgr.env)
+    for artifact in (target, loaded):
+        assert artifact.projection_atoms == (p,)
+        for value in (False, True):
+            assert evaluate(mgr, artifact.to_pysmt(), {p: value}) == value
