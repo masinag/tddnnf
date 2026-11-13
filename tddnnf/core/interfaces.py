@@ -45,14 +45,21 @@ T_Target_co = TypeVar("T_Target_co", bound=PropCompiledTarget, covariant=True)
 
 @runtime_checkable
 class PropCompiler(Protocol[T_Target_co]):
-    """Compiles a propositional formula into a PropCompiledTarget."""
+    """Compile existentially or universally quantified formula over a complete declared vocabulary.
+
+    Retained variables follow all_atoms order. Formula atoms must be declared;
+    quantifier sets must be subsets with only one kind nonempty, and all atoms
+    must be pre-registered.
+    """
 
     def compile(
         self,
         formula: FNode,
         abstractor: Abstractor,
         *,
-        project_on: Sequence[FNode] | None = None,
+        all_atoms: Sequence[FNode],
+        exists_atoms: Sequence[FNode] = (),
+        forall_atoms: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
     ) -> T_Target_co: ...
 

@@ -23,7 +23,9 @@ class BaseTestCompiler:
         self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, bank_case: SolverGroundTruth
     ) -> None:
         abstr = bank_case.abstr
-        target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
+        target = compiler.compile(
+            bank_case.original_formula, abstr, all_atoms=bank_case.all_atoms, exists_atoms=bank_case.vars_to_forget
+        )
         compiled_pysmt = target.to_pysmt(abstr, mgr)
 
         not_equivalent = mgr.Not(mgr.Iff(compiled_pysmt, bank_case.expected_formula))
@@ -35,7 +37,9 @@ class BaseTestCompiler:
         self, mgr: FormulaManager, compiler: PropCompiler, abstr: Abstractor, bank_case: SolverGroundTruth
     ) -> None:
         abstr = bank_case.abstr
-        target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
+        target = compiler.compile(
+            bank_case.original_formula, abstr, all_atoms=bank_case.all_atoms, exists_atoms=bank_case.vars_to_forget
+        )
         original_pysmt = target.to_pysmt(abstr, mgr)
 
         with tempfile.TemporaryDirectory() as tmpdir:

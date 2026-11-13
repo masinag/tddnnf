@@ -69,26 +69,26 @@ def shannon_forget(mgr: FormulaManager, formula: FNode, vars_to_forget: list[FNo
 
 
 class SolverGroundTruth:
-    def __init__(self, mgr: FormulaManager, formula: FNode, all_vars: list[FNode], strategy: str) -> None:
-        self.abstr = Abstractor(dict(enumerate(all_vars, 1)))
+    def __init__(self, mgr: FormulaManager, formula: FNode, all_atoms: list[FNode], strategy: str) -> None:
+        self.abstr = Abstractor(dict(enumerate(all_atoms, 1)))
         self.original_formula = formula
-        self.all_vars = all_vars
-        n = len(all_vars)
+        self.all_atoms = all_atoms
+        n = len(all_atoms)
         if strategy == "all" or n < 3:
-            self.project_on = all_vars
+            self.project_on = all_atoms
         elif strategy == "first_k":
-            self.project_on = all_vars[: n // 2]
+            self.project_on = all_atoms[: n // 2]
         elif strategy == "high_ids":
-            self.project_on = all_vars[n // 2 :]
+            self.project_on = all_atoms[n // 2 :]
         elif strategy == "even":
-            self.project_on = all_vars[::2]
+            self.project_on = all_atoms[::2]
         elif strategy == "odd":
-            self.project_on = all_vars[1::2]
+            self.project_on = all_atoms[1::2]
         else:
             msg = f"unknown strategy: {strategy}"
             raise ValueError(msg)
 
-        self.vars_to_forget = [v for v in all_vars if v not in self.project_on]
+        self.vars_to_forget = [v for v in all_atoms if v not in self.project_on]
         self.expected_formula = shannon_forget(mgr, formula, self.vars_to_forget)
 
 
@@ -98,3 +98,10 @@ def bank_case(request: pytest.FixtureRequest, mgr: FormulaManager) -> SolverGrou
     v = [mgr.Symbol(f"v{gen_fn.__name__}_{i}", BOOL) for i in range(num_vars)]
     formula = gen_fn(mgr, v)
     return SolverGroundTruth(mgr, formula, v, strategy)
+
+
+def evaluate(mgr, formula, assignment):
+    result = mgr.env.substituter.substitute(formula, {atom: mgr.Bool(value) for atom, value in assignment.items()})
+    result = mgr.env.simplifier.simplify(result)
+    assert result.is_bool_constant()
+    return result.is_true()

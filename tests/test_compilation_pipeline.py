@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+from pysmt.exceptions import UnsupportedOperatorError
 from pysmt.fnode import FNode
 from pysmt.typing import INT
 
@@ -33,21 +34,29 @@ def equivalent(mgr, actual, expected):
 
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("strategy", STRATEGIES)
-@pytest.mark.parametrize("projection", [None, [], ["b"], ["absent", "b", "absent"]])
+@pytest.mark.parametrize("projection", [None, ["a", "b"], ["absent", "b", "a", "absent"]])
 @pytest.mark.parametrize("constant", [None, True, False])
 def test_projected_semantics(mgr, backend, strategy, projection, constant):
     a, b, c, absent = [mgr.Symbol(name) for name in ("a", "b", "c", "absent")]
     phi = mgr.And(a, b) if constant is None else mgr.Bool(constant)
     lemmas = [mgr.Or(b, c)] if constant is None else []
     selected = None if projection is None else [mgr.Symbol(name) for name in projection]
-    with TheoryCompilation(phi, project_on=selected, env=mgr.env) as compilation:
+    with TheoryCompilation(phi, atoms=selected, env=mgr.env) as compilation:
+        generated = set().union(*(lemma.get_atoms() for lemma in lemmas)) - (phi.get_atoms() | set(compilation.atoms))
+        if backend is D4Compiler and strategy == "compile_textended" and generated:
+            with pytest.raises(NotImplementedError, match="universal"):
+                compilation.compile_textended(backend(), lemmas)
+            return
         target = getattr(compilation, strategy)(backend(), lemmas)
         combined = (
             mgr.And(phi, *lemmas)
             if strategy == "compile_treduced"
             else mgr.Or(phi, *(mgr.Not(lemma) for lemma in lemmas))
         )
-        forgotten = [atom for atom in combined.get_atoms() if atom not in compilation.project_on]
+        forgotten = [atom for atom in combined.get_atoms() if atom not in compilation.atoms]
+        if strategy == "compile_textended":
+            combined = mgr.Not(shannon_forget(mgr, mgr.Not(combined), list(generated)))
+            forgotten = [atom for atom in forgotten if atom not in generated]
         expected = shannon_forget(mgr, combined, forgotten)
         equivalent(mgr, target.to_pysmt(), expected)
         vocabulary = (
@@ -79,10 +88,14 @@ def test_node_id_atom_order(mgr, backend, strategy, explicit, theory):
         raw = [z, a, y, b]
     projection = [raw[1], mgr.Not(raw[0]), raw[1]] if explicit else None
     with TheoryCompilation(mgr.And(*raw[:2]), projection, env=mgr.env) as compilation:
-        assert compilation.project_on == ((a, z) if explicit else (z, a))
+        assert compilation.atoms == ((a, z) if explicit else (z, a))
+        if backend is D4Compiler and strategy == "compile_textended":
+            with pytest.raises(NotImplementedError, match="universal"):
+                compilation.compile_textended(backend(), [mgr.And(*raw[2:])])
+            return
         target = getattr(compilation, strategy)(backend(), [mgr.And(*raw[2:])])
-        assert target.projection_atoms == compilation.project_on
-        assert dict(target.abstr.id_to_atom) == dict(enumerate((*compilation.project_on, y, b), 1))
+        assert target.projection_atoms == compilation.atoms
+        assert dict(target.abstr.id_to_atom) == dict(enumerate((*compilation.atoms, y, b), 1))
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -95,7 +108,7 @@ def test_constant_normalizing_projection_atoms(mgr, backend, strategy, negated):
     entries = [mgr.Not(atom) for atom in atoms] if negated else atoms
     with TheoryCompilation(p, [*entries, p], env=mgr.env) as compilation:
         assert [compilation.normalize(atom) for atom in atoms] == [mgr.TRUE(), mgr.FALSE()]
-        assert compilation.project_on == (p,)
+        assert compilation.atoms == (p,)
         target = getattr(compilation, strategy)(backend(), [])
         assert target.projection_atoms == (p,)
         assert target.abstr.var_count == 1
@@ -187,7 +200,7 @@ def test_rejects_compound_and_constant_projection(mgr, entry, negated):
     a, b = mgr.Symbol("a"), mgr.Symbol("b")
     value = {"true": mgr.TRUE(), "false": mgr.FALSE(), "and": mgr.And(a, b), "or": mgr.Or(a, b)}[entry]
     value = mgr.Not(value) if negated else value
-    with pytest.raises(ValueError, match="Projection entries"):
+    with pytest.raises(ValueError, match="Vocabulary entries"):
         TheoryCompilation(a, [value], env=mgr.env)
 
 
@@ -211,8 +224,8 @@ def test_partial_initialization_cleanup(mgr, monkeypatch):
     solver = Mock()
     solver.converter = Mock()
     monkeypatch.setattr(mgr.env.factory, "Solver", Mock(return_value=solver))
-    with pytest.raises(ValueError, match="Projection entries"):
-        TheoryCompilation(mgr.TRUE(), project_on=[mgr.TRUE()], env=mgr.env)
+    with pytest.raises(ValueError, match="Vocabulary entries"):
+        TheoryCompilation(mgr.TRUE(), atoms=[mgr.TRUE()], env=mgr.env)
     solver.exit.assert_called_once()
 
     # Failure while reading the newly allocated solver's converter also cleans up.
@@ -263,10 +276,15 @@ atoms = {name: Symbol(name) for name in ["z", "a", "m", "absent", "lemma"]}
 results = []
 for backend in [BddCompiler, SddCompiler, D4Compiler]:
     for strategy in ["compile_treduced", "compile_textended"]:
-        for projection in [None, [atoms["absent"], atoms["m"]]]:
+        for projection in [None, [atoms["absent"], atoms["m"], atoms["z"], atoms["a"]]]:
             with TheoryCompilation(And(atoms["z"], Or(atoms["a"], atoms["m"])), projection) as c:
-                t = getattr(c, strategy)(backend(), [atoms["lemma"]])
-                results.append([ [str(a) for a in t.projection_atoms], t.abstr.to_dict() ])
+                try:
+                    t = getattr(c, strategy)(backend(), [atoms["lemma"]])
+                except NotImplementedError:
+                    assert backend is D4Compiler and strategy == "compile_textended"
+                    results.append(None)
+                else:
+                    results.append([ [str(a) for a in t.projection_atoms], t.abstr.to_dict() ])
 print(json.dumps(results, sort_keys=True))
 """
     outputs = [
@@ -277,14 +295,16 @@ print(json.dumps(results, sort_keys=True))
     ]
     assert outputs[0] == outputs[1] == outputs[2]
     rows = json.loads(outputs[0])
-    assert rows[:4] == rows[4:8] == rows[8:]
+    assert rows[:4] == rows[4:8]
+    assert rows[8:10] == rows[:2]
+    assert rows[10:] == [None, None]
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_backend_requires_prepared_abstraction(mgr, backend):
     abstractor = Abstractor()
     with pytest.raises(AssertionError, match="prepared"):
-        backend().compile(mgr.Symbol("a"), abstractor)
+        backend().compile(mgr.Symbol("a"), abstractor, all_atoms=[mgr.Symbol("a")])
     assert abstractor.var_count == 0
 
 
@@ -313,3 +333,31 @@ def test_sdd_supported_vtree_types(mgr, vtree_type):
     with TheoryCompilation(phi, env=mgr.env) as compilation:
         target = compilation.compile_treduced(SddCompiler(vtree_type=vtree_type), [])
     equivalent(mgr, target.to_pysmt(), phi)
+
+
+@pytest.mark.parametrize("declaration", [[], ["a"], ["x"]])
+def test_rejects_missing_original_atoms(mgr, declaration):
+    a, x = mgr.Symbol("a"), mgr.Symbol("x")
+    with pytest.raises(ValueError, match="formula atoms"):
+        TheoryCompilation(mgr.And(a, x), atoms=[mgr.Symbol(name) for name in declaration], env=mgr.env)
+
+
+def test_rejects_missing_normalized_atom(mgr):
+    x = mgr.Symbol("x", INT)
+    with pytest.raises(ValueError, match="formula atoms"):
+        TheoryCompilation(mgr.GE(x, mgr.Int(2)), [mgr.GE(x, mgr.Int(3))], env=mgr.env)
+
+
+@pytest.mark.parametrize("kind", ["forall", "exists"])
+@pytest.mark.parametrize("position", ["formula", "lemma"])
+def test_normalizer_rejects_quantified_inputs(mgr, kind, position):
+    x = mgr.Symbol("x", INT)
+    quantified = getattr(mgr, "ForAll" if kind == "forall" else "Exists")([x], mgr.GE(x, mgr.Int(0)))
+    if position == "formula":
+        with pytest.raises(UnsupportedOperatorError):
+            TheoryCompilation(quantified, env=mgr.env)
+    else:
+        with TheoryCompilation(mgr.TRUE(), env=mgr.env) as compilation:
+            for strategy in STRATEGIES:
+                with pytest.raises(UnsupportedOperatorError):
+                    getattr(compilation, strategy)(BddCompiler(), [quantified])

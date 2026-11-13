@@ -71,7 +71,7 @@ def test_context_derives_default_projection_from_normalized_formula(
     context = CompilationContext(phi, env=env)
 
     assert context.phi == norm.normalize(phi)
-    assert set(context.project_on) == {p, norm.normalize(x_ge_2)}
+    assert set(context.atoms) == {p, norm.normalize(x_ge_2)}
 
 
 def test_context_makes_explicit_projection_atoms_positive(
@@ -80,11 +80,11 @@ def test_context_makes_explicit_projection_atoms_positive(
     norm = NormalizerWalker(env)
     x_lt_two = mgr.LT(x, mgr.Int(2))
 
-    context = CompilationContext(p, project_on=[x_lt_two], env=env)
+    context = CompilationContext(p, atoms=[x_lt_two, p], env=env)
 
     normalized = norm.normalize(x_lt_two)
     assert normalized.is_not()
-    assert context.project_on == (normalized.arg(0),)
+    assert context.atoms == (normalized.arg(0), p)
 
 
 def test_context_exposes_normalization(env: Environment, mgr: FormulaManager, x: FNode, p: FNode) -> None:

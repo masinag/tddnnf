@@ -77,19 +77,22 @@ from pysmt.shortcuts import read_smtlib
 phi = read_smtlib("formula.smt2")
 ```
 
-Create the compilation context. Its `project_on` vocabulary determines which
-atoms remain in the compiled target and may appear in queries. When omitted, as
-here, it defaults to the atoms in `phi`. A custom `project_on` may select atoms
-from `phi` as well as atoms that occur only in theory lemmas supplied at
-compilation. Any atom in `phi` or those lemmas that is omitted from `project_on`
-is existentially quantified away.
+Create the compilation context. Its `atoms` vocabulary contains every atom
+of normalized `phi`, plus optional query atoms and absent free dimensions.
+Omitting it defaults to normalized formula atoms in node-ID order. Explicit
+entries are normalized, made positive, deduplicated in first-occurrence order,
+and discarded if they normalize to constants. Missing normalized input atoms
+raise `ValueError`. Atoms are Boolean symbols or theory relations such as
+`x < 2`, not underlying SMT symbols such as `x`. Formula and lemma inputs must
+be quantifier-free; the normalizer raises
+`UnsupportedOperatorError` for quantified inputs.
 
 ```python
 compilation = TheoryCompilation(phi)
 ```
 
 Enumerate theory lemmas for the normalized formula, passing the complete
-projection vocabulary through `atoms=compilation.project_on`. This allows the
+projection vocabulary through `atoms=compilation.atoms`. This allows the
 enumerator to generate lemmas involving query-only theory atoms that do not
 occur in `phi`.
 
@@ -98,7 +101,7 @@ enumerator = MathSATDivideAndConquerEnumerator(
     parallel_procs=4,
     divide_strategy=DivideByProjectedEnumerationStrategy(),
 )
-enumerator.check_all_sat(compilation.phi, atoms=compilation.project_on)
+enumerator.check_all_sat(compilation.phi, atoms=compilation.atoms)
 lemmas = enumerator.get_theory_lemmas()
 ```
 
@@ -191,16 +194,56 @@ preconditions, without repeated runtime validation. Projection entries normalize
 to positive Boolean symbols or theory atoms. Atoms that normalize to constants,
 including negated atoms, are discarded; explicitly supplied constants and
 compound Boolean entries are rejected.
-Omitted projection uses normalized formula atoms in `FNode.node_id()` order;
-explicit projection preserves first occurrence, including an empty list or atoms
-absent from the formula and lemmas. Each compile call registers new projection
-atoms first, then the remaining new combined-formula atoms in normalized atoms’
-node-ID order,
-preserving any IDs in a supplied abstraction. Node IDs serve only as sorting
-keys; new abstraction IDs remain sequential above the existing maximum. Ordering
-is reproducible given the same node creation history in the environment and
-starting abstraction.
-Non-projection atoms and encoding auxiliaries are existentially eliminated.
+The declared vocabulary preserves explicit first occurrence after normalization;
+the default follows normalized formula node IDs. Extra atoms absent from both
+formula and lemmas remain free dimensions. Each compile call registers declared
+atoms first, then lemma atoms outside that vocabulary in node-ID order. Existing
+abstraction IDs remain unchanged.
+
+Let `V = compilation.atoms`, `L` be the normalized lemma conjunction, and
+`W = Atoms(L) - V`. Every normalized input atom must belong to `V`:
+
+- Reduced: `exists W. (phi and L)`.
+- Extended: `forall W. (phi or not L)`.
+
+Extended compilation with d4 raises `NotImplementedError` when `W` is nonempty.
+It never substitutes another backend.
+
+The native compiler contract is:
+
+```python
+compiler.compile(
+    formula, abstractor,
+    all_atoms=all_atoms,
+    exists_atoms=(),
+    forall_atoms=(),
+    computation_logger=None,
+)
+```
+
+It compiles either `exists E. formula` or `forall U. formula`. `all_atoms` declares the
+complete atom vocabulary, including absent free dimensions. The retained vocabulary
+is `all_atoms` with both quantified sets removed, preserving declaration order.
+Declarations must contain distinct positive Boolean symbols or theory atoms;
+formula atoms must belong to `all_atoms`, and quantified sets must be disjoint
+subsets, and both lists cannot be nonempty. Invalid declarations raise `ValueError`. Every declared atom must already
+be registered in the supplied abstraction (otherwise `AssertionError`). Sparse
+supplied IDs are preserved. BDD and SDD support existential elimination and universal elimination via
+`not exists U. not formula`. d4 supports existential
+elimination and rejects every nonempty valid `forall_atoms` declaration before
+launching its external compiler. Universal elimination can cause substantial
+intermediate growth. Native target classes, query engines, and persistence schemas
+are unchanged.
+
+Native callers migrating from `all_vars=P` must supply the complete vocabulary
+as `all_atoms=V` and `exists_atoms=[a for a in V if a not in P]`. Native calls without
+projection now also require `all_atoms`. Rename native `exists_vars` and
+`forall_vars` to `exists_atoms` and `forall_atoms`. Theory callers and legacy
+builders must rename `project_on` or `all_vars` to `atoms` and read `.atoms`
+in place of `.all_vars`
+and include every normalized input atom. There is no compatibility alias or
+original-atom projection API. For example, compiling `a and x` with
+`atoms=[a]` raises `ValueError`.
 
 ### Compilation strategies
 
@@ -390,3 +433,62 @@ read-only `target.remapping` from shared abstraction IDs to native IDs. This
 mapping is required in schema v1 SDD artifacts. OBDD compilation declares only
 needed variable names. Neither backend changes shared abstraction IDs. Variables
 used during compilation and later forgotten remain allocated.
+
+
+## Test specification
+
+The executable integration corpus is in [`tests/bank_cases.py`](tests/bank_cases.py).
+It preserves all 27 supplied inline expressions and full/theory-projected reference
+counts: Boolean, equality, LRA, mixed integer/real arithmetic, bit vectors, and
+arrays. Partition counts are intentionally ignored. The four file-backed examples
+(Test lemmas, Planning, Randgen, Randgen big) are excluded as requested. The
+Bool-only projected reference zero denotes no theory projection; a satisfiable
+formula projected onto an empty vocabulary has one Boolean assignment.
+
+[`tests/test_bank_cases.py`](tests/test_bank_cases.py) exercises every inline
+formula with both theory constructions, complete vocabularies and the
+three native backend/engine pairs. Independent exhaustive SMT checks determine
+consistency of original-atom valuations. Reduced truth is `phi and consistent`;
+extended truth is `phi or not consistent`. Supplied model counts refer to theory-consistent reduced
+models, not the extended Boolean completion. The oracle checks reconstruction,
+counts, satisfiability, validity, enumeration, literal clause entailment and cube
+implication, before and after save/load. d4 cases requiring universal elimination
+must raise its capability exception. Existing ddnnife terminal-circuit query
+exclusions remain; this change does not expand constant handling.
+
+[`tests/test_quantified_compilation.py`](tests/test_quantified_compilation.py)
+independently enumerates Boolean truth tables for existential, universal,
+and unquantified compilation, with mixed requests rejected. It covers empty retained and declared vocabularies, absent free
+dimensions, sparse IDs, invalid declarations, and d4 rejection before execution.
+A generated-atom extended regression checks reconstruction and BDD/SDD persistence.
+
+The migration map is: shared native compiler fixtures declare `all_atoms` and
+existential omissions; theory pipeline tests distinguish generated from original
+atoms; engine, ownership and allocation fixtures use the new native signature;
+public theory callers use `atoms`. No compatibility alias is provided for
+the removed `project_on`, `all_vars`, `exists_vars`, or `forall_vars` keywords.
+
+Acceptance requires the independent quantifier tables, the theory corpus,
+existing small exhaustive SMT oracles, the affected adapter/session/persistence
+tests, the complete suite, Ruff lint/format, and `git diff --check`. Historical
+reported corpus failures are not evidence of current failures; only independently
+reproduced results should be reported as such.
+
+
+Current inventory: **18 test modules**, **113 test function/method definitions**
+(including definitions in the two shared base modules, counted once), and
+**1,299 collected test cases** after inheritance and parametrization. Support
+modules `conftest.py`, `formula_bank.py`, and `bank_cases.py` supply fixtures
+and formulas.
+
+| Integration boundary | Test definitions | Collected cases |
+| --- | ---: | ---: |
+| Native quantifiers and generated-atom regression | 5 | 194 |
+| Supplied theory corpus | 1 | 162 |
+| Existing compiler, engine, pipeline, normalization, ownership, metrics and persistence checks | 107 | 943 |
+
+
+Verification: all **1,299 tests passed**, including all 27 inline corpus formulas,
+162 corpus combinations, and independent native
+quantifier truth tables. Ruff lint/format, basedpyright and diff checks passed.
+The run emitted PySMT/MathSAT warnings and CUDD cleanup warnings.

@@ -19,20 +19,20 @@ def test_context_compilation_matches_manual_builder(mgr: FormulaManager, strateg
     p = mgr.Symbol(f"compilation_context_{strategy}_p", BOOL)
     raw_atom = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
     raw_lemma = mgr.Or(mgr.Not(p), raw_atom)
-    context = TheoryCompilation(p, project_on=[p, raw_atom], env=mgr.env)
+    context = TheoryCompilation(p, atoms=[p, raw_atom], env=mgr.env)
     normalized_lemma = context.normalize(raw_lemma)
 
     if strategy == "treduced":
         target = context.compile_treduced(SddCompiler(), [raw_lemma])
         abstractor = Abstractor()
         manual = TReducedBuilder(SddCompiler(), env=mgr.env).build(
-            context.phi, [normalized_lemma], abstractor, project_on=context.project_on
+            context.phi, [normalized_lemma], abstractor, atoms=context.atoms
         )
     else:
         target = context.compile_textended(SddCompiler(), [raw_lemma])
         abstractor = Abstractor()
         manual = TExtendedBuilder(SddCompiler(), env=mgr.env).build(
-            context.phi, [normalized_lemma], abstractor, project_on=context.project_on
+            context.phi, [normalized_lemma], abstractor, atoms=context.atoms
         )
 
     difference = mgr.Not(mgr.Iff(target.to_pysmt(), manual.to_pysmt()))
@@ -74,11 +74,11 @@ def test_context_deduplicates_equivalent_projection_atoms(mgr: FormulaManager) -
     atom = mgr.GE(x, mgr.Int(2))
     equivalent_atom = mgr.GE(mgr.Times(mgr.Int(2), x), mgr.Int(4))
 
-    context = TheoryCompilation(mgr.TRUE(), project_on=[atom, p, equivalent_atom], env=mgr.env)
+    context = TheoryCompilation(mgr.TRUE(), atoms=[atom, p, equivalent_atom], env=mgr.env)
     canonical_atom = context.normalize(atom)
 
     assert context.normalize(equivalent_atom) == canonical_atom
-    assert context.project_on == (canonical_atom, p)
+    assert context.atoms == (canonical_atom, p)
 
     target = context.compile_treduced(SddCompiler(), [])
 

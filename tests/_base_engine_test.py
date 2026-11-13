@@ -40,7 +40,7 @@ class BaseTestEngine(Generic[T_Target]):
         b: FNode,
     ) -> QueryEngine[T_Target]:
         abstr = Abstractor({1: a, 2: b})
-        target = compiler.compile(mgr.And(a, b), abstr)
+        target = compiler.compile(mgr.And(a, b), abstr, all_atoms=[a, b])
         return self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b], env=mgr.env))
 
     def test_exhaustive_engine_and_solver_space(
@@ -51,7 +51,9 @@ class BaseTestEngine(Generic[T_Target]):
         bank_case: SolverGroundTruth,
     ) -> None:
         abstr = bank_case.abstr
-        target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
+        target = compiler.compile(
+            bank_case.original_formula, abstr, all_atoms=bank_case.all_atoms, exists_atoms=bank_case.vars_to_forget
+        )
         container = TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on, env=mgr.env)
         if isinstance(target, D4CompiledTarget) and target.nnf_text in ("t 1\n", "f 1\n"):
             with pytest.raises(ddnnife.InternalError):
@@ -121,7 +123,7 @@ class BaseTestEngine(Generic[T_Target]):
     def test_enumeration_projection_order(self, mgr, compiler, a, b, reverse):
         projection = [b, a] if reverse else [a, b]
         abstr = Abstractor({1: a, 2: b})
-        native = compiler.compile(mgr.Or(a, b), abstr, project_on=projection)
+        native = compiler.compile(mgr.Or(a, b), abstr, all_atoms=projection)
         engine = self.engine_cls(TheoryCompiledTarget(native, abstr, projection, env=mgr.env))
         try:
             models = list(engine.enumerate_truth_assignments())
@@ -138,7 +140,9 @@ class BaseTestEngine(Generic[T_Target]):
         bank_case: SolverGroundTruth,
     ) -> None:
         abstr = bank_case.abstr
-        target = compiler.compile(bank_case.original_formula, abstr, project_on=bank_case.project_on)
+        target = compiler.compile(
+            bank_case.original_formula, abstr, all_atoms=bank_case.all_atoms, exists_atoms=bank_case.vars_to_forget
+        )
         container = TheoryCompiledTarget(target, abstr, projection_atoms=bank_case.project_on, env=mgr.env)
         if isinstance(target, D4CompiledTarget) and target.nnf_text in ("t 1\n", "f 1\n"):
             with pytest.raises(ddnnife.InternalError):
@@ -200,7 +204,7 @@ class BaseTestEngine(Generic[T_Target]):
         expected_count: int,
     ) -> None:
         abstr = Abstractor({1: a, 2: b})
-        target = compiler.compile(mgr.Or(a, b), abstr)
+        target = compiler.compile(mgr.Or(a, b), abstr, all_atoms=[a, b])
         engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b], env=mgr.env))
         assumptions = None if polarities is None else [a if positive else mgr.Not(a) for positive in polarities]
         assert engine.is_satisfiable(assumptions) == (expected_count > 0)
@@ -267,7 +271,7 @@ class BaseTestEngine(Generic[T_Target]):
         c: FNode,
     ) -> None:
         abstr = Abstractor({1: a, 2: b, 3: c})
-        target = compiler.compile(mgr.And(a, mgr.Or(b, c)), abstr, project_on=[a, b])
+        target = compiler.compile(mgr.And(a, mgr.Or(b, c)), abstr, all_atoms=[a, b, c], exists_atoms=[c])
         engine = self.engine_cls(TheoryCompiledTarget(target, abstr, projection_atoms=[a, b], env=mgr.env))
         with pytest.raises(ValueError, match="not .*projection"):
             engine.is_satisfiable(assumptions=[c])

@@ -19,26 +19,43 @@ class TheoryCompilation:
     """Normalize inputs and compile either theory construction through one pipeline.
 
     Callers must provide Boolean FNodes for phi and lemmas, with all input DAGs
-    (including projection entries) belonging to the selected environment.
+    (including vocabulary entries) belonging to the selected environment.
     These type and environment preconditions are not checked at runtime.
+    Formula and lemma inputs must be quantifier-free. atoms declares Boolean
+    symbols and theory atoms (such as x < 2), not underlying SMT symbols (x).
+    It must contain every normalized phi atom; extra query atoms and absent free
+    dimensions are supported. By default atoms follow normalized node-ID order.
+    Explicit entries are normalized, made positive, deduplicated in first-use
+    order, and discarded when they normalize to constants.
     """
 
     def __init__(
         self,
         phi: FNode,
-        project_on: Sequence[FNode] | None = None,
+        atoms: Sequence[FNode] | None = None,
         env: Environment | None = None,
     ) -> None:
+        """Create a session with the complete normalized atom vocabulary atoms.
+
+        Default to normalized phi atoms in node-ID order. Explicit entries are
+        normalized, made positive, deduplicated in first-occurrence order, and
+        discarded if they normalize to constants. Missing normalized phi atoms
+        raise ValueError; extra query atoms and absent dimensions are allowed.
+        Entries denote Boolean/theory atoms, not underlying SMT symbols.
+        Formula and lemma inputs must be quantifier-free.
+        """
         self._env = env if env is not None else get_env()
         self._closed = False
         self._normalizer = None
         try:
             self._normalizer = NormalizerWalker(self._env)
             self.phi = self.normalize(phi)
-            atoms = sorted(self.phi.get_atoms(), key=FNode.node_id) if project_on is None else project_on
-            self.project_on = tuple(
+            atoms = sorted(self.phi.get_atoms(), key=FNode.node_id) if atoms is None else atoms
+            self.atoms = tuple(
                 dict.fromkeys(normalized for atom in atoms if (normalized := self._normalize_atom(atom)) is not None)
             )
+            if not self.phi.get_atoms() <= set(self.atoms):
+                raise ValueError("Normalized formula atoms must belong to atoms")
         except BaseException:
             self.close()
             raise
@@ -72,7 +89,13 @@ class TheoryCompilation:
         lemmas: Iterable[FNode],
         computation_logger: dict[str, object] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
-        """Conjoin theory lemmas enumerated over normalized phi."""
+        """Compile exists W. (phi and L), eliminating only lemma atoms outside atoms.
+
+        Here:
+        - phi is the formula to be compiled. The set of atoms in phi must be a subset of the atoms of TheoryCompilation.
+        - L is the conjuction of the supplied lemmas, that must rule out the theory-inconsistent truth assignments propositionally satisfy phi
+        - W is the subset of theory atoms appearing in L but not in atoms.
+        """  # noqa: E501
         return self._compile(compiler, lemmas, False, computation_logger)
 
     def compile_textended(
@@ -81,7 +104,13 @@ class TheoryCompilation:
         lemmas: Iterable[FNode],
         computation_logger: dict[str, object] | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
-        """Disjoin negated theory lemmas enumerated over Not(phi)."""
+        """Compile forall W. (phi or not L).
+
+        Here:
+        - phi is the formula to be compiled. The set of atoms in phi must be a subset of the atoms of TheoryCompilation.
+        - L is the conjuction of the supplied lemmas, that must rule out the theory-inconsistent truth assignments propositionally satisfy (not phi)
+        - W is the subset of theory atoms appearing in L but not in atoms.
+        """  # noqa: E501
         return self._compile(compiler, lemmas, True, computation_logger)
 
     def _compile(
@@ -106,26 +135,33 @@ class TheoryCompilation:
             )
             if abstractor is None:
                 abstractor = Abstractor()
-            for atom in (*self.project_on, *sorted(combined.get_atoms(), key=FNode.node_id)):
+            quantified = tuple(sorted(combined.get_atoms() - set(self.atoms), key=FNode.node_id))
+            all_atoms = (*self.atoms, *quantified)
+            for atom in all_atoms:
                 abstractor.get_id(atom)
             artifact = compiler.compile(
-                combined, abstractor, project_on=self.project_on, computation_logger=computation_logger
+                combined,
+                abstractor,
+                all_atoms=all_atoms,
+                exists_atoms=() if extended else quantified,
+                forall_atoms=quantified if extended else (),
+                computation_logger=computation_logger,
             )
         stats.log("n_lemmas", len(normalized_lemmas))
-        stats.log("n_projection_atoms", len(self.project_on))
-        return TheoryCompiledTarget(artifact, abstractor, projection_atoms=self.project_on, env=self._env)
+        stats.log("n_projection_atoms", len(self.atoms))
+        return TheoryCompiledTarget(artifact, abstractor, projection_atoms=self.atoms, env=self._env)
 
     def _normalize_atom(self, atom: FNode) -> FNode | None:
         positive = atom.arg(0) if atom.is_not() else atom
         if positive.is_bool_constant() or not is_atom(positive):
-            raise ValueError("Projection entries must be Boolean symbols or theory atoms, optionally negated")
+            raise ValueError("Vocabulary entries must be Boolean symbols or theory atoms, optionally negated")
         normalized = self.normalize(atom)
         positive = normalized.arg(0) if normalized.is_not() else normalized
-        # Valid atoms (including negated ones) that normalize to constants add no projection dimension.
+        # Valid atoms (including negated ones) that normalize to constants add no vocabulary dimension.
         if positive.is_bool_constant():
             return None
         if not is_atom(positive):
-            raise ValueError("Projection entries must normalize to Boolean symbols or theory atoms")
+            raise ValueError("Vocabulary entries must normalize to Boolean symbols or theory atoms")
         return positive
 
 

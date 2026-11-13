@@ -47,7 +47,7 @@ def pairing(request):
 
 
 def compile_target(mgr, pairing, formula, atoms):
-    with TheoryCompilation(formula, project_on=atoms, env=mgr.env) as compilation:
+    with TheoryCompilation(formula, atoms=atoms, env=mgr.env) as compilation:
         return compilation.compile_treduced(pairing[0](), [])
 
 
@@ -108,7 +108,9 @@ def test_constant_targets(mgr, a, pairing, truth, active):
 def test_sparse_projection_growth(mgr, a, b, c, pairing):
     forgotten = mgr.Symbol("forgotten", BOOL)
     abstr = Abstractor({3: a, 7: b, 11: c, 15: forgotten})
-    native = pairing[0]().compile(mgr.And(a, forgotten), abstr, project_on=[c, b, a])
+    native = pairing[0]().compile(
+        mgr.And(a, forgotten), abstr, all_atoms=[c, b, a, forgotten], exists_atoms=[forgotten]
+    )
     target = TheoryCompiledTarget(native, abstr, [c, b, a], env=mgr.env)
     with target.queries(pairing[1]) as q:
         abstr.get_id(mgr.Symbol("later", BOOL))
@@ -130,7 +132,12 @@ def test_projected_enumeration(mgr, a, b, c, pairing, sparse, project, shape):
     abstr = Abstractor({3: a, 7: b, 11: c} if sparse else {1: a, 2: b, 3: c})
     projection = [b, a] if project else []
     formula = {"true": c, "false": mgr.FALSE(), "atom": mgr.And(a, c)}[shape]
-    native = pairing[0]().compile(formula, abstr, project_on=projection)
+    native = pairing[0]().compile(
+        formula,
+        abstr,
+        all_atoms=tuple(abstr.atom_to_id),
+        exists_atoms=[atom for atom in abstr.atom_to_id if atom not in projection],
+    )
     target = TheoryCompiledTarget(native, abstr, projection, env=mgr.env)
     engine = pairing[1](target)
     root = native.root
@@ -157,7 +164,7 @@ def test_equivalent_syntax_polarity_and_ambiguity(mgr, pairing, monkeypatch):
     opposite = mgr.LT(x, y)
     scaled = mgr.LE(mgr.Times(mgr.Int(2), y), mgr.Times(mgr.Int(2), x))
     abstr = Abstractor({1: atom})
-    native = pairing[0]().compile(atom, abstr, project_on=[atom])
+    native = pairing[0]().compile(atom, abstr, all_atoms=[atom])
     target = TheoryCompiledTarget(native, abstr, [atom], env=mgr.env)
     with target.queries(pairing[1]) as q:
         assert q.is_satisfiable([scaled])
@@ -397,7 +404,7 @@ def test_rejects_stored_atoms_normalizing_to_constants(mgr, pairing, truth, monk
     x = mgr.Symbol("stored_constant_x", INT)
     atom = mgr.Equals(x, x if truth else mgr.Plus(x, mgr.Int(1)))
     abstr = Abstractor({1: atom})
-    native = pairing[0]().compile(atom, abstr, project_on=[atom])
+    native = pairing[0]().compile(atom, abstr, all_atoms=[atom])
     target = TheoryCompiledTarget(native, abstr, [atom], env=mgr.env)
     contexts = []
     original = QuerySession._index_atoms

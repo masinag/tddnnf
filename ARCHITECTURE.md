@@ -33,22 +33,26 @@ PySMT environment and a `NormalizerWalker`, normalizes the input formula at
 construction time, and builds the projection vocabulary.
 
 ```python
-context = TheoryCompilation(phi, project_on=atoms)
+context = TheoryCompilation(phi, atoms=atoms)
 target = context.compile_treduced(D4Compiler(), lemmas)
 ```
 
-When `project_on` is omitted, the projection consists of the atoms in the
+When `atoms` is omitted, the projection consists of the atoms in the
 normalized input formula. When supplied, every projection atom is normalized,
 a top-level negation is removed so the vocabulary contains positive atoms, and
-duplicates are removed while preserving their first occurrence.
+duplicates are removed while preserving their first occurrence. Entries that
+normalize to constants are discarded. Missing normalized input atoms raise
+`ValueError`. Atoms are Boolean symbols or theory relations, not underlying
+SMT symbols. Formula and lemma inputs must be quantifier-free; the normalizer raises
+`UnsupportedOperatorError` for quantified inputs.
 
 Both constructions use one private pipeline to normalize lemmas,
 combine them with the formula, prepare an abstraction, compile, and log
 counts and durations. Supplied abstractions are reused; otherwise a fresh one is
 created. New projection atoms receive IDs first; remaining new atoms follow
 normalized atoms’ `FNode.node_id()` order. Omitted projection sorts the
-normalized formula atoms by the same key; explicit empty projection remains
-empty. Requested atoms absent from the formula and lemmas are registered as
+normalized formula atoms by the same key. The declaration must include every
+normalized input atom; empty declarations require atom-free input. Requested atoms absent from the formula and lemmas are registered as
 unconstrained atoms.
 Node IDs only determine sorting; abstraction IDs are allocated sequentially above
 the existing maximum. Ordering is reproducible given the same node creation
@@ -100,14 +104,15 @@ formula disjoined with the negated lemmas for T-extended compilation.
 Projection vocabularies may include atoms absent from the normalized input
 formula and supplied theory lemmas; these are unconstrained dimensions. The ordered
 `projection_atoms` tuple stored in `TheoryCompiledTarget` is the authoritative
-query vocabulary. Atoms from the input formula or lemmas that are not requested
-are existentially quantified away, and backend query engines reject query atoms
-outside this tuple.
+query vocabulary. All normalized input atoms must be declared. Generated
+lemma atoms are existentially eliminated for reduced compilation and universally
+eliminated for extended compilation. Backend query engines reject atoms outside
+this tuple.
 
 Query-only theory atoms need not occur in the input formula. To constrain them
-by theory consistency, they must occur in the supplied lemmas. Include such atoms in `compilation.project_on` and pass
+by theory consistency, they must occur in the supplied lemmas. Include such atoms in `compilation.atoms` and pass
 the complete projection vocabulary to the external lemma enumerator as
-`atoms=compilation.project_on`. For T-reduced compilation, enumerate over
+`atoms=compilation.atoms`. For T-reduced compilation, enumerate over
 `compilation.phi`; for T-extended compilation, enumerate over
 `Not(compilation.phi)`. This ensures that every query-only theory atom can occur
 in the generated lemmas before those lemmas are supplied to compilation.
@@ -184,10 +189,10 @@ $$
 Its lemmas $\mathit{Cl}$ rule out theory-consistent propositional assignments
 satisfying $\neg\varphi$.
 
-Each builder records the requested projection list in the returned container.
-When a builder is used directly without `project_on`, it derives the projection
-from every atom in the combined formula and orders those atoms by abstraction
-ID.
+Each builder accepts the same complete `atoms` vocabulary as
+`TheoryCompilation`, defaulting to normalized input atoms in node-ID order.
+Only lemma atoms outside that vocabulary are eliminated: existentially for
+reduced compilation, universally for extended compilation.
 
 ## Propositional backends
 
@@ -197,6 +202,7 @@ ID.
 `BCS12Walker`, invokes the bundled d4 executable, and stores the emitted NNF in
 `D4CompiledTarget`. Projected abstraction IDs are remapped to d4's dense output
 variable range. Constant results are represented directly as `t 1` or `f 1`.
+Universal declarations raise `NotImplementedError` before invoking d4.
 
 `D4CompiledTarget` exposes the NNF text, projected variable count, and ID
 remapping. It uses `ddnnife` for DAG statistics, while its own NNF parser
@@ -208,11 +214,12 @@ reconstructs a PySMT formula.
 `SddCompiler(vtree_type="balanced", auto_gc_and_minimize=True)` explicitly
 constructs the requested native vtree. The Boolean option jointly enables or
 disables native automatic garbage collection and minimization; both are enabled
-by default. It existentially quantifies non-projection variables after translation.
+by default. After translation it eliminates declared universal variables using
+`not exists U. not F`, then declared existential variables.
 
 `SddCompiledTarget` retains the `SddNode` root, `SddManager`, and a read-only
 abstraction-to-native `remapping`. Compilation allocates dense native IDs in
-ascending abstraction-ID order for formula and projection atoms only. Queries,
+ascending abstraction-ID order for declared `all_atoms` only. Queries,
 forgetting, reconstruction, and persistence use this correspondence. Constants
 retain a one-variable manager. Forgotten variables remain in the manager. It provides DAG
 statistics and reconstructs decision nodes as disjunctions of prime/sub
@@ -221,7 +228,7 @@ conjunctions.
 ### OBDD: CUDD
 
 `BddCompiler` uses `BddWalker` to translate the Boolean skeleton into a CUDD BDD
-and existentially quantifies non-projection variables after translation.
+and eliminates declared universal variables first, then existential variables.
 
 `BddCompiledTarget` retains the CUDD `Function` root and `BDD` manager. It
 reports reachable-node and edge counts and reconstructs each decision as an
@@ -335,7 +342,11 @@ base class:
 - `PropCompiledTarget` requires `dag_size()`, `save()`, `load()`, and
   `to_pysmt()`;
 - `PropCompiler[T]` requires a
-  `compile(formula, abstractor, *, project_on=None, computation_logger=None)` method; and
+  `compile(formula, abstractor, *, all_atoms, exists_atoms=(), forall_atoms=(), computation_logger=None)`
+  method implementing `exists E. F` or `forall U. F`, rejecting mixed requests. The complete declared vocabulary
+  includes absent free dimensions; quantified variables must be disjoint subsets
+  and every formula atom must be declared. Invalid declarations raise `ValueError`,
+  and the abstraction must be prepared before compilation; and
 - `QueryEngine[T]` defines the six query operations listed above.
 
 `DagSize` is the common immutable result for target size metrics, reporting
