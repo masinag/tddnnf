@@ -12,7 +12,8 @@ including its current public migration: `TheoryCompilation` and
 
 The test tree below is proposed, except for the implemented core groups:
 Abstractor, PySMT utilities, TheoryCompiledTarget, persistence, and StatsCollector, plus the normalization
-and compilation input-ownership checks, compiler contracts, and query-engine contracts described below.
+and compilation input-ownership checks, compiler contracts, query-engine contracts,
+and QuerySession input and lifecycle contracts described below.
 The removed suite remains unreplaced elsewhere; further cases will be decided
 one group at a time.
 
@@ -159,7 +160,7 @@ metadata assertions and leave native cleanup warnings visible.
 
 ### Implemented query-engine contracts
 
-`unit/queries/test_engine_contract.py` parametrizes the compatible BDD/BddEngine,
+`unit/queries/test_engine.py` parametrizes the compatible BDD/BddEngine,
 SDD/SddEngine, and d4/DdnnifeEngine pairs over the shared eleven plain formulas
 and one-/two-variable elimination cases. Formula construction happens inside
 `env`; containers bind the retained atoms in the original declaration order.
@@ -191,7 +192,7 @@ with both Z3 and engine counts. Other operations use the corresponding Z3
 satisfiability or counterexample query. No Python truth tables are introduced.
 The fixture closes each engine at teardown; native cleanup warnings stay visible.
 
-QuerySession, malformed-input tables, dedicated lifecycle tests, backend-specific
+Engine malformed-input tables, dedicated lifecycle tests, backend-specific
 coverage, unused vocabulary, theory workflows, and production fixes remain
 deferred. Any newly discovered production bugs require a separate decision.
 
@@ -206,6 +207,31 @@ the focused engine and full runs reported only PySMT walker deprecations. No new
 production bugs surfaced. The consolidation commit's pyright hook was skipped
 after it failed to resolve installed dependencies in this worktree, including
 when retried with the workspace environment; Ruff commit hooks passed.
+
+### Implemented QuerySession input and lifecycle contracts
+
+`unit/queries/test_session.py` uses the real normalizer, the existing `env`
+fixture and target, and one recording engine with fixed results and two fixed
+assignments. Representative scenarios cover public return values, omitted/`None`/
+empty assumptions, arithmetic alignment and reversed canonical polarity, nested
+clause/cube flattening with order and duplicates, and constants. Compound
+assumptions, non-formula inputs, and undeclared atoms after decisive constants
+raise before delegation. Argument assertions focus on alignment and flattening.
+
+Lifecycle scenarios cover normal/exceptional context exit, repeated close,
+representative queries, enumeration creation and context re-entry after close,
+independent sessions and enumerations, and stopping active/unstarted enumerations
+on session closure. There are no lifecycle counters or failure subclasses.
+
+Verification: all 10 focused session cases and all 1,368 suite cases pass using
+the main workspace interpreter. Repository-wide Ruff lint/format, tracked/new-file
+whitespace checks, and Pyright over production code and `test_session.py` pass
+with the established dependency paths. PySMT walker deprecation warnings remain.
+
+Detailed construction/cleanup failures, native resource release, constructor-input
+rejection, environment isolation, and destructor behavior remain deferred. The
+fake verifies wrapper behavior; native query correctness belongs to engine tests.
+No production or public API changes were needed.
 
 ## Organization
 
@@ -247,7 +273,7 @@ tests/
 │   │   ├── test_pysdd.py
 │   │   └── test_d4.py
 │   ├── queries/
-│   │   ├── test_engine_contract.py
+│   │   ├── test_engine.py
 │   │   ├── test_session.py
 │   │   ├── test_bdd_engine.py
 │   │   ├── test_sdd_engine.py
@@ -292,7 +318,7 @@ holders such as `DagSize`; exercise their contracts through implementations.
 
 | File                      | Classes/group and proposed coverage                                                                                                                                                                                                                                                                                                                                                      |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `test_engine_contract.py` | `BddEngine`, `SddEngine`, `DdnnifeEngine`: satisfiability, validity, counting, clause entailment, implicant checking, enumeration, assumptions, and query input validation. Include empty/constant queries, duplicates, contradictory assumptions, tautological clauses, and declared projection dimensions absent from the DAG. Check that sequential queries do not change the target. |
+| `test_engine.py` | `BddEngine`, `SddEngine`, `DdnnifeEngine`: satisfiability, validity, counting, clause entailment, implicant checking, enumeration, assumptions, and query input validation. Include empty/constant queries, duplicates, contradictory assumptions, tautological clauses, and declared projection dimensions absent from the DAG. Check that sequential queries do not change the target. |
 | `test_session.py`         | `QuerySession`: normalization/alignment of public query inputs, polarity, rejection of atoms outside the projection, environment binding, independent sessions and generators, context-manager exit, repeated close, use after close, cleanup of active enumeration. Use a small engine fake for wrapper behavior.                                                                       |
 | `test_bdd_engine.py`      | Any BDD-specific restriction, complemented-root, enumeration, or ownership regressions that cannot be expressed as shared contract cases.                                                                                                                                                                                                                                                |
 | `test_sdd_engine.py`      | Any SDD-specific conditioning, counting, enumeration, or ownership regressions that cannot be expressed as shared contract cases.                                                                                                                                                                                                                                                        |
