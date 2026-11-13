@@ -22,7 +22,7 @@ class SuspendTypeChecking:
 
     def __enter__(self) -> Environment:
         self._saved = self.mgr._do_type_check
-        self.mgr._do_type_check = lambda formula: formula
+        self.mgr._do_type_check = lambda formula: None
         return self.env
 
     def __exit__(self, *_: Any) -> None:

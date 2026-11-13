@@ -12,7 +12,7 @@ including its current public migration: `TheoryCompilation` and
 
 The test tree below is proposed, except for the implemented core groups:
 Abstractor, PySMT utilities, TheoryCompiledTarget, persistence, and StatsCollector, plus the normalization
-and compilation input-ownership checks and Boolean compiler contracts described below.
+and compilation input-ownership checks, compiler contracts, and query-engine contracts described below.
 The removed suite remains unreplaced elsewhere; further cases will be decided
 one group at a time.
 
@@ -34,7 +34,7 @@ constant scripts. Deserialization reuses constructor validation, and failed
 registrations leave both maps, counts, and subsequent ID allocation unchanged.
 The shared `is_atom()` predicate remains unchanged.
 
-No shared formula bank or backend fixtures are introduced yet. Broader malformed
+This group uses no shared formula bank or backend fixtures. Broader malformed
 mapping validation, other core modules, and backend tests remain deferred.
 
 ### Implemented PySMT utility group
@@ -120,7 +120,8 @@ inspect every descendant. Assertions are disabled under Python's `-O` mode.
 ### Implemented compiler contracts
 
 `test_compiler.py` uses real BDD, SDD, and d4 backends with the existing
-`env` fixture and formula factories evaluated inside that environment. Plain
+`env` fixture and shared formula factories from `tests/cases/formulas.py`, evaluated
+inside that environment. The extraction preserves all 53 compiler cases and assertions. Plain
 compilation covers eleven formulas: both constants, an atom and its negation,
 conjunction, disjunction, implication, equivalence, Boolean ITE, a compound ITE,
 and a five-symbol compound conjunction. Each formula's Boolean symbols are
@@ -156,6 +157,56 @@ Sizes, malformed or missing artifacts, fresh-environment loading, queries, and
 lifecycle fixes remain deferred. Tests avoid serialized bytes and internal
 metadata assertions and leave native cleanup warnings visible.
 
+### Implemented query-engine contracts
+
+`unit/queries/test_engine_contract.py` parametrizes the compatible BDD/BddEngine,
+SDD/SddEngine, and d4/DdnnifeEngine pairs over the shared eleven plain formulas
+and one-/two-variable elimination cases. Formula construction happens inside
+`env`; containers bind the retained atoms in the original declaration order.
+Existential compilation covers all pairs, and universal compilation covers
+BDD/SDD using the existing quantifier arguments. BDD/SDD include constant targets
+and empty projections. ddnnife cannot load d4's constant circuits, and d4 does
+not support universal elimination, so those combinations are omitted explicitly
+from the successful-case table, without skips or xfails. An explicit group table
+lists plain and existential cases for all three backends and universal cases for
+BDD/SDD, with a named nonconstant plain subset for ddnnife. One loop builds engine,
+literal-query, and assumption parameters together, unpacking each formula case
+and creating its fixture input once. Constant factories are identified directly
+by `TRUE`/`FALSE`; IDs only label cases.
+
+Six tests cover satisfiability, validity, counting, clause entailment, implicants,
+and enumeration. Query tables include empty lists, each polarity of the first
+retained atom, complementary literals, all-positive/all-negative lists, and mixed
+polarities. Satisfiability and counting also exercise omitted assumptions.
+Constants use empty literal queries, plus the default-call case for assumptions.
+These tables include satisfiable and unsatisfiable assumptions, tautological
+clauses, and contradictory cubes.
+
+All oracle helpers stay local to the engine module and use Z3. Quantified
+expectations use `Exists`/`ForAll` on the original formulas. The model oracle
+blocks complete assignments over retained atoms, including the empty projection;
+counts come from those model sets. Enumeration compares the full model set,
+rejects duplicates, checks Boolean values and projection key order, and agrees
+with both Z3 and engine counts. Other operations use the corresponding Z3
+satisfiability or counterexample query. No Python truth tables are introduced.
+The fixture closes each engine at teardown; native cleanup warnings stay visible.
+
+QuerySession, malformed-input tables, dedicated lifecycle tests, backend-specific
+coverage, unused vocabulary, theory workflows, and production fixes remain
+deferred. Any newly discovered production bugs require a separate decision.
+
+Verification: compiler collection and execution both preserve 53 cases; the
+focused engine run passes 1,216 cases; the full suite passes 1,358 tests.
+Repository-wide Ruff lint/format and tracked/new-file whitespace checks pass.
+The generation simplification preserves every collected engine test ID and each
+parameter's fixture input. Its focused and full reruns pass the same counts using
+the main workspace interpreter; this worktree's `.venv` lacks the Z3 oracle.
+The focused compiler run reproduced the known CUDD shutdown reference warnings;
+the focused engine and full runs reported only PySMT walker deprecations. No new
+production bugs surfaced. The consolidation commit's pyright hook was skipped
+after it failed to resolve installed dependencies in this worktree, including
+when retried with the workspace environment; Ruff commit hooks passed.
+
 ## Organization
 
 - Use pytest, with one module per class or cohesive group of classes.
@@ -176,9 +227,11 @@ metadata assertions and leave native cleanup warnings visible.
 
 ```text
 tests/
-├── conftest.py
+├── __init__.py
 ├── cases/
+│   ├── __init__.py
 │   └── formulas.py
+├── conftest.py
 ├── unit/
 │   ├── core/
 │   │   ├── test_abstraction.py
@@ -273,9 +326,9 @@ Start with formula categories, then agree concrete formulas interactively:
 | Theory atoms and equivalent syntactic forms                    | Abstraction, normalization, and query alignment.                               |
 | Lemmas with additional atoms                                   | Reduced/extended construction and generated-variable elimination.              |
 
-For small propositional cases, use explicit truth tables or exhaustive assignment
-evaluation as the oracle. For quantified cases, evaluate existential or universal elimination
-independently. At the propositional compiler/engine layer, theory atoms are
+Shared compiler and engine contracts use Z3 as an independent oracle; engine
+counts and enumeration use Z3 model blocking over the retained vocabulary.
+Quantified expectations use `Exists`/`ForAll` formulas. At the propositional compiler/engine layer, theory atoms are
 independent Boolean dimensions; do not silently replace Boolean model counts
 with counts of theory-consistent assignments. Normalization equivalence and
 theory workflows may use an SMT solver as an independent oracle.
