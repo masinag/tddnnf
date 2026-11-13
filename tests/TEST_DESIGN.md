@@ -10,9 +10,10 @@ This plan covers the `tddnnf` library in `/tmp/tddnnf-06-public-migration`,
 including its current public migration: `TheoryCompilation` and
 `TheoryCompiledTarget`. Benchmark harness tests are outside this plan.
 
-The test tree below is proposed, except for the first implemented core group,
-`tests/unit/core/test_abstraction.py`. The removed suite remains unreplaced
-elsewhere; further cases will be decided one group at a time.
+The test tree below is proposed, except for the implemented core groups,
+`tests/unit/core/test_abstraction.py` and `tests/unit/core/test_pysmt_utils.py`.
+The removed suite remains unreplaced elsewhere; further cases will be decided
+one group at a time.
 
 ### Implemented Abstractor group
 
@@ -34,6 +35,25 @@ The shared `is_atom()` predicate remains unchanged.
 
 No shared formula bank or backend fixtures are introduced yet. Broader malformed
 mapping validation, other core modules, and backend tests remain deferred.
+
+### Implemented PySMT utility group
+
+`test_pysmt_utils.py` uses `env`, local formulas, and small tables with explicit
+expected results. Classification covers symbols, theory relations, constants,
+negations, nested and mixed connectives, and non-Boolean terms. Theory-atom
+filtering preserves constants, order, duplicates, and its input.
+
+Query tests cover empty lists, stable deduplication, polarity, constants and
+negated constants, complementary literals, and invalid or undeclared inputs.
+Validation continues after decisive constants and complementary pairs. Vocabulary
+tests cover declaration order, unused atoms, constant formulas, both quantifier
+kinds, invalid/duplicate declarations, missing atoms, and mixed quantifiers.
+Representative successful and rejected calls check that inputs remain unchanged.
+
+Type checking is suspended and restored on normal and exceptional exits in
+default and explicit environments. Tests use public formula construction and
+verify that explicit selection leaves the current environment's checking active.
+Production behavior and backend validation remain outside this group.
 
 ## Organization
 
