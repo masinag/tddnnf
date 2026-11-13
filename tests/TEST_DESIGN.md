@@ -11,7 +11,7 @@ including its current public migration: `TheoryCompilation` and
 `TheoryCompiledTarget`. Benchmark harness tests are outside this plan.
 
 The test tree below is proposed, except for the implemented core groups:
-Abstractor, PySMT utilities, TheoryCompiledTarget, and persistence, plus the normalization
+Abstractor, PySMT utilities, TheoryCompiledTarget, persistence, and StatsCollector, plus the normalization
 and compilation input-ownership checks described below.
 The removed suite remains unreplaced elsewhere; further cases will be decided
 one group at a time.
@@ -84,6 +84,16 @@ and refusal of an existing directory while preserving its contents. Assertions
 avoid JSON formatting, exact error messages, and temporary directory names.
 Mocks, shared fixtures, native backends, symlinks, concurrent saves, and other
 metadata shapes remain outside this group.
+
+### Implemented StatsCollector group
+
+`test_stats_collector.py` covers operation without a logger, dictionary insertion
+and replacement while preserving unrelated entries, nanosecond-to-second
+conversion, accumulation across successive timed blocks, and elapsed-time
+recording while propagating the same exception. Each timing test uses a local
+controlled clock patched with `monkeypatch`, without sleeps or shared fixtures.
+Invalid timing values, nested timing, backend metric keys, and additional clock
+edge cases remain unverified.
 
 ### Implemented normalization and compilation ownership checks
 
@@ -169,7 +179,7 @@ holders such as `DagSize`; exercise their contracts through implementations.
 | `test_pysmt_utils.py`            | Atom/literal/clause/cube predicates; flat query-literal validation and simplification; duplicates, constants, complementary literals, unknown projection atoms; compilation vocabulary validation and retained order. `SuspendTypeChecking`: restoration on normal and exceptional exit. |
 | `test_theory_compiled_target.py` | `TheoryCompiledTarget`: association of target, abstraction, atoms, and environment; delegation of reconstruction/size; save/load of abstraction and atoms. Session creation is deferred to the QuerySession group. Use small fakes where backend semantics are irrelevant.                                                              |
 | `test_persistence.py`            | Shared artifact helpers: metadata version checks, malformed or missing metadata, successful atomic save, cleanup after failure, refusal to overwrite an existing destination.                                                                                                            |
-| `test_stats_collector.py`        | `StatsCollector`: behavior with/without a supplied logger, recorded values, timed regions using a controlled clock. Agree exception behavior before asserting it.                                                                                                                        |
+| `test_stats_collector.py`        | `StatsCollector`: no-logger execution, dictionary insertion/replacement, controlled-clock conversion and accumulation, timing and exception propagation on failure.                                                                                                                        |
 | `test_normalizer.py`             | `NormalizerWalker`: semantic preservation, canonicalization of equivalent supported theory atoms, polarity, idempotence, Boolean structure, explicit environment, close/context-manager behavior. Parametrize by formula family.                                                         |
 
 ### Compilers and targets
