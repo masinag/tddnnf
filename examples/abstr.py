@@ -26,7 +26,7 @@ atoms = [xgt5, xgt0, ygt5, xpygt5]
 
 # ---- COMPILATION CONTEXT ----
 
-with TheoryCompilation(phi, project_on=atoms) as compilation:
+with TheoryCompilation(phi, all_vars=atoms) as compilation:
     # ---- BACKEND LOOP ----
 
     print(f"phi: {phi}")

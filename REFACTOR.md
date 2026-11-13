@@ -1161,3 +1161,28 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   variable order, circuit size, and total compilation time may change; ordering
   is not canonical across different node creation histories. Existing saved
   artifacts retain their recorded abstraction IDs.
+
+
+## Complete theory compilation vocabulary migration
+
+`TheoryCompilation` and legacy builders replace `project_on` with `all_vars`
+without a compatibility alias. Normalize explicit atoms, strip negation,
+deduplicate in first-occurrence order, and discard entries normalizing to
+constants. Default to normalized formula atoms in node-ID order. Require all
+normalized input atoms; additional query atoms and absent free dimensions remain
+supported. Atoms mean Boolean symbols or theory relations, not SMT term symbols.
+Reject quantified formula and lemma inputs using the selected environment's
+quantifier oracle before normalization.
+
+Enumerators receive quantifier-free `compilation.phi` (reduced) or its negation
+(extended), with `atoms=compilation.all_vars`. For normalized lemma conjunction
+L and W = Atoms(L) - all_vars, compile exists W.(phi and L) or
+forall W.(phi or not L), respectively. Original-atom projection and a projected
+formula API are unsupported. Native compilers require complete declarations and
+prepared abstractions, allow only one nonempty quantifier list, and retain
+`all_vars`, `exists_vars`, `forall_vars`. d4 rejects universals before execution.
+Native targets, query engines, persistence schemas and logging keys are unchanged.
+
+After review and merge into lean-core, integrate lean-core into public migration,
+reconcile its reorganized tests and specification, and update companion callers.
+This integration is gated on the reviewed merge; preserve dirty worktrees.

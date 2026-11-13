@@ -17,6 +17,7 @@ from pysmt.walkers import DagWalker, handles
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
+from tddnnf.core.pysmt_utils import compilation_vocabulary
 from tddnnf.core.stats_collector import StatsCollector
 
 D4_BIN = Path(__file__).resolve().parent.parent / "bin" / "d4.bin"
@@ -301,13 +302,19 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        project_on: Sequence[FNode] | None = None,
+        all_vars: Sequence[FNode],
+        exists_vars: Sequence[FNode] = (),
+        forall_vars: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
     ) -> D4CompiledTarget:
+        retained = compilation_vocabulary(formula, all_vars, exists_vars, forall_vars)
+        assert all(atom in abstractor for atom in all_vars), "Abstraction must be prepared before compilation"
+        if forall_vars:
+            raise NotImplementedError("d4 does not support universal variable elimination")
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
-            atoms = list(formula.get_atoms())
-            if not atoms and (project_on is None or len(project_on) == 0):
+            atoms = list(all_vars)
+            if not atoms:
                 if formula.is_true():
                     stats.log("n_atoms", 0)
                     stats.log("n_proj_vars", 0)
@@ -318,13 +325,10 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
                     return D4CompiledTarget("f 1\n", 0)
 
             with stats.track_time("register_atoms_time"):
-                proj_set = set(atoms if project_on is None else project_on)
-                assert all(a in abstractor for a in atoms + list(proj_set)), "Abstraction must be prepared"
+                proj_set = set(retained)
 
-            all_atoms = set(atoms)
-            if project_on is not None:
-                all_atoms.update(project_on)
-            all_atom_ids = sorted({abstractor.get_id(a) for a in all_atoms})
+            all_atoms = set(all_vars)
+            all_atom_ids = sorted(abstractor.get_id(a) for a in all_vars)
 
             projected_ids = {abstractor.get_id(a) for a in proj_set}
 

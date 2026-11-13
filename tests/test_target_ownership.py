@@ -49,7 +49,7 @@ def test_constructor_inputs_are_copied_and_state_is_read_only(mgr, backend):
     mapping = {3: a}
     abstr = Abstractor(mapping)
     projection = [a]
-    representation = backend().compile(a, abstr, project_on=projection)
+    representation = backend().compile(a, abstr, all_vars=projection)
     target = TheoryCompiledTarget(representation, abstr, projection, env=mgr.env)
     mapping[3] = b
     projection.append(b)

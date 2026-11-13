@@ -14,6 +14,7 @@ from pysmt.walkers import DagWalker, handles
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
+from tddnnf.core.pysmt_utils import compilation_vocabulary
 from tddnnf.core.stats_collector import StatsCollector
 
 
@@ -177,31 +178,28 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
         formula: FNode,
         abstractor: Abstractor,
         *,
-        project_on: Sequence[FNode] | None = None,
+        all_vars: Sequence[FNode],
+        exists_vars: Sequence[FNode] = (),
+        forall_vars: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
     ) -> BddCompiledTarget:
+        retained = compilation_vocabulary(formula, all_vars, exists_vars, forall_vars)
+        assert all(atom in abstractor for atom in all_vars), "Abstraction must be prepared before compilation"
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
-            atoms = set(formula.get_atoms())
-            if project_on is not None:
-                atoms.update(project_on)
-            atoms = list(atoms)
-            assert all(atom in abstractor for atom in atoms), "Abstraction must be prepared before compilation"
+            atoms = all_vars
             mgr = BDD()
             for i in sorted(abstractor.get_id(atom) for atom in atoms):
                 mgr.declare(f"b{i}")
             walker = BddWalker(mgr, abstractor)
             root = walker.translate(formula)
-            n_proj_vars: int
-            if project_on is not None:
-                project_set = set(project_on)
-                forgotten = [f"b{abstractor.get_id(atom)}" for atom in atoms if atom not in project_set]
-                if forgotten:
-                    with stats.track_time("forget_time"):
-                        root = root.exist(*forgotten)
-                n_proj_vars = len(project_set)
-            else:
-                n_proj_vars = len(atoms)
+            with stats.track_time("forget_time"):
+                universal = [f"b{abstractor.get_id(atom)}" for atom in forall_vars]
+                existential = [f"b{abstractor.get_id(atom)}" for atom in exists_vars]
+                if universal:
+                    root = ~(~root).exist(*universal)
+                if existential:
+                    root = root.exist(*existential)
             stats.log("n_atoms", len(atoms))
-            stats.log("n_proj_vars", n_proj_vars)
+            stats.log("n_proj_vars", len(retained))
             return BddCompiledTarget(root, mgr)

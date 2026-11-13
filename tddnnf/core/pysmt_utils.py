@@ -1,4 +1,4 @@
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from typing import Any
 
 from pysmt.environment import Environment
@@ -81,3 +81,22 @@ def clause_lits(clause: list[FNode], projection_atoms: Collection[FNode]) -> lis
 def cube_lits(cube: list[FNode], projection_atoms: Collection[FNode]) -> list[FNode] | None:
     """Return deduplicated, nonconstant cube literals, or None if contradictory."""
     return _query_lits(cube, projection_atoms)
+
+
+def compilation_vocabulary(
+    formula: FNode, all_vars: Sequence[FNode], exists_vars: Sequence[FNode], forall_vars: Sequence[FNode]
+) -> tuple[FNode, ...]:
+    """Validate a single quantifier kind and retain declaration order."""
+    if exists_vars and forall_vars:
+        raise ValueError("Cannot combine existential and universal declarations")
+    for variables in (all_vars, exists_vars, forall_vars):
+        if any(not isinstance(atom, FNode) or not is_atom(atom) or atom.is_bool_constant() for atom in variables):
+            raise ValueError("Variable declarations must contain Boolean symbols or theory atoms")
+        if len(set(variables)) != len(variables):
+            raise ValueError("Variable declarations must not contain duplicates")
+    declared, existential, universal = set(all_vars), set(exists_vars), set(forall_vars)
+    if not formula.get_atoms() <= declared:
+        raise ValueError("Formula atoms must belong to all_vars")
+    if not (existential | universal) <= declared or existential & universal:
+        raise ValueError("Quantified variables must be disjoint subsets of all_vars")
+    return tuple(atom for atom in all_vars if atom not in existential | universal)
