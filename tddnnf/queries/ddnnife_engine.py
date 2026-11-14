@@ -19,20 +19,20 @@ from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
     """Polynomial-time queries over a d-DNNF compiled target via ddnnife."""
 
-    def __init__(self, container: TheoryCompiledTarget[D4CompiledTarget]) -> None:
+    def __init__(self, theory_target: TheoryCompiledTarget[D4CompiledTarget]) -> None:
         self._tmpdir = None
-        if not isinstance(container.target, D4CompiledTarget):
+        if not isinstance(theory_target.target, D4CompiledTarget):
             raise TypeError("DdnnifeEngine requires D4CompiledTarget")
-        self._abstr = container.abstr
-        self._atoms: tuple[FNode, ...] = container.atoms
-        self._atom_set: set[FNode] = set(container.atoms)
-        self._var_count = container.target.var_count
-        self._remapping = container.target.remapping
+        self._abstr = theory_target.abstr
+        self._atoms: tuple[FNode, ...] = theory_target.atoms
+        self._atom_set: set[FNode] = set(theory_target.atoms)
+        self._var_count = theory_target.target.var_count
+        self._remapping = theory_target.target.remapping
 
         self._tmpdir = None
         self._mut = None
         self._ddnnf = None
-        nnf_text = container.target.nnf_text
+        nnf_text = theory_target.target.nnf_text
         if nnf_text not in ("t 1\n", "f 1\n"):
             # Every target atom is mapped, even when absent from the DAG.
             ids = {self._abstr.get_id(a) for a in self._atoms}

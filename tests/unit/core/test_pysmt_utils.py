@@ -149,7 +149,7 @@ def test_compilation_vocabulary_rejects_invalid_declarations(env: Environment) -
     p, q = mgr.Symbol("p", BOOL), mgr.Symbol("q", BOOL)
     for invalid in (mgr.TRUE(), mgr.FALSE(), mgr.Not(p), mgr.And(p, q), mgr.Symbol("n", INT), "p"):
         with pytest.raises(ValueError):
-            compilation_vocabulary(p, [p, invalid], [], [])
+            compilation_vocabulary(p, [p, invalid], [], [])  # pyright: ignore[reportArgumentType]
     for declared, exists, forall in (
         ([p, p], [], []),
         ([p], [p, p], []),

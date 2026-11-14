@@ -15,8 +15,7 @@ class NormalizerWalker(DagWalker):
     """Normalize theory atoms through MathSAT, using DagWalker's memoization.
 
     Callers must supply Boolean FNodes whose entire DAG belongs to the selected
-    environment. Root ownership is asserted before walking; type hints and
-    descendant ownership remain caller preconditions.
+    environment.
     """
 
     def __init__(self, env: Environment | None = None) -> None:

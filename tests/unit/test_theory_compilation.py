@@ -11,7 +11,7 @@ from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
 
 @pytest.mark.parametrize("entry", ["formula", "vocabulary", "lemma", "normalize", "abstraction"])
 @pytest.mark.parametrize("strategy", ["compile_treduced", "compile_textended"])
-def test_rejects_foreign_inputs_before_backend_compilation(env, entry, strategy):
+def test_rejects_foreign_inputs_before_backend_compilation(env: Environment, entry: str, strategy: str):
     mgr = env.formula_manager
     local = mgr.Symbol("p")
     foreign = Environment().formula_manager.Symbol("p")
@@ -34,7 +34,7 @@ def test_rejects_foreign_inputs_before_backend_compilation(env, entry, strategy)
     compiler.compile.assert_not_called()
 
 
-def test_default_vocabulary_uses_normalized_atoms_in_node_id_order(env):
+def test_default_vocabulary_uses_normalized_atoms_in_node_id_order(env: Environment):
     mgr = env.formula_manager
     n = mgr.Symbol("n", INT)
     p = mgr.Symbol("p")
@@ -46,7 +46,7 @@ def test_default_vocabulary_uses_normalized_atoms_in_node_id_order(env):
         assert compilation.atoms == (p, lower)
 
 
-def test_explicit_vocabulary_normalizes_and_preserves_first_occurrence_order(env):
+def test_explicit_vocabulary_normalizes_and_preserves_first_occurrence_order(env: Environment):
     mgr = env.formula_manager
     p, unused = mgr.Symbol("p"), mgr.Symbol("unused")
     n = mgr.Symbol("n", INT)
@@ -65,7 +65,7 @@ def test_empty_vocabulary_accepts_constant_formulas(env, value):
         assert compilation.atoms == ()
 
 
-def test_vocabulary_must_include_every_normalized_formula_atom(env):
+def test_vocabulary_must_include_every_normalized_formula_atom(env: Environment):
     mgr = env.formula_manager
     p, q = mgr.Symbol("p"), mgr.Symbol("q")
     with pytest.raises(ValueError):
@@ -74,7 +74,7 @@ def test_vocabulary_must_include_every_normalized_formula_atom(env):
         TheoryCompilation(mgr.And(p, q), atoms=[p], env=env)
 
 
-def test_vocabulary_rejects_constants_compounds_and_underlying_integer_symbols(env):
+def test_vocabulary_rejects_constants_compounds_and_underlying_integer_symbols(env: Environment):
     mgr = env.formula_manager
     p, q = mgr.Symbol("p"), mgr.Symbol("q")
     for invalid in (mgr.TRUE(), mgr.FALSE(), mgr.And(p, q), mgr.Symbol("n", INT)):
@@ -83,7 +83,7 @@ def test_vocabulary_rejects_constants_compounds_and_underlying_integer_symbols(e
 
 
 @pytest.mark.parametrize("strategy", ["compile_treduced", "compile_textended"])
-def test_builders_pass_normalized_formula_vocabulary_and_quantifiers(env, strategy):
+def test_builders_pass_normalized_formula_vocabulary_and_quantifiers(env: Environment, strategy: str):
     mgr = env.formula_manager
     p, unused, generated = (mgr.Symbol(name) for name in ("p", "unused", "generated"))
     n = mgr.Symbol("n", INT)
@@ -116,7 +116,7 @@ def test_builders_pass_normalized_formula_vocabulary_and_quantifiers(env, strate
     assert result.env is env
 
 
-def test_reduced_compilation_preserves_and_extends_supplied_sparse_abstraction(env):
+def test_reduced_compilation_preserves_and_extends_supplied_sparse_abstraction(env: Environment):
     mgr = env.formula_manager
     p, unused, generated = (mgr.Symbol(name) for name in ("p", "unused", "generated"))
     abstractor = Abstractor({3: unused, 8: p})

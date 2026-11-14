@@ -1,8 +1,9 @@
 import pytest
+from pysmt.fnode import FNode
 from pysmt.shortcuts import FALSE, TRUE, And, Iff, Implies, Ite, Not, Or, Symbol
 
 
-def compound_formula():
+def compound_formula() -> FNode:
     p, q, r, s, t = (Symbol(name) for name in ("p", "q", "r", "s", "t"))
     return And(p, Or(q, r), Or(Not(q), s), Or(t, r))
 

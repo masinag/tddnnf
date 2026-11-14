@@ -9,6 +9,7 @@ from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize
 from tddnnf.core.persistence import write_metadata
 from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
+from tests.helpers import owns_dag
 
 
 class ConjunctionTarget:
@@ -53,7 +54,7 @@ def test_bindings_and_atoms_copy(env: Environment) -> None:
 
 
 @pytest.mark.parametrize("explicit", [False, True])
-def test_reconstruction_and_size_use_bound_target_and_environment(env: Environment, assert_owned_dag, explicit) -> None:
+def test_reconstruction_and_size_use_bound_target_and_environment(env: Environment, explicit: bool) -> None:
     destination = Environment() if explicit else env
     mgr = destination.formula_manager
     p, q = mgr.Symbol("p"), mgr.Symbol("q")
@@ -66,15 +67,13 @@ def test_reconstruction_and_size_use_bound_target_and_environment(env: Environme
     assert target.env is destination
     reconstructed = target.to_pysmt()
     assert reconstructed is mgr.And(p, q)
-    assert_owned_dag(reconstructed, destination)
+    assert owns_dag(reconstructed, destination)
     assert target.dag_size() == DagSize(3, 2)
     assert get_env() is env
 
 
 @pytest.mark.parametrize("explicit", [False, True])
-def test_round_trip_preserves_abstraction_and_atoms(
-    tmp_path: Path, env: Environment, explicit: bool, assert_owned_dag
-) -> None:
+def test_round_trip_preserves_abstraction_and_atoms(tmp_path: Path, env: Environment, explicit: bool) -> None:
     mgr = env.formula_manager
     p, q = mgr.Symbol("p"), mgr.Symbol("q")
     abstr = Abstractor({7: p, 2: q})
@@ -100,12 +99,12 @@ def test_round_trip_preserves_abstraction_and_atoms(
         assert loaded.atoms == (dest_q, dest_p)
         reconstructed = loaded.to_pysmt()
         assert reconstructed is dest_mgr.And(dest_p, dest_q)
-        assert_owned_dag(reconstructed, destination)
+        assert owns_dag(reconstructed, destination)
         assert get_env() is current
     assert get_env() is env
 
 
-def test_constant_round_trip_has_empty_vocabulary(tmp_path: Path, env: Environment, assert_owned_dag) -> None:
+def test_constant_round_trip_has_empty_vocabulary(tmp_path: Path, env: Environment) -> None:
     target = TheoryCompiledTarget(ConjunctionTarget(), Abstractor(), atoms=[])
     directory = tmp_path / "target"
     target.save(directory)
@@ -116,7 +115,7 @@ def test_constant_round_trip_has_empty_vocabulary(tmp_path: Path, env: Environme
     assert loaded.abstr.id_to_atom == {}
     reconstructed = loaded.to_pysmt()
     assert reconstructed is env.formula_manager.TRUE()
-    assert_owned_dag(reconstructed, env)
+    assert owns_dag(reconstructed, env)
 
     metadata = json.loads((directory / "metadata.json").read_text())
     assert metadata == {
@@ -130,7 +129,7 @@ def test_constant_round_trip_has_empty_vocabulary(tmp_path: Path, env: Environme
 
 
 @pytest.mark.parametrize("binding", ["abstraction", "atoms"])
-def test_constructor_rejects_foreign_inputs(env: Environment, binding) -> None:
+def test_constructor_rejects_foreign_inputs(env: Environment, binding: str) -> None:
     mgr = env.formula_manager
     local = mgr.Symbol("p")
     foreign = Environment().formula_manager.Symbol("p")

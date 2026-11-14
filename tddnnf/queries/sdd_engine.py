@@ -16,13 +16,13 @@ from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 class SddEngine(QueryEngine[SddCompiledTarget]):
     """Polynomial-time queries over an SDD compiled target."""
 
-    def __init__(self, container: TheoryCompiledTarget[SddCompiledTarget]) -> None:
-        if not isinstance(container.target, SddCompiledTarget):
+    def __init__(self, theory_target: TheoryCompiledTarget[SddCompiledTarget]) -> None:
+        if not isinstance(theory_target.target, SddCompiledTarget):
             raise TypeError("SddEngine requires SddCompiledTarget")
-        self._target = container.target
-        self._abstr = container.abstr
-        self._atoms: tuple[FNode, ...] = container.atoms
-        self._atom_set: set[FNode] = set(container.atoms)
+        self._target = theory_target.target
+        self._abstr = theory_target.abstr
+        self._atoms: tuple[FNode, ...] = theory_target.atoms
+        self._atom_set: set[FNode] = set(theory_target.atoms)
         ids = {self._abstr.get_id(a) for a in self._atoms}
         assert ids <= self._target.remapping.keys(), "SDD mapping must cover the target atoms"
 

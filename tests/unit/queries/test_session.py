@@ -4,12 +4,13 @@ from pathlib import Path
 from typing import Self
 
 import pytest
+from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 from pysmt.typing import INT
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import DagSize
+from tddnnf.core.interfaces import DagSize, QueryEngine
 from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 
 
@@ -31,31 +32,34 @@ class RecordingTarget:
         raise NotImplementedError
 
 
-class RecordingEngine:
-    def __init__(self, target):
-        self.calls = target.target.calls
-        self.assignments = [{target.atoms[0]: True}, {target.atoms[0]: False}]
+TargetType = TheoryCompiledTarget[RecordingTarget]
+
+
+class RecordingEngine(QueryEngine[RecordingTarget]):
+    def __init__(self, theory_target: TargetType):
+        self.calls = theory_target.target.calls
+        self.assignments = [{theory_target.atoms[0]: True}, {theory_target.atoms[0]: False}]
 
     def close(self):
         pass
 
-    def is_satisfiable(self, assumptions=None):
+    def is_satisfiable(self, assumptions: list[FNode] | None = None):
         self.calls.append(("is_satisfiable", assumptions))
         return False
 
-    def count_truth_assignments(self, assumptions=None):
+    def count_truth_assignments(self, assumptions: list[FNode] | None = None):
         self.calls.append(("count_truth_assignments", assumptions))
         return 17
 
     def is_valid(self):
         return False
 
-    def entails_clause(self, clause):
-        self.calls.append(("entails_clause", clause))
+    def entails_clause(self, query_clause: list[FNode]):
+        self.calls.append(("entails_clause", query_clause))
         return True
 
-    def is_implicant(self, cube):
-        self.calls.append(("is_implicant", cube))
+    def is_implicant(self, query_cube: list[FNode]):
+        self.calls.append(("is_implicant", query_cube))
         return False
 
     def enumerate_truth_assignments(self) -> Generator[dict[FNode, bool], None, None]:
@@ -63,7 +67,7 @@ class RecordingEngine:
 
 
 @pytest.fixture
-def target(env) -> TheoryCompiledTarget[RecordingTarget]:
+def target(env: Environment) -> TheoryCompiledTarget[RecordingTarget]:
     mgr = env.formula_manager
     p, q = mgr.Symbol("p"), mgr.Symbol("q")
     n = mgr.Symbol("n", INT)
@@ -71,7 +75,7 @@ def target(env) -> TheoryCompiledTarget[RecordingTarget]:
     return TheoryCompiledTarget(RecordingTarget(), Abstractor(dict(enumerate(atoms, 1))), atoms, env=env)
 
 
-def test_public_queries_return_engine_results(target):
+def test_public_queries_return_engine_results(target: TargetType):
     p = target.atoms[0]
     with target.queries(RecordingEngine) as session:
         assert session.is_satisfiable() is False
@@ -83,7 +87,7 @@ def test_public_queries_return_engine_results(target):
         assert list(session.enumerate_truth_assignments()) == [{p: True}, {p: False}]
 
 
-def test_arithmetic_alignment_and_polarity(target):
+def test_arithmetic_alignment_and_polarity(target: TargetType):
     mgr = target.env.formula_manager
     n = mgr.Symbol("n", INT)
     scaled = mgr.Times(mgr.Int(2), n)
@@ -99,7 +103,7 @@ def test_arithmetic_alignment_and_polarity(target):
     assert target.target.calls == [("is_satisfiable", [lower, mgr.Not(lower), upper, mgr.Not(upper)])]
 
 
-def test_nested_clauses_and_cubes_preserve_order_and_duplicates(target):
+def test_nested_clauses_and_cubes_preserve_order_and_duplicates(target: TargetType):
     mgr = target.env.formula_manager
     p, q = target.atoms[:2]
     with target.queries(RecordingEngine) as session:
@@ -111,7 +115,7 @@ def test_nested_clauses_and_cubes_preserve_order_and_duplicates(target):
     ]
 
 
-def test_constants_are_accepted(target):
+def test_constants_are_accepted(target: TargetType):
     mgr = target.env.formula_manager
     with target.queries(RecordingEngine) as session:
         assert session.count_truth_assignments([mgr.TRUE(), mgr.FALSE()]) == 17
@@ -119,7 +123,7 @@ def test_constants_are_accepted(target):
         assert session.is_implicant(mgr.FALSE()) is False
 
 
-def test_invalid_inputs_never_reach_engine(target):
+def test_invalid_inputs_never_reach_engine(target: TargetType):
     mgr = target.env.formula_manager
     p, q = target.atoms[:2]
     unknown = mgr.Symbol("undeclared")
@@ -133,12 +137,12 @@ def test_invalid_inputs_never_reach_engine(target):
             (session.entails_clause, 42),
         ):
             with pytest.raises(ValueError):
-                operation(query)
+                operation(query)  # pyright: ignore[reportArgumentType]
     assert target.target.calls == []
 
 
 @pytest.mark.parametrize("exceptional", [False, True])
-def test_context_exit_closes_session(target, exceptional):
+def test_context_exit_closes_session(target: TargetType, exceptional: bool):
     session = target.queries(RecordingEngine)
     with pytest.raises(ValueError) if exceptional else nullcontext():
         with session as entered:
@@ -157,13 +161,13 @@ def test_context_exit_closes_session(target, exceptional):
             pytest.fail("Closed session entered")
 
 
-def test_sessions_over_same_target_are_independent(target):
+def test_sessions_over_same_target_are_independent(target: TargetType):
     with target.queries(RecordingEngine) as first, target.queries(RecordingEngine) as second:
         first.close()
         assert second.count_truth_assignments() == 17
 
 
-def test_enumerations_remain_independent_after_exhaustion_and_close(target):
+def test_enumerations_remain_independent_after_exhaustion_and_close(target: TargetType):
     p = target.atoms[0]
     with target.queries(RecordingEngine) as session:
         first = session.enumerate_truth_assignments()
@@ -177,7 +181,7 @@ def test_enumerations_remain_independent_after_exhaustion_and_close(target):
         assert session.count_truth_assignments() == 17
 
 
-def test_session_close_stops_active_and_unstarted_enumerations(target):
+def test_session_close_stops_active_and_unstarted_enumerations(target: TargetType):
     with target.queries(RecordingEngine) as session:
         first = session.enumerate_truth_assignments()
         second = session.enumerate_truth_assignments()

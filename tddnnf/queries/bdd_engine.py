@@ -16,13 +16,13 @@ from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 class BddEngine(QueryEngine[BddCompiledTarget]):
     """Polynomial-time queries over a BDD compiled target."""
 
-    def __init__(self, container: TheoryCompiledTarget[BddCompiledTarget]) -> None:
-        if not isinstance(container.target, BddCompiledTarget):
+    def __init__(self, target: TheoryCompiledTarget[BddCompiledTarget]) -> None:
+        if not isinstance(target.target, BddCompiledTarget):
             raise TypeError("BddEngine requires BddCompiledTarget")
-        self._target = container.target
-        self._abstr = container.abstr
-        self._atoms: tuple[FNode, ...] = container.atoms
-        self._atom_set: set[FNode] = set(container.atoms)
+        self._target = target.target
+        self._abstr = target.abstr
+        self._atoms: tuple[FNode, ...] = target.atoms
+        self._atom_set: set[FNode] = set(target.atoms)
 
     def _restrict_chain(self, lits: list[FNode], negate: bool = False, root=None):
         """Restrict by validated literals, flipping each sign when negate is True.

@@ -19,20 +19,20 @@ if TYPE_CHECKING:
 class QuerySession(Generic[T_Target]):
     """Normalize, validate, and delegate queries in the target's environment."""
 
-    def __init__(self, target: TheoryCompiledTarget[T_Target], engine_type: type[QueryEngine[T_Target]]):
+    def __init__(self, theory_target: TheoryCompiledTarget[T_Target], engine_type: type[QueryEngine[T_Target]]):
         self._closed = False
         self._normalizer = None
         self._inner = None
         self._atom_index = {}
         self._iterators: set[Generator[dict[FNode, bool], None, None]] = set()
-        self._atoms = target.atoms
-        self._mgr = target.env.formula_manager
+        self._atoms = theory_target.atoms
+        self._mgr = theory_target.env.formula_manager
         try:
             if not isinstance(engine_type, type) or not issubclass(engine_type, QueryEngine):
                 raise TypeError("Expected a query engine class")
-            self._normalizer = NormalizerWalker(target.env)
+            self._normalizer = NormalizerWalker(theory_target.env)
             self._atom_index = self._index_atoms(self._atoms)
-            self._inner = engine_type(target)
+            self._inner = engine_type(theory_target)
         except BaseException:
             self.close()
             raise
