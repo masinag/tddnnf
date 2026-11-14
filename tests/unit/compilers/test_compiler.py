@@ -5,7 +5,7 @@ from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
 from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
 from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
 from tddnnf.core.abstraction import Abstractor
-from tests.cases.formulas import ELIMINATION_CASES, PLAIN_CASES
+from tests.cases import ELIMINATION_CASES, PLAIN_CASES
 
 
 def assert_equivalent(env, reconstructed, expected):

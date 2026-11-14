@@ -9,7 +9,7 @@ from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tddnnf.queries.bdd_engine import BddEngine
 from tddnnf.queries.ddnnife_engine import DdnnifeEngine
 from tddnnf.queries.sdd_engine import SddEngine
-from tests.cases.formulas import ELIMINATION_CASES, PLAIN_CASES
+from tests.cases import ELIMINATION_CASES, PLAIN_CASES
 
 # ddnnife cannot load d4's constant circuits.
 DDNNIFE_PLAIN_CASES = [case for case in PLAIN_CASES if case.values[0] not in (TRUE, FALSE)]
@@ -130,6 +130,7 @@ def test_counting(env, compiled_case, query_kind):
 def test_clause_entailment(env, compiled_case, query_kind):
     engine, formula, atoms = compiled_case
     clause = query_literals(query_kind, atoms)
+    assert clause is not None
     assert engine.entails_clause(clause) == (not z3_satisfiable(env, And(formula, Not(Or(clause)))))
 
 
@@ -137,6 +138,7 @@ def test_clause_entailment(env, compiled_case, query_kind):
 def test_implicants(env, compiled_case, query_kind):
     engine, formula, atoms = compiled_case
     cube = query_literals(query_kind, atoms)
+    assert cube is not None
     assert engine.is_implicant(cube) == (not z3_satisfiable(env, And(And(cube), Not(formula))))
 
 
