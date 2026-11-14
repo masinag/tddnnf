@@ -13,7 +13,7 @@ including its current public migration: `TheoryCompilation` and
 The test tree below is proposed, except for the implemented core groups:
 Abstractor, PySMT utilities, TheoryCompiledTarget, persistence, and StatsCollector, plus the normalization
 and compilation input-ownership checks, compiler contracts, query-engine contracts,
-and QuerySession input and lifecycle contracts described below.
+QuerySession input and lifecycle contracts, and compilation orchestration described below.
 The removed suite remains unreplaced elsewhere; further cases will be decided
 one group at a time.
 
@@ -231,6 +231,38 @@ with the established dependency paths. PySMT walker deprecation warnings remain.
 Detailed construction/cleanup failures, native resource release, constructor-input
 rejection, environment isolation, and destructor behavior remain deferred. The
 fake verifies wrapper behavior; native query correctness belongs to engine tests.
+No production or public API changes were needed.
+
+### Implemented compilation orchestration
+
+`unit/test_theory_compilation.py` preserves the ten input-ownership cases and
+adds nine orchestration cases using the real normalizer and local formulas.
+Default vocabulary follows normalized node-ID order. Explicit vocabulary keeps
+first-occurrence order and unused atoms, deduplicates normalized/negated
+equivalents, and drops arithmetic atoms that normalize to constants. Empty
+vocabulary accepts both constants; missing formula atoms, Boolean constants,
+compound declarations, and underlying integer symbols raise `ValueError`.
+
+Both builders use `Mock(spec=PropCompiler)` returning a
+`Mock(spec=PropCompiledTarget)`. Assertions check normalized combined formulas,
+complete vocabulary, existential versus universal elimination of lemma-only
+atoms, pre-registration, and returned artifact, abstraction, projection order,
+and environment bindings. A separate reduced example checks preservation and
+extension of a supplied sparse abstraction. No shared helpers or fake framework
+are added.
+
+Verification: all 19 focused compilation cases (ten ownership and nine new
+orchestration cases) and all 1,377 suite cases pass using the main workspace
+interpreter. Repository-wide Ruff lint/format, tracked/untracked whitespace
+checks, and Pyright over production code and `test_theory_compilation.py` pass
+with the established dependency paths. PySMT walker deprecation warnings remain;
+the full suite also reports a CUDD shutdown warning about three referenced nodes.
+The query-test commit's configured Ruff and Pyright hooks all passed after
+temporarily supplying the dependency paths; that local config was removed.
+
+Metrics, compilation lifecycle, compiler-instance validation, real theory
+integration workflows, and production fixes remain deferred. These tests check
+orchestration; native compiler semantics belong to the compiler contracts.
 No production or public API changes were needed.
 
 ## Organization
