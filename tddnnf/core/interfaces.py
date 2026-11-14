@@ -10,7 +10,7 @@ from pysmt.formula import FormulaManager
 
 if TYPE_CHECKING:
     from tddnnf.core.abstraction import Abstractor
-    from tddnnf.core.containers import TheoryCompiledTarget
+    from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 
 
 @dataclass(frozen=True)
@@ -69,7 +69,7 @@ class PropCompiler(Protocol[T_Target_co]):
 class QueryEngine(Protocol[T_Target_co]):
     """Polynomial-time queries over a compiled target using flat, aligned literal lists."""
 
-    def __init__(self, container: TheoryCompiledTarget[T_Target_co]) -> None: ...
+    def __init__(self, theory_target: TheoryCompiledTarget[T_Target_co]) -> None: ...
 
     def close(self) -> None:
         """Release engine resources; repeated calls are safe. Defaults to no-op."""

@@ -8,10 +8,10 @@ from pysmt.fnode import FNode
 from pysmt.shortcuts import get_env
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.containers import TheoryCompiledTarget
 from tddnnf.core.interfaces import PropCompiler, T_Target
-from tddnnf.core.pysmt_utils import is_atom
+from tddnnf.core.pysmt_utils import is_atom, owns_dags
 from tddnnf.core.stats_collector import StatsCollector
+from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tddnnf.normalization.normalizer import NormalizerWalker
 
 
@@ -20,7 +20,8 @@ class TheoryCompilation:
 
     Callers must provide Boolean FNodes for phi and lemmas, with all input DAGs
     (including vocabulary entries) belonging to the selected environment.
-    These type and environment preconditions are not checked at runtime.
+    Supplied-node ownership is asserted before normalization or compilation;
+    type hints and descendant ownership remain caller preconditions.
     Formula and lemma inputs must be quantifier-free. atoms declares Boolean
     symbols and theory atoms (such as x < 2), not underlying SMT symbols (x).
     It must contain every normalized phi atom; extra query atoms and absent free
@@ -128,6 +129,9 @@ class TheoryCompilation:
         self._ensure_open()
         if isinstance(compiler, (str, type)) or not isinstance(compiler, PropCompiler):
             raise TypeError("Expected a configured compiler instance")
+        assert abstractor is None or owns_dags(self._env, abstractor.id_to_atom.values()), (
+            "Abstraction must belong to the selected environment"
+        )
         normalized_lemmas = [self.normalize(lemma) for lemma in lemmas]
         stats = StatsCollector(computation_logger)
         with stats.track_time("build_time"):
@@ -153,7 +157,7 @@ class TheoryCompilation:
             )
         stats.log("n_lemmas", len(normalized_lemmas))
         stats.log("n_projection_atoms", len(self.atoms))
-        return TheoryCompiledTarget(artifact, abstractor, projection_atoms=self.atoms, env=self._env)
+        return TheoryCompiledTarget(artifact, abstractor, atoms=self.atoms, env=self._env)
 
     def _normalize_atom(self, atom: FNode) -> FNode | None:
         positive = atom.arg(0) if atom.is_not() else atom

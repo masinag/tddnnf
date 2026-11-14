@@ -23,7 +23,7 @@ Querying:
    and
 2. use a backend-specific propositional query engine to answer them.
 
-Here, the vocabulary is the target’s `projection_atoms`: the normalized SMT atoms
+Here, the vocabulary is the target’s `atoms`: the normalized SMT atoms
 selected for projection and available to queries.
 
 ## Compilation flow
@@ -74,8 +74,10 @@ reject operations. Query sessions provide the same explicit lifecycle.
 
 Callers must respect the annotated Python types and provide Boolean formulas
 from the selected environment, including every descendant. The normalizer
-trusts these preconditions and uses `DagWalker` memoization without a separate
-validation traversal. SDD configuration types are likewise caller preconditions;
+asserts supplied-node environment membership and uses `DagWalker` memoization.
+Supplied abstraction and target projection nodes are also checked. Assertions
+are disabled under Python's `-O` mode; type hints and descendant ownership remain
+caller preconditions. SDD configuration types are likewise caller preconditions;
 unsupported vtree names still raise `ValueError` before entering native code.
 
 The architecture requires theory atoms to be in some canonical forms.
@@ -107,7 +109,7 @@ theory lemmas: their conjunction for T-reduced compilation, or the input
 formula disjoined with the negated lemmas for T-extended compilation.
 Projection vocabularies may include atoms absent from the normalized input
 formula and supplied theory lemmas; these are unconstrained dimensions. The ordered
-`projection_atoms` tuple stored in `TheoryCompiledTarget` is the authoritative
+`atoms` tuple stored in `TheoryCompiledTarget` is the authoritative
 query vocabulary. All normalized input atoms must be declared. Generated
 lemma atoms are existentially eliminated for reduced compilation and universally
 eliminated for extended compilation. Backend query engines reject atoms outside
@@ -121,11 +123,15 @@ the complete projection vocabulary to the external lemma enumerator as
 `Not(compilation.phi)`. This ensures that every query-only theory atom can occur
 in the generated lemmas before those lemmas are supplied to compilation.
 
-## Abstraction and compiled containers
+## Abstraction and compiled targets
 
 `Abstractor` maintains a bidirectional mapping between SMT atoms and positive
 integer IDs. `get_id()` validates atoms with `is_atom`, returns existing IDs,
 and registers new atoms above the current maximum ID, including sparse mappings.
+Boolean constants raise `ValueError` in constructor mappings, `get_id()`, and
+`from_dict()`, which reuses constructor validation. Rejected registrations leave
+both mappings and the next available ID unchanged. The shared `is_atom()`
+predicate still accepts constants for other formula and query helpers.
 `get_atom()` performs the reverse lookup. `var_count` reports the number of
 mapped atoms and `max_var` reports the largest assigned ID. Constructor mappings
 are copied; `id_to_atom` and `atom_to_id` are read-only views of private dictionaries.
@@ -150,7 +156,7 @@ when none is supplied.
 
 - `target`: the backend-specific compiled DAG;
 - `abstr`: its SMT-atom-to-integer mapping; and
-- `projection_atoms`: the ordered, externally visible tuple; and
+- `atoms`: the ordered, externally visible tuple; and
 - `env`: the owning PySMT environment.
 
 Projection order and membership define the target's query dimensions. Storing
@@ -293,7 +299,7 @@ idempotent; subclasses of `QueryEngine` inherit a no-op default.
 
 `TheoryCompiledTarget.save(directory)` writes a versioned artifact containing
 `abstraction.json` (SMT-LIB atom scripts, original IDs, and ordered
-`projection_atom_ids`), `metadata.json`, and the native payload. Standalone backend
+`atom_ids`), `metadata.json`, and the native payload. Standalone backend
 `save()` and `load()` use their native libraries and the same metadata format
 without the abstraction file. External targets implement `PropCompiledTarget`
 without registration; each backend supplies its codec and complete payload file
@@ -371,7 +377,7 @@ tddnnf/
 ├── context.py                  # TheoryCompilation
 ├── core/
 │   ├── abstraction.py         # Abstractor mapping and serialization
-│   ├── containers.py          # TheoryCompiledTarget
+│   ├── theory_compiled_target.py          # TheoryCompiledTarget
 │   ├── interfaces.py          # Backend and query protocols, DagSize
 │   ├── pysmt_utils.py         # Atom, clause, cube, and assumption helpers
 │   └── stats_collector.py     # Optional timing and count instrumentation

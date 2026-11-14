@@ -189,8 +189,10 @@ callers must respect the annotated argument types.
 
 `TheoryCompilation` supports `with` and idempotent `close()`; normalization and
 compilation fail after closure. Inputs must be Boolean nodes from the selected PySMT environment,
-including every descendant; type hints and environment membership are caller
-preconditions, without repeated runtime validation. Vocabulary entries normalize
+including every descendant. Supplied-node environment membership is asserted
+before normalization or compilation, and for target abstraction/projection nodes.
+These assertions are disabled under Python's `-O` mode; type hints and descendant
+ownership remain caller preconditions. Vocabulary entries normalize
 to positive Boolean symbols or theory atoms. Atoms that normalize to constants,
 including negated atoms, are discarded; explicitly supplied constants and
 compound Boolean entries are rejected.
@@ -337,7 +339,7 @@ from pathlib import Path
 from pysmt.shortcuts import And, read_smtlib, write_smtlib
 
 from tddnnf.compilers.d4 import D4CompiledTarget
-from tddnnf.core.containers import TheoryCompiledTarget
+from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 
 artifact_dir = Path("artifacts")
 artifact_dir.mkdir(exist_ok=True)
@@ -408,7 +410,7 @@ from pathlib import Path
 from pysmt.environment import Environment
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.containers import TheoryCompiledTarget
+from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tddnnf.core.interfaces import DagSize
 from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 
@@ -438,7 +440,7 @@ class LiteralTarget:
 
 env = Environment()
 atom = env.formula_manager.Symbol("a")
-target = TheoryCompiledTarget(LiteralTarget(7), Abstractor({7: atom}), [atom], env)
+target = TheoryCompiledTarget(LiteralTarget(7), Abstractor({7: atom}), atoms=[atom], env=env)
 target.save(Path("literal-target"))
 loaded = TheoryCompiledTarget.load(Path("literal-target"), LiteralTarget, env=env)
 assert loaded.to_pysmt() is atom
