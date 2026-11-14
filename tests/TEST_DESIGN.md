@@ -13,7 +13,7 @@ including its current public migration: `TheoryCompilation` and
 The test tree below is proposed, except for the implemented core groups:
 Abstractor, PySMT utilities, TheoryCompiledTarget, persistence, and StatsCollector, plus the normalization
 and compilation input-ownership checks, compiler contracts, query-engine contracts,
-QuerySession input and lifecycle contracts, and compilation orchestration described below.
+QuerySession input and lifecycle contracts, compilation orchestration, and bank integration workflows described below.
 The removed suite remains unreplaced elsewhere; further cases will be decided
 one group at a time.
 
@@ -264,6 +264,42 @@ Metrics, compilation lifecycle, compiler-instance validation, real theory
 integration workflows, and production fixes remain deferred. These tests check
 orchestration; native compiler semantics belong to the compiler contracts.
 No production or public API changes were needed.
+
+### Implemented bank integration workflows
+
+`integration/test_compilation_workflow.py` uses all 27 `BANK_CASES`, real MathSAT
+lemma enumeration, and compatible BDD, SDD, and d4 compiler/target/engine triples.
+Two explicit workflow tests check original containers and same-environment
+save/load results. Local symbols use the bank's real, integer, Boolean, 8-bit
+vector, and integer-array types. Production code and public APIs are unchanged.
+
+Reduced workflows compare counts with the bank and complete projected assignment
+sets with independent Z3 model blocking over normalized atoms. They check SAT,
+assignment key order, Boolean values, duplicates, and clause entailment.
+Extended workflows check validity and implicants against Z3 counterexample
+queries. Generated clauses/cubes are empty, every signed singleton, and every
+signed pair of distinct atoms; no random sampling or wider subsets are used.
+These asymmetric query groups preserve theory semantics: extended Boolean model
+counts are not theory-consistent model counts.
+
+All cases run on BDD and SDD. Explicit d4 parameter marks exclude the nine
+zero-count reduced cases and extended `BV unsat` because ddnnife cannot load
+their constant circuits. After enumeration, extended workflows normalize lemmas
+and detect generated atoms from the combined formula using compilation's rule.
+When d4 requires universal elimination, the test asserts `NotImplementedError`
+mentioning universal elimination and returns; all other cases continue through
+save/load and queries. No exceptions are converted into skips. Reduced array
+cases exercise real generated-atom elimination.
+
+Verification: the focused run has 152 passes and 10 constant-circuit skips; the full
+suite has 1,529 passes and the same 10 skips. Repository-wide Ruff lint/format,
+tracked/untracked whitespace checks, and Basedpyright over production code and the
+new module pass using the established dependency paths. PySMT walker deprecation,
+non-standard array-logic serialization, and the existing CUDD shutdown warning
+remain visible. No new production failures surfaced.
+
+Lifecycle assertions, private enumerator cleanup, wider query generation,
+fresh-environment loading, and production fixes remain deferred.
 
 ## Organization
 
