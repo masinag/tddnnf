@@ -13,26 +13,26 @@ from tddnnf.normalization.normalizer import NormalizerWalker
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from tddnnf.core.containers import TheoryCompiledTarget
+    from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 
 
 class QuerySession(Generic[T_Target]):
     """Normalize, validate, and delegate queries in the target's environment."""
 
-    def __init__(self, target: TheoryCompiledTarget[T_Target], engine_type: type[QueryEngine[T_Target]]):
+    def __init__(self, theory_target: TheoryCompiledTarget[T_Target], engine_type: type[QueryEngine[T_Target]]):
         self._closed = False
         self._normalizer = None
         self._inner = None
         self._atom_index = {}
         self._iterators: set[Generator[dict[FNode, bool], None, None]] = set()
-        self._atoms = target.projection_atoms
-        self._mgr = target.env.formula_manager
+        self._atoms = theory_target.atoms
+        self._mgr = theory_target.env.formula_manager
         try:
             if not isinstance(engine_type, type) or not issubclass(engine_type, QueryEngine):
                 raise TypeError("Expected a query engine class")
-            self._normalizer = NormalizerWalker(target.env)
+            self._normalizer = NormalizerWalker(theory_target.env)
             self._atom_index = self._index_atoms(self._atoms)
-            self._inner = engine_type(target)
+            self._inner = engine_type(theory_target)
         except BaseException:
             self.close()
             raise
@@ -130,7 +130,7 @@ class QuerySession(Generic[T_Target]):
         index: dict[FNode, tuple[FNode, bool]] = {}
         for target_atom in atoms:
             canonical, target_negated = self._normalize_with_polarity(target_atom)
-            assert not canonical.is_bool_constant(), "Projection atoms must not normalize to constants"
+            assert not canonical.is_bool_constant(), "Target atoms must not normalize to constants"
             previous = index.get(canonical)
             if previous is not None and previous[0] != target_atom:
                 raise ValueError(f"Ambiguous normalized atom {canonical}: {previous[0]}, {target_atom}")
@@ -148,7 +148,7 @@ class QuerySession(Generic[T_Target]):
         try:
             return self._atom_index[canonical]
         except KeyError as exc:
-            raise ValueError(f"Query atom not in target projection_atoms: {query_atom.serialize()}") from exc
+            raise ValueError(f"Query atom not in target atoms: {query_atom.serialize()}") from exc
 
     def _align_literal(self, literal: FNode) -> FNode:
         """Normalize one literal and replace its atom with the target atom."""

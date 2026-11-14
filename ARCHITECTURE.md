@@ -23,7 +23,7 @@ Querying:
    and
 2. use a backend-specific propositional query engine to answer them.
 
-Here, the vocabulary is the target’s `projection_atoms`: the normalized SMT atoms
+Here, the vocabulary is the target’s `atoms`: the normalized SMT atoms
 selected for projection and available to queries.
 
 ## Compilation flow
@@ -33,8 +33,10 @@ PySMT environment and a `NormalizerWalker`, normalizes the input formula at
 construction time, and builds the projection vocabulary.
 
 ```python
-context = TheoryCompilation(phi, atoms=atoms)
-target = context.compile_treduced(D4Compiler(), lemmas)
+from tddnnf import TheoryCompilation, TheoryCompiledTarget
+
+with TheoryCompilation(phi, atoms=atoms) as compilation:
+    target = compilation.compile_treduced(D4Compiler(), lemmas, abstractor=abstractor)
 ```
 
 When `atoms` is omitted, the projection consists of the atoms in the
@@ -59,9 +61,11 @@ the existing maximum. Ordering is reproducible given the same node creation
 history in the environment and starting abstraction.
 
 Compilers are configured instances. Their `compile` methods receive the PySMT
-formula, prepared abstraction, projection, and logger for each call; native
-translators never allocate IDs. The old builders forward to this pipeline while
-preserving caller-supplied abstractions. `CompilationContext` remains an alias.
+formula, prepared abstraction, atom declarations, and logger for each call; native
+translators never allocate IDs. Both public compilation methods accept keyword-only
+`abstractor=None`; a supplied mapping is reused with append-only registration.
+The old `CompilationContext` alias and builders are removed; use `TheoryCompilation`
+and its `compile_treduced` or `compile_textended` methods.
 Compilation sessions and normalizers support `with` and idempotent `close()`,
 including cleanup on exceptions and initialization failure. Closed sessions
 reject operations. Query sessions provide the same explicit lifecycle.
@@ -70,8 +74,10 @@ reject operations. Query sessions provide the same explicit lifecycle.
 
 Callers must respect the annotated Python types and provide Boolean formulas
 from the selected environment, including every descendant. The normalizer
-trusts these preconditions and uses `DagWalker` memoization without a separate
-validation traversal. SDD configuration types are likewise caller preconditions;
+asserts supplied-node environment membership and uses `DagWalker` memoization.
+Supplied abstraction and target projection nodes are also checked. Assertions
+are disabled under Python's `-O` mode; type hints and descendant ownership remain
+caller preconditions. SDD configuration types are likewise caller preconditions;
 unsupported vtree names still raise `ValueError` before entering native code.
 
 The architecture requires theory atoms to be in some canonical forms.
@@ -103,7 +109,7 @@ theory lemmas: their conjunction for T-reduced compilation, or the input
 formula disjoined with the negated lemmas for T-extended compilation.
 Projection vocabularies may include atoms absent from the normalized input
 formula and supplied theory lemmas; these are unconstrained dimensions. The ordered
-`projection_atoms` tuple stored in `TheoryCompiledTarget` is the authoritative
+`atoms` tuple stored in `TheoryCompiledTarget` is the authoritative
 query vocabulary. All normalized input atoms must be declared. Generated
 lemma atoms are existentially eliminated for reduced compilation and universally
 eliminated for extended compilation. Backend query engines reject atoms outside
@@ -117,11 +123,15 @@ the complete projection vocabulary to the external lemma enumerator as
 `Not(compilation.phi)`. This ensures that every query-only theory atom can occur
 in the generated lemmas before those lemmas are supplied to compilation.
 
-## Abstraction and compiled containers
+## Abstraction and compiled targets
 
 `Abstractor` maintains a bidirectional mapping between SMT atoms and positive
 integer IDs. `get_id()` validates atoms with `is_atom`, returns existing IDs,
 and registers new atoms above the current maximum ID, including sparse mappings.
+Boolean constants raise `ValueError` in constructor mappings, `get_id()`, and
+`from_dict()`, which reuses constructor validation. Rejected registrations leave
+both mappings and the next available ID unchanged. The shared `is_atom()`
+predicate still accepts constants for other formula and query helpers.
 `get_atom()` performs the reverse lookup. `var_count` reports the number of
 mapped atoms and `max_var` reports the largest assigned ID. Constructor mappings
 are copied; `id_to_atom` and `atom_to_id` are read-only views of private dictionaries.
@@ -146,7 +156,7 @@ when none is supplied.
 
 - `target`: the backend-specific compiled DAG;
 - `abstr`: its SMT-atom-to-integer mapping; and
-- `projection_atoms`: the ordered, externally visible tuple; and
+- `atoms`: the ordered, externally visible tuple; and
 - `env`: the owning PySMT environment.
 
 Projection order and membership define the target's query dimensions. Storing
@@ -164,12 +174,11 @@ bindings’ reference ownership. d4 remapping is copied and exposed read-only.
 
 ## Compilation strategies
 
-Builders combine already-normalized inputs and delegate propositional
-compilation. They do not implement backend-specific translation.
+Both public methods normalize inputs and delegate to the shared pipeline.
 
 ### T-reduced
 
-`TReducedBuilder` compiles
+`compilation.compile_treduced(compiler, lemmas)` compiles
 
 $$
 \varphi \land \bigwedge_{C \in \mathit{Cl}} C.
@@ -180,7 +189,7 @@ assignments satisfying $\varphi$.
 
 ### T-extended
 
-`TExtendedBuilder` compiles
+`compilation.compile_textended(compiler, lemmas)` compiles
 
 $$
 \varphi \lor \bigvee_{C \in \mathit{Cl}} \neg C.
@@ -189,8 +198,8 @@ $$
 Its lemmas $\mathit{Cl}$ rule out theory-consistent propositional assignments
 satisfying $\neg\varphi$.
 
-Each builder accepts the same complete `atoms` vocabulary as
-`TheoryCompilation`, defaulting to normalized input atoms in node-ID order.
+Both methods retain the session’s complete ordered `atoms` vocabulary in the
+returned container, defaulting to normalized input atoms in node-ID order.
 Only lemma atoms outside that vocabulary are eliminated: existentially for
 reduced compilation, universally for extended compilation.
 
@@ -200,9 +209,12 @@ reduced compilation, universally for extended compilation.
 
 `D4Compiler` translates a PySMT Boolean skeleton to BC-S1.2 circuit syntax with
 `BCS12Walker`, invokes the bundled d4 executable, and stores the emitted NNF in
-`D4CompiledTarget`. Projected abstraction IDs are remapped to d4's dense output
-variable range. Constant results are represented directly as `t 1` or `f 1`.
-Universal declarations raise `NotImplementedError` before invoking d4.
+`D4CompiledTarget`. Compilation creates a dense mapping before translation,
+assigning retained atoms first and quantified atoms afterward. The walker
+and circuit declarations use those native IDs; the target retains the complete
+declared mapping, including on constant return paths. Constant results are
+represented directly as `t 1` or `f 1`. Universal declarations raise
+`NotImplementedError` before invoking d4.
 
 `D4CompiledTarget` exposes the NNF text, projected variable count, and ID
 remapping. It uses `ddnnife` for DAG statistics, while its own NNF parser
@@ -215,7 +227,7 @@ reconstructs a PySMT formula.
 constructs the requested native vtree. The Boolean option jointly enables or
 disables native automatic garbage collection and minimization; both are enabled
 by default. After translation it eliminates declared universal variables using
-`not exists U. not F`, then declared existential variables.
+`not exists U. not F`, or eliminates declared existential variables.
 
 `SddCompiledTarget` retains the `SddNode` root, `SddManager`, and a read-only
 abstraction-to-native `remapping`. Compilation allocates dense native IDs in
@@ -228,7 +240,7 @@ conjunctions.
 ### OBDD: CUDD
 
 `BddCompiler` uses `BddWalker` to translate the Boolean skeleton into a CUDD BDD
-and eliminates declared universal variables first, then existential variables.
+and eliminates either declared universal or declared existential variables.
 
 `BddCompiledTarget` retains the CUDD `Function` root and `BDD` manager. It
 reports reachable-node and edge counts and reconstructs each decision as an
@@ -264,7 +276,7 @@ overflow, and ddnnife buffering/u64 enumeration limits remain visible (see
 Adapters account for forgotten native dimensions, fixed assumptions, sparse IDs,
 and unconstrained active atoms. Enumeration returns total assignments keyed by
 the exact stored atoms in projection order. The SDD adapter deduplicates native assignments that differ only on forgotten
-dimensions. Nonconstant D4 artifacts map exactly the projection to dense native
+dimensions. D4 artifacts map retained atoms first, followed by quantified atoms, to dense native
 IDs, including atoms absent from the DAG; query engines assert this invariant.
 
 Sessions support `with` and idempotent `close()`, including initialization failure
@@ -287,7 +299,7 @@ idempotent; subclasses of `QueryEngine` inherit a no-op default.
 
 `TheoryCompiledTarget.save(directory)` writes a versioned artifact containing
 `abstraction.json` (SMT-LIB atom scripts, original IDs, and ordered
-`projection_atom_ids`), `metadata.json`, and the native payload. Standalone backend
+`atom_ids`), `metadata.json`, and the native payload. Standalone backend
 `save()` and `load()` use their native libraries and the same metadata format
 without the abstraction file. External targets implement `PropCompiledTarget`
 without registration; each backend supplies its codec and complete payload file
@@ -352,7 +364,7 @@ base class:
 `DagSize` is the common immutable result for target size metrics, reporting
 reachable vertices and child-reference edges.
 
-Builders and compilers can receive a shared `dict[str, object]` as
+Compilation methods and compilers can receive a shared `dict[str, object]` as
 `computation_logger`. `StatsCollector` makes logging optional, accumulates
 wall-clock durations, and records counts such as lemmas, atoms, and projection
 variables. d4 additionally reports time spent registering atoms, writing the
@@ -365,15 +377,12 @@ tddnnf/
 ├── context.py                  # TheoryCompilation
 ├── core/
 │   ├── abstraction.py         # Abstractor mapping and serialization
-│   ├── containers.py          # TheoryCompiledTarget
+│   ├── theory_compiled_target.py          # TheoryCompiledTarget
 │   ├── interfaces.py          # Backend and query protocols, DagSize
 │   ├── pysmt_utils.py         # Atom, clause, cube, and assumption helpers
 │   └── stats_collector.py     # Optional timing and count instrumentation
 ├── normalization/
 │   └── normalizer.py          # MathSAT-backed NormalizerWalker
-├── builders/
-│   ├── reduced.py             # TReducedBuilder
-│   └── extended.py            # TExtendedBuilder
 ├── compilers/
 │   ├── d4.py                  # d4/d-DNNF compiler and target
 │   ├── pysdd.py               # PySDD compiler and target
@@ -386,5 +395,8 @@ tddnnf/
 ```
 
 Native allocation preserves shared abstraction IDs. OBDD compilation declares
-only needed `b<ID>` names in ascending ID order. SDD schema v1 artifacts require
-`remapping`; there is no identity fallback for older payloads.
+only needed `b<ID>` names in ascending ID order. Both SDD and d4 target
+constructors interpret omitted or empty mappings as identity over their native
+variable range; nonempty mappings are retained exactly and exposed read-only.
+SDD schema v1 artifacts require the `remapping` field; a missing field remains
+an error, including in older payloads.

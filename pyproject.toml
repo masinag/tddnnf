@@ -15,7 +15,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "ruff>=0.1", "basedpyright", "pre-commit>=3.0"]
+dev = [
+    "pytest>=7",
+    "ruff>=0.1",
+    "basedpyright",
+    "pre-commit>=3.0",
+    "z3-solver>=5.4.1.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["tddnnf"]
@@ -37,6 +43,7 @@ include = ["tddnnf"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["integration: complete workflows using real lemma enumeration and native backends"]
 
 [build-system]
 requires = ["hatchling"]

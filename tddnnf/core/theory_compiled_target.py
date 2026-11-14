@@ -11,6 +11,7 @@ from pysmt.fnode import FNode
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.core.interfaces import DagSize, PropCompiledTarget, QueryEngine, T_Target
 from tddnnf.core.persistence import read_json, saving_to
+from tddnnf.core.pysmt_utils import owns_dags
 from tddnnf.queries.session import QuerySession
 
 
@@ -21,13 +22,15 @@ class TheoryCompiledTarget(Generic[T_Target]):
         self,
         target: T_Target,
         abstr: Abstractor,
-        projection_atoms: Sequence[FNode],
+        atoms: Sequence[FNode],
         env: Environment | None = None,
     ) -> None:
         self._target = target
         self._abstr = abstr
-        self._projection_atoms = tuple(projection_atoms)
+        self._atoms = tuple(atoms)
         self._env = env if env is not None else get_env()
+        assert owns_dags(self._env, abstr.id_to_atom.values()), "Abstraction must belong to the selected environment"
+        assert owns_dags(self._env, self._atoms), "Atoms must belong to the selected environment"
 
     @property
     def target(self) -> T_Target:
@@ -38,8 +41,8 @@ class TheoryCompiledTarget(Generic[T_Target]):
         return self._abstr
 
     @property
-    def projection_atoms(self) -> tuple[FNode, ...]:
-        return self._projection_atoms
+    def atoms(self) -> tuple[FNode, ...]:
+        return self._atoms
 
     @property
     def env(self) -> Environment:
@@ -59,7 +62,7 @@ class TheoryCompiledTarget(Generic[T_Target]):
             self.target.save(temporary_directory)
             payload = {
                 "abstraction": self.abstr.to_dict(),
-                "projection_atom_ids": [self.abstr.atom_to_id[a] for a in self.projection_atoms],
+                "atom_ids": [self.abstr.atom_to_id[a] for a in self.atoms],
             }
             (temporary_directory / "abstraction.json").write_text(json.dumps(payload, indent=2))
             data = read_json(temporary_directory / "metadata.json")
@@ -82,5 +85,5 @@ class TheoryCompiledTarget(Generic[T_Target]):
         target = target_type.load(directory)
         payload = read_json(directory / "abstraction.json")
         abstr = Abstractor.from_dict(payload["abstraction"], env=env)
-        projection = [abstr.get_atom(i) for i in payload["projection_atom_ids"]]
-        return cls(target, abstr, projection, env=env)
+        atoms = [abstr.get_atom(i) for i in payload["atom_ids"]]
+        return cls(target, abstr, atoms=atoms, env=env)

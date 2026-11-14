@@ -1,16 +1,15 @@
 # Lean core design
 
-**Status: agreed future design, implemented through the steps in
-[REFACTOR.md](REFACTOR.md).** This is not a description of the current API.
-[ARCHITECTURE.md](ARCHITECTURE.md) and [README.md](README.md) describe the
-implementation until the public migration lands. Follow-up work is in
+**Status: implemented public contracts.** Execution evidence is in
+[REFACTOR.md](REFACTOR.md); usage and implementation details are in
+[README.md](README.md) and [ARCHITECTURE.md](ARCHITECTURE.md). Follow-up work is in
 [TODO.md](TODO.md).
 
 ## Public interface and compilation
 
 The public concepts are `TheoryCompilation`, `TheoryCompiledTarget`, the backend
 classes `BddCompiledTarget`, `SddCompiledTarget`, and `D4CompiledTarget`,
-configured compiler instances, and configured reasoner instances. The intended
+configured compiler instances, and query engine classes. The public
 workflow is:
 
 ```python
@@ -19,7 +18,7 @@ with TheoryCompilation(phi, atoms=atoms, env=env) as compilation:
     lemmas = enumerator.get_theory_lemmas()
     target = compilation.compile_treduced(D4Compiler(), lemmas)
 
-with target.queries(DdnnifeReasoner()) as queries:
+with target.queries(DdnnifeEngine) as queries:
     satisfiable = queries.is_satisfiable()
     count = queries.count_truth_assignments()
 ```
@@ -34,6 +33,10 @@ The methods differ only in the formula they construct:
 - T-reduced: `phi AND AND(lemmas)`.
 - T-extended: `phi OR OR(NOT(lemma) for lemma in lemmas)`.
 
+Both accept keyword-only `abstractor: Abstractor | None = None` after the existing
+compiler, lemmas, and optional computation logger positional arguments. Supplied
+abstractions retain existing IDs and append new registrations.
+
 Both use one private pipeline for normalization, validation, abstraction,
 projection, compilation, target construction, and computation logging.
 Compilers receive the PySMT DAG and prepared abstraction. Retain separate
@@ -42,8 +45,8 @@ visitor framework is unnecessary.
 
 Pass instances such as `D4Compiler()`, `SddCompiler()`, and `BddCompiler()`.
 Backend options belong in their constructors. Passing a string or a compiler
-class is an API error. Reasoner selection follows the same rule, with
-`DdnnifeReasoner()`, `SddReasoner()`, and `CuddReasoner()`.
+class is an API error. Query sessions instead accept the matching engine class:
+`DdnnifeEngine`, `SddEngine`, or `BddEngine`. No reasoner layer is needed.
 
 `D4Compiler` retains the d4 CLI, BC-S1.2 circuit translation, projected
 compilation, subprocess error handling, temporary-file cleanup, and computation
@@ -59,8 +62,10 @@ environment or the active environment when omitted. Stored formula nodes must
 belong to that environment. Normalize the formula, supplied projection entries,
 and later the lemmas there. Callers must respect type hints and supply Boolean
 formulas/lemmas and DAGs entirely from that formula manager, including embedded
-nodes. These are caller preconditions; normalization relies on `DagWalker`
-memoization without repeated type checks or environment-validation traversals.
+nodes. Supplied-node environment membership is asserted before normalization
+or compilation, and when binding target abstraction/projection nodes. These
+assertions are disabled under Python's `-O` mode. Type hints and descendant
+ownership remain caller preconditions; normalization uses `DagWalker` memoization.
 
 Projection entries normalize to positive Boolean symbols or theory atoms;
 strip a normalized top-level negation and reject arbitrary Boolean formulas.
@@ -99,7 +104,7 @@ their existing IDs instead of applying the new allocation order.
 ## Target and resource ownership
 
 `TheoryCompiledTarget` binds a public backend compiled target, abstraction,
-ordered active vocabulary (`projection_atoms`), and owning PySMT environment.
+ordered active vocabulary (`atoms`), and owning PySMT environment.
 `BddCompiledTarget`, `SddCompiledTarget`, and `D4CompiledTarget` remain public
 classes, available through the supported read-only `.target` property.
 
@@ -118,7 +123,7 @@ is unsupported; saving may include atoms registered by later compilations.
 | D4CompiledTarget | NNF text, variable count, abstraction-to-NNF remapping, codec metadata |
 | SddCompiledTarget | Root references, manager, abstraction-to-native remapping, final vtree, codec metadata |
 | BddCompiledTarget | Root references, manager, final variable order, codec metadata |
-| Query session | Independent normalizer, transient atom index, reasoner resources and temporary files |
+| Query session | Independent normalizer, transient atom index, engine resources and temporary files |
 
 Native roots retain their managers for as long as needed. A target survives
 closure of the compilation session; closing one query session leaves the target
@@ -146,7 +151,7 @@ native DAGs and are not promises of identical sizes across representations.
 
 ## Query sessions and backend authority
 
-`target.queries(reasoner)` validates representation compatibility and returns a
+`target.queries(Engine)` validates representation compatibility and returns a
 shared session that exposes all six unary queries:
 
 | Operation | Meaning over the active vocabulary |
@@ -193,7 +198,7 @@ repair native numerical limits with a second reasoning implementation.
 Precision, overflow, and enumeration buffering limits remain visible and are
 documented with the installed versions and reproductions established in step 1.
 Derived answers inherit the limitations of the native primitive they use.
-Unsupported representation/reasoner combinations fail explicitly.
+Unsupported representation/engine combinations fail explicitly.
 
 ## Deferred d-DNNF conversion
 
@@ -213,7 +218,7 @@ representation. Keep the existing artifact layout:
 
 Record d-DNNF variable counts and remapping, the actual saved SDD vtree, and the
 complete OBDD variable-to-level order after reordering. An NNF codec identifies
-its text dialect. Metadata describes artifacts, not compiler/reasoner
+its text dialect. Metadata describes artifacts, not compiler/engine
 configuration or a normalizer.
 
 Parse atoms into the requested environment, or the active environment by

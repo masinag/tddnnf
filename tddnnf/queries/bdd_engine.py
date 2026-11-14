@@ -8,7 +8,7 @@ from pysmt.fnode import FNode
 from tddnnf.compilers.cudd import BddCompiledTarget
 
 if TYPE_CHECKING:
-    from tddnnf.core.containers import TheoryCompiledTarget
+    from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tddnnf.core.interfaces import QueryEngine
 from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 
@@ -16,18 +16,18 @@ from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 class BddEngine(QueryEngine[BddCompiledTarget]):
     """Polynomial-time queries over a BDD compiled target."""
 
-    def __init__(self, container: TheoryCompiledTarget[BddCompiledTarget]) -> None:
-        if not isinstance(container.target, BddCompiledTarget):
+    def __init__(self, target: TheoryCompiledTarget[BddCompiledTarget]) -> None:
+        if not isinstance(target.target, BddCompiledTarget):
             raise TypeError("BddEngine requires BddCompiledTarget")
-        self._target = container.target
-        self._abstr = container.abstr
-        self._projection_atoms: tuple[FNode, ...] = container.projection_atoms
-        self._projection_atom_set: set[FNode] = set(container.projection_atoms)
+        self._target = target.target
+        self._abstr = target.abstr
+        self._atoms: tuple[FNode, ...] = target.atoms
+        self._atom_set: set[FNode] = set(target.atoms)
 
     def _restrict_chain(self, lits: list[FNode], negate: bool = False, root=None):
         """Restrict by validated literals, flipping each sign when negate is True.
 
-        Callers must first use clause_lits or cube_lits with the exact projection
+        Callers must first use clause_lits or cube_lits with the exact target
         atoms and handle None. Inputs must be constant-free, deduplicated literals
         over those atoms, with no complementary pair.
         """
@@ -44,17 +44,17 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         return mgr.let(assign, source)
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
-        unique = cube_lits(assumptions or [], self._projection_atom_set)
+        unique = cube_lits(assumptions or [], self._atom_set)
         if unique is None:
             return False
         mgr = self._target.manager
         return self._restrict_chain(unique, negate=False) != mgr.false
 
     def _forgotten_var_count(self) -> int:
-        return len(self._target.manager.vars) - len(self._projection_atoms)
+        return len(self._target.manager.vars) - len(self._atoms)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        unique = cube_lits(assumptions or [], self._projection_atom_set)
+        unique = cube_lits(assumptions or [], self._atom_set)
         if unique is None:
             return 0
         n = len(self._target.manager.vars)
@@ -67,14 +67,14 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         return self._target.root == self._target.manager.true
 
     def entails_clause(self, query_clause: list[FNode]) -> bool:
-        lits = clause_lits(query_clause, self._projection_atom_set)
+        lits = clause_lits(query_clause, self._atom_set)
         if lits is None:
             return True
         mgr = self._target.manager
         return self._restrict_chain(lits, negate=True) == mgr.false
 
     def is_implicant(self, query_cube: list[FNode]) -> bool:
-        lits = cube_lits(query_cube, self._projection_atom_set)
+        lits = cube_lits(query_cube, self._atom_set)
         if lits is None:
             return True
         mgr = self._target.manager
@@ -85,6 +85,6 @@ class BddEngine(QueryEngine[BddCompiledTarget]):
         if root == self._target.manager.false:
             return
         mgr = self._target.manager
-        projection_ids = {f"b{self._abstr.get_id(atom)}": atom for atom in self._projection_atoms}
-        for assignment in mgr.pick_iter(root, care_vars=set(projection_ids)):
-            yield {atom: assignment[name] for name, atom in projection_ids.items()}
+        atom_ids = {f"b{self._abstr.get_id(atom)}": atom for atom in self._atoms}
+        for assignment in mgr.pick_iter(root, care_vars=set(atom_ids)):
+            yield {atom: assignment[name] for name, atom in atom_ids.items()}
