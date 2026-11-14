@@ -276,11 +276,16 @@ vector, and integer-array types. Production code and public APIs are unchanged.
 Reduced workflows compare counts with the bank and complete projected assignment
 sets with independent Z3 model blocking over normalized atoms. They check SAT,
 assignment key order, Boolean values, duplicates, and clause entailment.
-Extended workflows check validity and implicants against Z3 counterexample
-queries. Generated clauses/cubes are empty, every signed singleton, and every
-signed pair of distinct atoms; no random sampling or wider subsets are used.
-These asymmetric query groups preserve theory semantics: extended Boolean model
-counts are not theory-consistent model counts.
+Extended workflows compare complete assignment sets against all Boolean
+assignments over `compilation.atoms` minus the Z3 models of the negated formula.
+Original and saved/loaded targets check counts against that set, assignment key
+order, Boolean values, and duplicate rejection, alongside validity and implicants
+against Z3 counterexample queries. Generated clauses/cubes are empty, every signed
+singleton, and every signed pair of distinct atoms; no random sampling or wider
+subsets are used. Extended Boolean model counts include theory-inconsistent
+assignments and are not theory-consistent model counts. Reduced enumeration
+checks exact set equality and rejects duplicates without a redundant length
+assertion.
 
 All cases run on BDD and SDD. Explicit d4 parameter marks exclude the nine
 zero-count reduced cases and extended `BV unsat` because ddnnife cannot load
@@ -300,6 +305,45 @@ remain visible. No new production failures surfaced.
 
 Lifecycle assertions, private enumerator cleanup, wider query generation,
 fresh-environment loading, and production fixes remain deferred.
+
+### Implemented extra theory-atom integration workflows
+
+The same integration module adds twelve cases: separate reduced and extended
+workflows, two extra declared theory atoms, and the three existing backend
+triples. A local fixture builds `((x + y >= 1) & A) | ((x + y <= 0) & ~A)`
+over real `x`, `y`, `z` and Boolean `A`; the bank remains unchanged. The extra
+atom is either the branch-dependent `x + y <= 1/2` (two reduced models) or the
+independent `z <= 0` (four reduced models). It is declared first, followed by
+normalized formula atoms in node-ID order. Both MathSAT enumerations receive
+the complete compilation vocabulary: the formula for reduced compilation and
+its negation for extended compilation.
+
+Original and saved/loaded reduced targets check SAT, counts, complete assignment
+sets against Z3, Boolean values, vocabulary/key order, duplicate rejection, and
+clause entailment. The extra-atom fixture parametrizes only the atom kind;
+reduced counts come from the size of the Z3 model set. Extended targets check
+complete assignment sets and counts against all Boolean assignments minus the
+Z3 models of the negated formula:
+10 assignments for the dependent atom and 8 for the independent atom. Both
+original and saved/loaded targets reject duplicates and check Boolean values and
+vocabulary/key order, alongside validity and implicants through Z3
+counterexamples. Existing literal-query generation includes empty queries and
+all signed singletons and pairs, including those involving the extra atom.
+All twelve focused cases pass with the extended enumeration checks, without
+additional exclusions or production/API changes. A separate Z3-oracle check
+confirms the extended counts of 10 and 8. Broader formula families and lifecycle
+coverage remain deferred; the existing bank constant-circuit exclusions are
+preserved.
+
+Verification after adding extended assignment checks: all twelve extra-atom
+cases pass, integration tests pass with 164 passes and 10 constant-circuit skips,
+and the full suite passes with 1,541 passes and the same 10 skips.
+Repository-wide Ruff lint/format, whitespace checks, and Basedpyright over
+production code and the workflow module pass using the established dependency
+paths. PySMT walker deprecations, non-standard array-logic serialization, and
+the known CUDD shutdown reference warning remain visible. No new production
+defects surfaced. The preceding bank-workflow commit skipped its Pyright hook
+after dependency resolution failed; the separate Basedpyright check passed.
 
 ## Organization
 
