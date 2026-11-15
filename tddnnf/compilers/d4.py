@@ -80,12 +80,15 @@ class _D4Node:
 
 
 class D4CompiledTarget(PropCompiledTarget):
-    """A compiled d-DNNF target backed by a d4 NNF file."""
+    """A compiled d-DNNF target backed by a d4 NNF file.
+
+    Omitted or empty remapping uses identity over the native variable range.
+    """
 
     def __init__(self, nnf_text: str, var_count: int, remapping: Mapping[int, int] | None = None) -> None:
         self._nnf_text = nnf_text
         self._var_count = var_count
-        self._remapping = MappingProxyType(dict(remapping) if remapping is not None else {})
+        self._remapping = MappingProxyType(dict(remapping) if remapping else {i: i for i in range(1, var_count + 1)})
 
     @property
     def nnf_text(self) -> str:
@@ -147,9 +150,10 @@ class D4CompiledTarget(PropCompiledTarget):
 class BCS12Walker(DagWalker):
     """Walks a pysmt formula, generating BC-S1.2 circuit gate definitions."""
 
-    def __init__(self, abstractor: Abstractor) -> None:
+    def __init__(self, abstractor: Abstractor, remapping: Mapping[int, int]) -> None:
         DagWalker.__init__(self, invalidate_memoization=True)
         self._abs = abstractor
+        self._remapping = remapping
         self._gate_counter = 0
         self._gate_lines: list[str] = []
 
@@ -159,7 +163,7 @@ class BCS12Walker(DagWalker):
 
     def _map(self, formula: FNode) -> str:
         assert formula in self._abs, "Abstraction must be prepared"
-        return f"v{self._abs.get_id(formula)}"
+        return f"v{self._remapping[self._abs.get_id(formula)]}"
 
     @staticmethod
     def _remove_double_neg(s: str) -> str:
@@ -252,7 +256,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
 
     The formula is first translated to BC-S1.2 circuit format, then compiled
     by the d4 binary. Edge literals are restricted to the dense projection IDs;
-    metadata retains every projected dimension, including those absent from the DAG.
+    metadata retains formula and projection atoms, including forgotten atoms.
     This relies on the supported d4 circuit parser assigning sorted P variables first.
     """
 
@@ -260,18 +264,18 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
         self,
         formula: FNode,
         abstractor: Abstractor,
-        all_atom_ids: list[int],
+        remapping: Mapping[int, int],
         projected_ids: set[int],
         path: Path,
     ) -> None:
-        walker = BCS12Walker(abstractor)
+        walker = BCS12Walker(abstractor, remapping)
         root_gate = walker.translate(formula)
 
         with open(path, "w") as f:
             f.write("c BC-S1.2\n")
-            for aid in all_atom_ids:
-                f.write(f"I v{aid}\n")
-            ids = sorted(projected_ids)
+            for native in remapping.values():
+                f.write(f"I v{native}\n")
+            ids = sorted(remapping[aid] for aid in projected_ids)
             if ids:
                 f.write("P " + " ".join(f"v{i}" for i in ids) + "\n")
             else:
@@ -331,6 +335,9 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
             all_atom_ids = sorted(abstractor.get_id(a) for a in all_atoms)
 
             projected_ids = {abstractor.get_id(a) for a in proj_set}
+            # d4 assigns projected variables first; match that order before translation.
+            ordered_ids = sorted(projected_ids) + [aid for aid in all_atom_ids if aid not in projected_ids]
+            remapping = {aid: native for native, aid in enumerate(ordered_ids, 1)}
 
             with tempfile.TemporaryDirectory(prefix="d4_compile_") as tmpdir:
                 tmp = Path(tmpdir)
@@ -338,7 +345,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
                 out_path = tmp / "output.nnf"
 
                 with stats.track_time("write_circuit_time"):
-                    self._write_circuit(formula, abstractor, all_atom_ids, projected_ids, circuit_path)
+                    self._write_circuit(formula, abstractor, remapping, projected_ids, circuit_path)
                 with stats.track_time("run_d4_time"):
                     self._run_d4(circuit_path, out_path)
 
@@ -347,20 +354,19 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
                     if nnf_raw.startswith("f"):
                         stats.log("n_atoms", len(declared_atoms))
                         stats.log("n_proj_vars", 0)
-                        return D4CompiledTarget("f 1\n", 0, remapping={})
-                    stats.log("n_atoms", len(declared_atoms))
+                        return D4CompiledTarget("f 1\n", 0, remapping=remapping)
+                    stats.log("n_atoms", len(all_atoms))
                     stats.log("n_proj_vars", 0)
-                    return D4CompiledTarget("t 1\n", 0, remapping={})
+                    return D4CompiledTarget("t 1\n", 0, remapping=remapping)
 
                 nnf_text = out_path.read_text()
                 if nnf_text.startswith("f"):
                     stats.log("n_atoms", len(declared_atoms))
                     stats.log("n_proj_vars", len(projected_ids))
-                    return D4CompiledTarget("f 1\n", 0, remapping={})
+                    return D4CompiledTarget("f 1\n", 0, remapping=remapping)
 
             var_count = len(projected_ids)
             nnf_text = _clean_nnf(nnf_text, var_count)
-            remapping = {aid: i + 1 for i, aid in enumerate(sorted(projected_ids))}
-            stats.log("n_atoms", len(declared_atoms))
+            stats.log("n_atoms", len(all_atoms))
             stats.log("n_proj_vars", len(projected_ids))
             return D4CompiledTarget(nnf_text, var_count, remapping=remapping)

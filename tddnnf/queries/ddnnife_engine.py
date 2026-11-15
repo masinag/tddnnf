@@ -11,7 +11,7 @@ from pysmt.fnode import FNode
 from tddnnf.compilers.d4 import D4CompiledTarget
 
 if TYPE_CHECKING:
-    from tddnnf.core.containers import TheoryCompiledTarget
+    from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tddnnf.core.interfaces import QueryEngine
 from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 
@@ -19,27 +19,24 @@ from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
     """Polynomial-time queries over a d-DNNF compiled target via ddnnife."""
 
-    def __init__(self, container: TheoryCompiledTarget[D4CompiledTarget]) -> None:
-
+    def __init__(self, theory_target: TheoryCompiledTarget[D4CompiledTarget]) -> None:
         self._tmpdir = None
-        if not isinstance(container.target, D4CompiledTarget):
+        if not isinstance(theory_target.target, D4CompiledTarget):
             raise TypeError("DdnnifeEngine requires D4CompiledTarget")
-        self._abstr = container.abstr
-        self._projection_atoms: tuple[FNode, ...] = container.projection_atoms
-        self._projection_atom_set: set[FNode] = set(container.projection_atoms)
-        self._var_count = container.target.var_count
-        self._remapping = container.target.remapping
+        self._abstr = theory_target.abstr
+        self._atoms: tuple[FNode, ...] = theory_target.atoms
+        self._atom_set: set[FNode] = set(theory_target.atoms)
+        self._var_count = theory_target.target.var_count
+        self._remapping = theory_target.target.remapping
 
         self._tmpdir = None
         self._mut = None
         self._ddnnf = None
-        nnf_text = container.target.nnf_text
+        nnf_text = theory_target.target.nnf_text
         if nnf_text not in ("t 1\n", "f 1\n"):
-            # Every projected dimension is mapped, even when absent from the DAG.
-            ids = {self._abstr.get_id(a) for a in self._projection_atoms}
-            assert set(self._remapping) == ids, "D4 mapping must cover exactly the projection"
-            assert len(self._remapping) == self._var_count == len(self._projection_atoms)
-            assert set(self._remapping.values()) == set(range(1, self._var_count + 1))
+            # Every target atom is mapped, even when absent from the DAG.
+            ids = {self._abstr.get_id(a) for a in self._atoms}
+            assert ids <= self._remapping.keys(), "D4 mapping must cover the target atoms"
         self._tmpdir = tempfile.TemporaryDirectory(prefix="ddnnife_engine_")
         try:
             nnf_path = Path(self._tmpdir.name) / "circuit.nnf"
@@ -65,7 +62,7 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
     def _lits_to_ddnnf(self, lits: list[FNode], negate: bool = False) -> list[int]:
         """Convert validated literals, flipping each sign when negate is True.
 
-        Callers must first use clause_lits or cube_lits with the exact projection
+        Callers must first use clause_lits or cube_lits with the exact target
         atoms and handle None. Inputs must be constant-free, deduplicated literals
         over those atoms, with no complementary pair.
         """
@@ -78,37 +75,37 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         return result
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
-        unique = cube_lits(assumptions or [], self._projection_atom_set)
+        unique = cube_lits(assumptions or [], self._atom_set)
         if unique is None:
             return False
         assert self._mut is not None
         return self._mut.is_sat(self._lits_to_ddnnf(unique))
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        unique = cube_lits(assumptions or [], self._projection_atom_set)
+        unique = cube_lits(assumptions or [], self._atom_set)
         if unique is None:
             return 0
         assert self._mut is not None
         return int(self._mut.count(self._lits_to_ddnnf(unique)))
 
     def is_valid(self) -> bool:
-        return self.count_truth_assignments() == (1 << len(self._projection_atoms))
+        return self.count_truth_assignments() == (1 << len(self._atoms))
 
     def entails_clause(self, query_clause: list[FNode]) -> bool:
-        lits = clause_lits(query_clause, self._projection_atom_set)
+        lits = clause_lits(query_clause, self._atom_set)
         if lits is None:
             return True
         assert self._mut is not None
         return not self._mut.is_sat(self._lits_to_ddnnf(lits, negate=True))
 
     def is_implicant(self, query_cube: list[FNode]) -> bool:
-        lits = cube_lits(query_cube, self._projection_atom_set)
+        lits = cube_lits(query_cube, self._atom_set)
         if lits is None:
             return True
         assert self._mut is not None
         ddnnf_lits = self._lits_to_ddnnf(lits)
         count = int(self._mut.count(ddnnf_lits))
-        remaining = len(self._projection_atoms) - len(lits)
+        remaining = len(self._atoms) - len(lits)
         return count == (1 << remaining)
 
     def enumerate_truth_assignments(self) -> Generator[dict[FNode, bool], None, None]:
@@ -117,4 +114,4 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         raw = self._mut.enumerate([], total)
         for model_lits in raw:
             assignment = {abs(lit): lit > 0 for lit in model_lits}
-            yield {a: assignment[self._remapping[self._abstr.get_id(a)]] for a in self._projection_atoms}
+            yield {a: assignment[self._remapping[self._abstr.get_id(a)]] for a in self._atoms}

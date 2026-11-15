@@ -6,9 +6,11 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.397
+  - repo: local
     hooks:
-      - id: pyright
-        args: [tddnnf/]
+      - id: basedpyright
+        name: basedpyright
+        entry: basedpyright tddnnf/
+        language: system
+        types: [python]
         pass_filenames: false

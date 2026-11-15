@@ -21,10 +21,15 @@ from tddnnf.core.stats_collector import StatsCollector
 
 
 class SddCompiledTarget(PropCompiledTarget):
-    """A propositionally compiled SDD target backed by PySDD."""
+    """A propositionally compiled SDD target backed by PySDD.
 
-    def __init__(self, root: SddNode, manager: SddManager, remapping: Mapping[int, int]) -> None:
-        self._remapping = MappingProxyType(dict(remapping))
+    Omitted or empty remapping uses identity over the native variable range.
+    """
+
+    def __init__(self, root: SddNode, manager: SddManager, remapping: Mapping[int, int] | None = None) -> None:
+        self._remapping = MappingProxyType(
+            dict(remapping) if remapping else {i: i for i in range(1, manager.var_count() + 1)}
+        )
         self._root = root
         self._manager = manager
 

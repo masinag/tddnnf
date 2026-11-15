@@ -314,7 +314,7 @@ Leave the PR open for renewed approval. Do not merge or start the next step.
 
 Record evidence here as steps are implemented; consult GitHub for approvals and
 merges. Steps 0–5 have merged into `refactor/lean-core` and record their checks
-below. Step 6 (public migration) has not started; explicit d-DNNF conversion is
+below. Step 6 (public migration) is recorded below; explicit d-DNNF conversion is
 deferred in [TODO.md](TODO.md#explicit-d-dnnf-conversion). Historical evidence
 below retains the step numbers and contracts used at the time.
 
@@ -1163,9 +1163,134 @@ file SHA-256 hashes still match `baseline/preserved-checkout.json`.
   artifacts retain their recorded abstraction IDs.
 
 
+### Step 6 — public migration (2026-11-11)
+
+- Isolated branches `refactor/06-public-migration` start at library `0314647`
+  and testbench `e431af3` in `/tmp/tddnnf-06-public-migration` and
+  `/tmp/tddnnf-testbench-06-public-migration`. GitHub confirms prerequisite
+  PRs #15/#17 merged at 13:58:45/14:00:33 UTC. Original checkouts, including
+  the testbench’s unrelated pending files, are untouched.
+- Public exports are `TheoryCompilation` and `TheoryCompiledTarget`. Both
+  compilation methods forward keyword-only `abstractor=None` to the existing
+  pipeline, preserving positional logger arguments, IDs, projection order,
+  and append-only reuse. Removed builders and the `CompilationContext` alias
+  after migrating callers. Compiler modules, backend targets, `.target`, and
+  engine-class query sessions remain public. No module rename or reasoner layer.
+- Compiler/engine/session matrices now use functions and parameterized fixtures;
+  their solver comparisons and native regressions remain. The common engine
+  fixture closes all successfully opened engines/sessions after each test.
+  Documentation describes replacements and supplied-abstraction reuse.
+- Paired source selection for all suites and the benchmark is explicit:
+  `PYTHONPATH=/tmp/tddnnf-06-public-migration:/tmp/tddnnf-testbench-06-public-migration/scripts`.
+  Existing environments are reused without sync or dependency changes. Library
+  interpreter: `/home/gabriele/Documents/theorykc/tddnnf/.venv/bin/python`;
+  companion interpreter: `/home/gabriele/Documents/theorykc/tddnnf-testbench/.venv/bin/python`.
+  The existing ignored d4 binary was copied into the library worktree.
+- Commands: library `python -m pytest -q --disable-warnings`: **954 passed**,
+  1187 warnings, 29.96 s. Companion `python -m pytest -q --disable-warnings
+  tests baseline/test_recorder.py baseline/test_summary.py`: **195 passed**,
+  5 warnings, 4.43 s. Focused pipeline: **166 passed**. All three
+  `python examples/{abstr,tred,text}.py` invocations exit successfully.
+  Raw logs are `/tmp/step06-{library,testbench,focused,recorder,example-*}.log`.
+- Recorder resource files now live in a sibling `compile/` directory so the
+  target destination stays absent until save. Its regression invokes the real
+  recorder entry point and compiler on an absent destination. Both recorder
+  and summarizer accept `--results-dir` and `--evidence-dir`; summary tests
+  cover defaults and custom paths without creating baseline output.
+- Fixed campaign command (from companion worktree, with paired `PYTHONPATH`
+  and `PYTHONHASHSEED=0`): `python baseline/run.py --results-dir results_step06
+  --evidence-dir validation/step06`. Six frozen cases, three backends, two
+  constructions, two projections, one warm-up and three measured runs remain;
+  per-task deadline 60 s, 8 GiB address-space limit. Then `python
+  baseline/summarize.py --results-dir results_step06 --evidence-dir validation/step06`.
+- Paired validated runtime revisions: library
+  `ddf8e5479786eb755de98f34487f25b07aa1b9a0`, companion
+  `4f9ac8f54444c8012900ad4feb124aa6f15599f8`. Subsequent commits contain
+  evidence/docs only. The campaign began before recorder formatting and the
+  consumer import-path change; measured repeats use the final sources, and
+  neither adjustment changes behavior. Environment/source hashes and all
+  records are preserved in the companion `validation/step06/` directory.
+- Environment: Python **3.12.15**, PySMT **0.9.7.dev431**, MathSAT **5.6.16**
+  (`412f4b1ef83c`), dd **0.6.0** / CUDD **3.0.0**, PySDD **1.0.6**,
+  ddnnife **0.10.0**, tlemma-enum **0.1.0**, Ruff **0.15.17**.
+  Library pytest is **9.0.3**, companion pytest **9.1.1**. The d4 binary hash
+  matches step 1 (`23353293da4575054734195f24c28e3b522686d4e34dc02194295ffdd470fc49`),
+  built from `dda4511f218dd250e5973d7c27271f7228edc210`.
+- Fixed matrix: **288 records**, 72 warm-up and 216 measured; **280 successful
+  compilations, 8 timeouts** versus 272/16 in step 1. All eight timeouts are
+  d4 extended planning (both projections, all repeats). Each query type and DAG
+  measurement has **248 successes and 32 native zero-feature errors**; DAGs are
+  unavailable after the eight compile timeouts. No query-load timeouts remain.
+  Answers and stage statuses are stable across repeats.
+- Four mutually available answers change: SDD empty-vocabulary true counts
+  **2 → 1**. Other available answers match step 1. The 42 availability changes
+  separately record d4 constants now exposing native errors (behavior established
+  before step 6), successful SDD planning full-projection loads with saved vtrees
+  (31,329 unconditional / 25,992 conditioned, matching BDD/d4), and newly completed
+  SDD extended planning cells. No unavailable result is treated as zero.
+- Median per-cell compile-time / peak-RSS / artifact-byte ratios over matched
+  successful cells: OBDD **1.013 / 0.975 / 1.402**, SDD **1.009 / 0.977 / 1.815**,
+  d-DNNF **0.992 / 0.982 / 1.454**. Versioned metadata/mappings and SDD vtrees add
+  bytes, particularly to small artifacts. Full per-cell timing, memory, artifact,
+  DAG, answer and status comparison is in `summary.csv` and `comparison.json`.
+- Investigated full-planning BDD slowdown: reduced **3.433 → 4.572 s**,
+  extended **3.368 → 4.601 s**. Reduced artifacts shrink **132,013 → 92,187 bytes**,
+  vertices **5,696 → 3,571**, edges **11,390 → 7,144**; peak RSS falls
+  **111,008 → 90,772 KiB**. All 135 atom IDs differ after canonical alignment
+  with step 1, affecting native ordering/construction. `_compile` AST and core,
+  compiler and engine sources are unchanged from prerequisite `0314647`.
+- Alternating prerequisite/step-6 control, after the campaign, uses `git archive
+  0314647 tddnnf` under `/tmp/tddnnf-06-control`, the same frozen planning inputs,
+  two full-projection BDD constructions and warm-up plus three measured repeats.
+  Command: paired environment `python /tmp/step06-control.py`. Prerequisite
+  medians **4.379 / 4.429 s** versus step 6 **4.450 / 4.460 s** (reduced/extended):
+  **1.016 / 1.007x**. The large slowdown already reproduces on the prerequisite;
+  this does not establish a causal breakdown or performance guarantee.
+  `python /tmp/step06-comparison.py` creates the cell comparison; exact analysis
+  scripts are archived in the companion evidence.
+- `python baseline/native_limits.py` reproduces all four recorded native limits
+  unchanged. A direct native planning SDD check records manager dimensions and
+  counts: partial projection retains 135 native dimensions versus 44 active
+  atoms, so native overflow occurs before dimension removal. No Python repair
+  or backend substitution was added. Extended large counts also remain unreliable.
+- Independent read-only review of commits `612b8ef` / `1d3a756` independently
+  passed **763 library checks** and **4 recorder/reporting checks**, finding only
+  a missing replay-environment export and an unused helper. Both were fixed in
+  `ddf8e54` / `4f9ac8f`; affected session checks pass (**86 tests**).
+- Ruff: `ruff check tddnnf tests examples` and companion `ruff check scripts tests
+  baseline/run.py baseline/summarize.py baseline/test_recorder.py baseline/test_summary.py`.
+  `git diff <base> --name-only --diff-filter=ACM` selects changed Python files
+  for `ruff format --check` (16 library, 6 companion). Both `git diff <base>
+  --check` checks pass. Relative Markdown links resolve; external HTTP links were
+  not probed. Original baseline's 47 files outside the four updated recorder/
+  reporting Python sources remain byte-identical, including its checksum manifest.
+- Limits: matrix tasks are sequential, but short verification processes overlapped
+  warm-up and early repeat 1. CPU affinity/frequency and unrelated host load are
+  uncontrolled. Peak RSS is GNU Time child accounting, not a simultaneous sum;
+  8 GiB is per-process address space, not a shared RSS cgroup limit. Skipped
+  deferred features, dependency changes, historical regeneration, malformed-native
+  probes and unrelated formatting. Removing old contexts/builders intentionally
+  breaks their callers; native precision, overflow, buffering and zero-feature
+  restrictions remain.
+- Final independent read-only evidence audit of `50c18a4` / `bd6d24f` reports
+  **no outstanding findings**. It independently checks all 288 records, 72 cells,
+  stage totals, answer classifications, 16 control records, source hashes and
+  47 preserved baseline checksums. It did not repeat the complete campaign or
+  suites. Companion `validation/step06/REVIEW.md` records both reviews.
+  Final documentation check resolves **35 relative links/anchors** before adding
+  review/evidence links. Both base-to-head whitespace checks pass. No merge,
+  auto-merge or final integration PR is authorized by this delivery.
+
+- Delivered as linked open PRs [library #16](https://github.com/masinag/tddnnf/pull/16)
+  and [testbench #18](https://github.com/masinag/tddnnf-testbench/pull/18), both
+  targeting `refactor/lean-core`. The companion’s
+  [comparison and evidence](https://github.com/masinag/tddnnf-testbench/blob/refactor/06-public-migration/validation/step06/README.md)
+  includes original per-cell measurements, archived artifacts and independent reviews.
+  Both remain open; no merge or final integration PR was performed.
+
 ## Complete theory compilation vocabulary migration
 
-`TheoryCompilation` and legacy builders replace `project_on` or `all_vars` with `atoms`
+`TheoryCompilation` replaces `project_on` or `all_vars` with `atoms`
 without a compatibility alias. Normalize explicit atoms, strip negation,
 deduplicate in first-occurrence order, and discard entries normalizing to
 constants. Default to normalized formula atoms in node-ID order. Require all
@@ -1184,6 +1309,6 @@ prepared abstractions, allow only one nonempty quantifier list, and use
 `exists_vars`, `forall_vars`, with no aliases. d4 rejects universals before execution.
 Native targets, query engines, persistence schemas and logging keys are unchanged.
 
-After review and merge into lean-core, integrate lean-core into public migration,
-reconcile its reorganized tests and specification, and update companion callers.
-This integration is gated on the reviewed merge; preserve dirty worktrees.
+The quantified compilation changes are integrated into public migration with its
+reorganized tests. Companion caller migration is separate work; local dirty
+worktree specifications remain unchanged.

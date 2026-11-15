@@ -119,8 +119,9 @@ The target retains read-only bindings to its environment, abstraction, and tuple
 vocabulary after compilation closes. Reconstruct with `target.to_pysmt()` and
 inspect DAG metrics with `target.dag_size()`. `Abstractor.get_id()` registers new
 atoms above the current maximum ID and preserves existing IDs. Constructor
-mappings are copied and public mapping views are read-only. Builders reuse a
-supplied abstractor; later registrations preserve earlier targets’ query
+mappings are copied and public mapping views are read-only. Both compilation
+methods accept keyword-only `abstractor=existing`; they reuse the supplied
+abstractor. Later registrations preserve earlier targets’ query
 dimensions. Concurrent mutation is unsupported; saved mappings may include atoms
 registered by later compilations.
 
@@ -187,10 +188,11 @@ native automatic garbage collection and minimization. Pass `False` to disable bo
 callers must respect the annotated argument types.
 
 `TheoryCompilation` supports `with` and idempotent `close()`; normalization and
-compilation fail after closure. `CompilationContext` remains an alias during
-migration. Inputs must be Boolean nodes from the selected PySMT environment,
-including every descendant; type hints and environment membership are caller
-preconditions, without repeated runtime validation. Projection entries normalize
+compilation fail after closure. Inputs must be Boolean nodes from the selected PySMT environment,
+including every descendant. Supplied-node environment membership is asserted
+before normalization or compilation, and for target abstraction/projection nodes.
+These assertions are disabled under Python's `-O` mode; type hints and descendant
+ownership remain caller preconditions. Vocabulary entries normalize
 to positive Boolean symbols or theory atoms. Atoms that normalize to constants,
 including negated atoms, are discarded; explicitly supplied constants and
 compound Boolean entries are rejected.
@@ -235,15 +237,37 @@ launching its external compiler. Universal elimination can cause substantial
 intermediate growth. Native target classes, query engines, and persistence schemas
 are unchanged.
 
-Native callers migrating from `all_vars=P` must supply the complete vocabulary
+Native callers migrating from `project_on=P` or `all_vars=P` must supply the complete vocabulary
 as `all_atoms=V` and `exists_atoms=[a for a in V if a not in P]`. Native calls without
 projection now also require `all_atoms`. Rename native `exists_vars` and
-`forall_vars` to `exists_atoms` and `forall_atoms`. Theory callers and legacy
-builders must rename `project_on` or `all_vars` to `atoms` and read `.atoms`
-in place of `.all_vars`
+`forall_vars` to `exists_atoms` and `forall_atoms`. Theory callers must rename `project_on` or `all_vars` to `atoms` and read `.atoms`
+in place of `.project_on` or `.all_vars`
 and include every normalized input atom. There is no compatibility alias or
 original-atom projection API. For example, compiling `a and x` with
 `atoms=[a]` raises `ValueError`.
+
+### Migrating old callers
+
+Import `TheoryCompilation` and `TheoryCompiledTarget` from `tddnnf`.
+`CompilationContext`, `QueryContext`, `TReducedBuilder`, and `TExtendedBuilder`
+are removed. Replace a builder call with:
+
+```python
+from tddnnf import TheoryCompilation, TheoryCompiledTarget
+
+with TheoryCompilation(phi, atoms=atoms, env=env) as compilation:
+    target = compilation.compile_treduced(compiler, lemmas, log, abstractor=abstractor)
+# Use compile_textended for the former TExtendedBuilder.
+with target.queries(DdnnifeEngine) as queries:
+    count = queries.count_truth_assignments()
+```
+
+Keep compiler module paths and backend target classes unchanged. Query sessions
+accept engine classes (`BddEngine`, `SddEngine`, `DdnnifeEngine`). Backend targets
+remain available through the read-only `target.target` property. Omitting
+`abstractor` creates a fresh mapping for each compilation; supplying one keeps
+existing IDs and appends new atoms. Old context query wrappers become
+`target.queries(Engine)`. See [Architecture](ARCHITECTURE.md) for lifetimes.
 
 ### Compilation strategies
 
@@ -273,8 +297,8 @@ idempotent `close()`. Each enumeration call creates an independent generator.
 The session owns active enumerations and stops them before releasing native query
 resources and the normalizer, even if cleanup raises. An enumeration can also be
 closed explicitly with its own `close()` method. Query methods then raise `RuntimeError`; closed generators
-raise `StopIteration`. The target and other sessions remain usable. Direct engines
-and builders remain available. The former `QueryContext.wrap_queries()` API is
+raise `StopIteration`. The target and other sessions remain usable.
+Direct engines remain available. The former `QueryContext.wrap_queries()` API is
 replaced by `target.queries(Engine)`.
 
 
@@ -315,7 +339,7 @@ from pathlib import Path
 from pysmt.shortcuts import And, read_smtlib, write_smtlib
 
 from tddnnf.compilers.d4 import D4CompiledTarget
-from tddnnf.core.containers import TheoryCompiledTarget
+from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 
 artifact_dir = Path("artifacts")
 artifact_dir.mkdir(exist_ok=True)
@@ -386,7 +410,7 @@ from pathlib import Path
 from pysmt.environment import Environment
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.containers import TheoryCompiledTarget
+from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tddnnf.core.interfaces import DagSize
 from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 
@@ -416,7 +440,7 @@ class LiteralTarget:
 
 env = Environment()
 atom = env.formula_manager.Symbol("a")
-target = TheoryCompiledTarget(LiteralTarget(7), Abstractor({7: atom}), [atom], env)
+target = TheoryCompiledTarget(LiteralTarget(7), Abstractor({7: atom}), atoms=[atom], env=env)
 target.save(Path("literal-target"))
 loaded = TheoryCompiledTarget.load(Path("literal-target"), LiteralTarget, env=env)
 assert loaded.to_pysmt() is atom
@@ -428,16 +452,21 @@ representation and codec metadata are descriptive and do not select a backend.
 Applications should check representation metadata before calling native loaders
 when they need to reject a mismatch with their selected backend.
 
-SDD compilation uses dense native IDs for formula and projection atoms, with a
+SDD compilation uses dense native IDs for all declared atoms, with a
 read-only `target.remapping` from shared abstraction IDs to native IDs. This
 mapping is required in schema v1 SDD artifacts. OBDD compilation declares only
 needed variable names. Neither backend changes shared abstraction IDs. Variables
 used during compilation and later forgotten remain allocated.
 
+SDD and D4 remappings retain exactly the declared atoms, including
+forgotten atoms and excluding unrelated abstractor entries. D4 assigns projected
+IDs first; its `var_count` defines the counting universe independently of mapping
+size. Existing projection-only mappings remain accepted when they cover the projection.
+
 
 ## Test specification
 
-The executable integration corpus is in [`tests/bank_cases.py`](tests/bank_cases.py).
+The executable integration corpus is in [`tests/integration/bank_cases.py`](tests/integration/bank_cases.py).
 It preserves all 27 supplied inline expressions and full/theory-projected reference
 counts: Boolean, equality, LRA, mixed integer/real arithmetic, bit vectors, and
 arrays. Partition counts are intentionally ignored. The four file-backed examples
@@ -445,7 +474,7 @@ arrays. Partition counts are intentionally ignored. The four file-backed example
 Bool-only projected reference zero denotes no theory projection; a satisfiable
 formula projected onto an empty vocabulary has one Boolean assignment.
 
-[`tests/test_bank_cases.py`](tests/test_bank_cases.py) exercises every inline
+[`tests/integration/test_bank_cases.py`](tests/integration/test_bank_cases.py) exercises every inline
 formula with both theory constructions, complete vocabularies and the
 three native backend/engine pairs. Independent exhaustive SMT checks determine
 consistency of original-atom valuations. Reduced truth is `phi and consistent`;
@@ -456,11 +485,13 @@ implication, before and after save/load. d4 cases requiring universal eliminatio
 must raise its capability exception. Existing ddnnife terminal-circuit query
 exclusions remain; this change does not expand constant handling.
 
-[`tests/test_quantified_compilation.py`](tests/test_quantified_compilation.py)
+[`tests/compilers/test_compilers.py`](tests/compilers/test_compilers.py)
 independently enumerates Boolean truth tables for existential, universal,
 and unquantified compilation, with mixed requests rejected. It covers empty retained and declared vocabularies, absent free
 dimensions, sparse IDs, invalid declarations, and d4 rejection before execution.
-A generated-atom extended regression checks reconstruction and BDD/SDD persistence.
+A generated-atom extended regression in
+[`tests/integration/test_projection_roundtrip.py`](tests/integration/test_projection_roundtrip.py)
+checks reconstruction and BDD/SDD persistence.
 
 The migration map is: shared native compiler fixtures declare `all_atoms` and
 existential omissions; theory pipeline tests distinguish generated from original
@@ -475,20 +506,10 @@ reported corpus failures are not evidence of current failures; only independentl
 reproduced results should be reported as such.
 
 
-Current inventory: **18 test modules**, **113 test function/method definitions**
-(including definitions in the two shared base modules, counted once), and
-**1,299 collected test cases** after inheritance and parametrization. Support
-modules `conftest.py`, `formula_bank.py`, and `bank_cases.py` supply fixtures
-and formulas.
-
-| Integration boundary | Test definitions | Collected cases |
-| --- | ---: | ---: |
-| Native quantifiers and generated-atom regression | 5 | 194 |
-| Supplied theory corpus | 1 | 162 |
-| Existing compiler, engine, pipeline, normalization, ownership, metrics and persistence checks | 107 | 943 |
-
-
-Verification: all **1,299 tests passed**, including all 27 inline corpus formulas,
-162 corpus combinations, and independent native
-quantifier truth tables. Ruff lint/format, basedpyright and diff checks passed.
-The run emitted PySMT/MathSAT warnings and CUDD cleanup warnings.
+The merged suite collects **1,337 cases**: **1,335 pass** and **2 retain existing
+ddnnife terminal-circuit skips**. All **27 bank formulas / 162 backend-strategy
+combinations** pass. Ruff lint and formatting, Pyright, basedpyright, and
+whitespace/conflict checks pass. Existing PySMT and native dependency warnings
+remain. Tests are organized under `tests/compilation/`, `tests/compilers/`,
+`tests/core/`, `tests/queries/`, `tests/persistence/`, and `tests/integration/`,
+with the bank and quantified modules retained at their source paths.
