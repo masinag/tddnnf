@@ -9,9 +9,11 @@ requires-python = ">=3.12"
 dependencies = [
     "pysmt>=0.9.7.dev431",
     "pysdd>=1.0.6",
-    "dd",
+    "dd>=0.6.0",
     "ddnnife>=0.1.0",
     "tlemma-enum @ git+https://github.com/ecivini/tlemmas-enumeration.git@develop",
+    "cmake<4",
+    "ninja>=1.13.2",
 ]
 
 [project.optional-dependencies]
