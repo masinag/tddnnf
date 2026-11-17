@@ -1,11 +1,9 @@
 # d-DNNF Modulo Theories
 
-`tddnnf` is a Python library for compiling and querying SMT formulas in
-deterministic, decomposable negation normal form (d-DNNF) or some stricter
-forms, like ordered binary decision diagrams (OBDDs) or sentential decision
-diagrams (SDDs).
-
-## References
+`tddnnf` is a Python library for compiling, transforming, and querying SMT
+formulas in deterministic, decomposable negation normal form (d-DNNF) or some
+stricter forms, like ordered binary decision diagrams (OBDDs) or sentential
+decision diagrams (SDDs).
 
 The framework implements the following papers:
 
@@ -17,34 +15,46 @@ The framework implements the following papers:
 
 Theory-lemma enumeration is done using the
 [tlemma_enum](https://github.com/ecivini/tlemmas-enumeration/tree/develop)
-package, implementing the paper:
+package.
 
-[3]
-[E. Civini, G. Masina, G. Spallitta, and R. Sebastiani, "Beyond Eager Encodings: A Theory-Agnostic Approach to Theory-Lemma Enumeration in SMT," in IJCAR 2026](https://doi.org/10.1007/978-3-032-32589-1_18).
+## Overview
 
-## Installation
+The key idea behind this framework is to combine an SMT formula with a suitable
+set of theory lemmas so that SMT-level queries reduce to propositional-level
+queries. The resulting formula can then be compiled ---by means of existing
+propositional compilers--- into a target language that supports answering
+propositional queries in polynomial time. By the property above, this also
+allows SMT queries to be answered in polynomial time using existing
+propositional reasoners.
 
-The latest version of the package can be installed via
+We distinguish two classes of formulas, which can be obtained by combining the
+original formula in different ways with different set of theory lemmas.
 
-```bash
-pip install git+https://github.com/masinag/tddnnf.git
-```
+| Class           | Property                                                                             | How to obtain the property for a formula `phi`                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Theory-reduced  | The formula is propositionally satisfied only by theory-consistent truth assignments | `phi ∧ ⋀ᵢ lᵢ`, where `{lᵢ}ᵢ` is a set of theory lemmas ruling out the theory-inconsistent truth assignments that propositionally satisfy `phi`     |
+| Theory-extended | All the theory-inconsistent truth assignments propositionally satisfy the formula    | `phi ∨ ¬(⋀ᵢ kᵢ)`, where `{kᵢ}ᵢ` is a set of theory lemmas ruling out the theory-inconsistent truth assignments that propositionally satisfy `¬phi` |
 
-The framework uses internally the SMT solver MathSAT, which must be installed
-via:
+Each class supports a different set of SMT queries that can be reduced to their
+propositional counterparts.
 
-```bash
-pysmt-install --msat
-```
+| Class           |         CO         |         CE         |         IM         |         VA         |         EQ         |         SE         |         CT         |         ME         |
+| --------------- | :----------------: | :----------------: | :----------------: | :----------------: | :----------------: | :----------------: | :----------------: | :----------------: |
+| Theory-reduced  | :white_check_mark: | :white_check_mark: |                    |                    | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| Theory-extended |                    |                    | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                    |                    |
 
-For d-DNNF compilation with [d4](https://github.com/crillab/d4v2), install the
-compiler with:
+Where:
 
-```bash
-python -m tddnnf.install_bin --d4
-```
-
-Other compilers and queries are installed by default as python dependencies.
+- **CO** (consistency): determine if the formula is theory-satisfiable.
+- **CE** (clause entailment): determine if the formula theory-entails a clause.
+- **IM** (implicant): determine if a cube theory-entails the formula.
+- **VA** (validity): determine if the formula is theory-valid.
+- **EQ** (equivalence): determine if two formulas are theory-equivalent.
+- **SE** (sentence entailment): determine if a formulas theory-entails another
+  formula.
+- **CT** (counting): count the number of theory-satisfiable truth assignments.
+- **ME** (model enumeration): enumerate all the theory-satisfiable truth
+  assignments.
 
 ## Example
 
@@ -76,9 +86,7 @@ phi = (x_gt_0 & y_gt_5) | (x_gt_5 & x_plus_y_gt_5)
 
 # -------- compilation --------
 with TheoryCompilation(phi) as compilation:
-    # Compilation into a theory-reduced or theory-extended representation requires
-    # providing a set of theory lemmas for a specific formula and atom set. These
-    # lemmas can be enumerated via the tlemma_enum package
+    # required theory lemmas can be enumerated via the tlemma_enum package
     enumerator = MathSATTotalEnumerator()
     enumerator.check_all_sat(compilation.phi, atoms=list(compilation.atoms))
     phi_lemmas = enumerator.get_theory_lemmas()
@@ -127,6 +135,8 @@ See the
 repository for all available enumerators, enumeration strategies, configuration
 options, and alternatives.
 
+See the [`examples/`](examples/) directory for more examples.
+
 ## Available components
 
 ### Compilation backends
@@ -161,29 +171,58 @@ with target.queries(SddEngine) as queries:
 
 ### Compilation methods
 
-Use the high-level `TheoryCompilation` methods for compilation.
+The `TheoryCompilation` class is the entry point for compilation. It requires
+specifying the formula `phi` to be compiled, and the set `atoms` of atoms that
+used as the vocabulary for compilation and querying: `atoms` must be a superset
+of the set of atoms occurring the in the formula `phi` and in the subsequent
+queries.
 
-| Method                | Requires lemmas enumerated for | Compiled formula                                         |
-| --------------------- | ------------------------------ | -------------------------------------------------------- |
-| `compile_treduced()`  | `phi`                          | `phi` conjoined with its theory lemmas                   |
-| `compile_textended()` | `Not(phi)`                     | `phi` disjoined with the negation of those theory lemmas |
+`TheoryCompilation` provides two high-level methods for compiling theory-reduced
+and theory-extended d-DNNF formulas:
+
+- `compile_treduced(compiler, lemmas)`;
+- `compile_textended(compiler, lemmas)`.
+
+Each method requires a propositional compiler class, and a suitable set of
+theory lemmas. For a correct result of the subsequent queries, the set of theory
+lemmas must match the [above](#overview) requirements. **Importantly**, the set
+of lemmas must rule out truth assignments over the whole `atoms` set, comprising
+also those atoms that do not occur in `phi` but only in subsequent queries. A
+convenient way to obtain such a set is by using the
+[`tlemma_enum`](https://github.com/ecivini/tlemmas-enumeration/tree/develop)
+package is by explicitly passing the atoms set as
+
+```python
+enumerator.check_all_sat(compilation.phi, atoms=list(compilation.atoms))
+```
+
+for theory-reduced compilation, or
+
+```python
+enumerator.check_all_sat(Not(compilation.phi), atoms=list(compilation.atoms))
+```
+
+for theory-extended compilation.
 
 ### Query operations
 
-All query sessions expose the same operations. However, it must be noted that
-the correctness of the result depends on the supplied target: some SMT queries
-are correct only for theory-reduced formulas, some others only for
-theory-extended formulas, some others for both. See [the paper](#references) for
-details, and the table below for a summary.
+The `QuerySession` is the entry point for queries. It requires specifying a
+compiled formula `theory_target` to be queries, and an propositional query
+engine class `engine_type` be instantiated and used for answering queries.
 
-| Operation                                   | Result                                                                          | Theory-Reduced     | Theory-Extended    |
-| ------------------------------------------- | ------------------------------------------------------------------------------- | ------------------ | ------------------ |
-| `is_satisfiable(assumptions=None)`          | Whether the target has a satisfying truth assignment, optionally under literals | :heavy_check_mark: |                    |
-| `count_truth_assignments(assumptions=None)` | Number of satisfying total truth assignments, optionally under literals         | :heavy_check_mark: |                    |
-| `is_valid()`                                | Whether every truth assignment satisfies the target                             |                    | :heavy_check_mark: |
-| `entails_clause(query_clause)`              | Whether the target entails a clause                                             | :heavy_check_mark: |                    |
-| `is_implicant(query_cube)`                  | Whether a cube implies the target                                               |                    | :heavy_check_mark: |
-| `enumerate_truth_assignments()`             | Iterator over satisfying total truth assignments                                | :heavy_check_mark: |                    |
+Since all the queries are performed at the propositional level, the correctness
+of the answers depends on the theory-reduction or theory-extension properties of
+the supplied compiled formula, as from the [above table](#overview).
+
+`QuerySession` exposes the following operations, corresponding to the
+[above](#overview) queries:
+
+- **CO**: `is_satisfiable(assumptions=None)`
+- **CE**: `entails_clause(query_clause)`
+- **IM**: `is_implicant(query_cube)`
+- **VA**: `is_valid()`
+- **CT**: `count_truth_assignments(assumptions=None)`
+- **ME**: `enumerate_truth_assignments()`
 
 ## Saving lemmas and compiled targets
 
@@ -191,51 +230,66 @@ Since compilation can be expensive, intermediate results can be stored on disk
 and loaded later.
 
 Prepare an artifact directory and persistence imports. This example continues
-from the d4 walkthrough above.
+from the walkthrough above.
 
 ```python
 from pathlib import Path
 
 from pysmt.shortcuts import And, read_smtlib, write_smtlib
 
-from tddnnf.compilers.d4 import D4CompiledTarget
-from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
-
 artifact_dir = Path("artifacts")
 artifact_dir.mkdir(exist_ok=True)
-```
 
-Save the enumerated lemmas as an SMT-LIB formula.
+def save_lemmas(lemmas: list[FNode], lemmas_file: Path) -> None:
+  """Save the enumerated lemmas as an SMT-LIB formula."""
+  write_smtlib(And(lemmas), lemmas_file)
 
-```python
+def load_lemmas(lemmas_file: Path) -> list[FNode]:
+  """Load the SMT-LIB formula and recover the original lemma list."""
+  lemmas_formula = read_smtlib(str(lemmas_file))
+  if lemmas_formula.is_true():
+      loaded_lemmas = []
+  elif lemmas_formula.is_and():
+      loaded_lemmas = list(lemmas_formula.args())
+  else:
+      loaded_lemmas = [lemmas_formula]
+
 lemmas_file = artifact_dir / "lemmas.smt2"
-write_smtlib(And(lemmas), lemmas_file)
+save_lemmas(lemmas, lemmas_file)
+loaded_lemmas = load_lemmas(lemmas_file)
 ```
 
-Load the SMT-LIB formula and recover the original lemma list.
+Similarly, one can save and load the compiled target.
 
 ```python
-lemmas_formula = read_smtlib(str(lemmas_file))
-if lemmas_formula.is_true():
-    loaded_lemmas = []
-elif lemmas_formula.is_and():
-    loaded_lemmas = list(lemmas_formula.args())
-else:
-    loaded_lemmas = [lemmas_formula]
-```
+from tddnnf.compilers.d4 import D4CompiledTarget
 
-Compile from the loaded lemmas and save the target.
-
-```python
-target = compilation.compile_treduced(D4Compiler(), loaded_lemmas)
 target_dir = artifact_dir / "ddnnf"
+
 target.save(target_dir)
-```
-
-Load the target without compiling again by supplying its backend class.
-
-```python
 loaded_target = TheoryCompiledTarget.load(target_dir, D4CompiledTarget)
 ```
 
-See the [`examples/`](examples/) directory for more examples.
+## Installation
+
+The latest version of the package can be installed via
+
+```bash
+pip install git+https://github.com/masinag/tddnnf.git
+```
+
+The framework internally uses the SMT solver MathSAT, which must be installed
+via:
+
+```bash
+pysmt-install --msat
+```
+
+For d-DNNF compilation with [d4](https://github.com/crillab/d4v2), install the
+compiler with:
+
+```bash
+python -m tddnnf.install_bin --d4
+```
+
+Other compilers and queries are installed by default as python dependencies.
