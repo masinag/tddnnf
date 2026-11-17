@@ -70,7 +70,8 @@ class NormalizerWalker(DagWalker):
     def walk(self, formula: FNode, **kwargs: object) -> FNode:
         if self._closed:
             raise RuntimeError("Normalizer is closed")
-        assert owns_dags(self.env, (formula,)), "Formula must belong to the selected environment"
+        if not owns_dags(self.env, (formula,)):
+            raise ValueError("Formula must belong to the selected environment")
         with SuspendTypeChecking(self.env):
             return super().walk(formula, **kwargs)
 

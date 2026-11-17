@@ -30,6 +30,59 @@ BACKENDS = [
 ]
 
 
+@pytest.mark.parametrize("compiler_type, target_type, engine_type", BACKENDS)
+@pytest.mark.parametrize("include_unused", [False, True], ids=["formula-atoms", "unused-retained-atom"])
+@pytest.mark.parametrize(
+    "eliminated_names, retained_names, expected_count",
+    [
+        pytest.param((), ("A", "B", "p", "q"), 5, id="eliminate-none"),
+        pytest.param(("A",), ("B", "p", "q"), 4, id="eliminate-A"),
+        pytest.param(("B",), ("A", "p", "q"), 4, id="eliminate-B"),
+        pytest.param(("A", "B"), ("p", "q"), 3, id="eliminate-A-B"),
+        pytest.param(("p", "q"), ("A", "B"), 3, id="eliminate-p-q"),
+    ],
+)
+def test_reduced_projection_retains_only_declared_unquantified_atoms(
+    env, compiler_type, target_type, engine_type, include_unused, eliminated_names, retained_names, expected_count
+):
+    mgr = env.formula_manager
+    x, y = (mgr.Symbol(name, REAL) for name in ("x", "y"))
+    a, b = (mgr.Symbol(name) for name in ("A", "B"))
+    p, q = mgr.LE(x, mgr.Real(0)), mgr.Equals(x, mgr.Real(1))
+    r, s = mgr.LE(x, mgr.Real(1)), mgr.GE(x, mgr.Real(1))
+    u = mgr.LE(y, mgr.Real(0))
+    atoms = {"A": a, "B": b, "p": p, "q": q}
+    declared = (a, b, p, q)
+    retained = tuple(atoms[name] for name in retained_names)
+    if include_unused:
+        declared = (u, *declared)
+        retained = (u, *retained)
+        expected_count *= 2
+    phi = mgr.And(mgr.Implies(a, p), mgr.Implies(b, q))
+    lemmas = [
+        mgr.Or(mgr.Not(p), mgr.Not(s)),
+        mgr.Or(mgr.Not(p), r),
+        mgr.Or(mgr.Not(q), r),
+        mgr.Or(mgr.Not(q), s),
+        mgr.Or(q, mgr.Not(r), mgr.Not(s)),
+    ]
+    with TheoryCompilation(phi, atoms=declared, env=env) as compilation:
+        target = compilation.compile_treduced(
+            compiler_type(), lemmas, exists_atoms=[atoms[name] for name in eliminated_names]
+        )
+
+    assert target.atoms == retained
+    expected = theory_models(env, phi, retained)
+    assert len(expected) == expected_count
+    with target.queries(engine_type) as session:
+        assert session.count_truth_assignments() == expected_count
+        assignments = list(session.enumerate_truth_assignments())
+        assert all(tuple(assignment) == retained for assignment in assignments)
+        models = [tuple(assignment[atom] for atom in retained) for assignment in assignments]
+        assert len(models) == len(set(models))
+        assert set(models) == expected
+
+
 def workflow_cases(extended: bool) -> list:
     cases = []
     for case in BANK_CASES:

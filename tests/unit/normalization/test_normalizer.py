@@ -49,7 +49,7 @@ def test_rejects_foreign_inputs(env: Environment, entry: str):
     foreign = Environment().formula_manager.Symbol("p")
     assert foreign is not local
     with NormalizerWalker(env) as normalizer:
-        with pytest.raises(AssertionError, match="selected environment"):
+        with pytest.raises(ValueError, match="selected environment"):
             getattr(normalizer, entry)(foreign)
 
 
