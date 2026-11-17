@@ -17,7 +17,7 @@ def test_rejects_foreign_inputs_before_backend_compilation(env: Environment, ent
     foreign = Environment().formula_manager.Symbol("p")
     assert foreign is not local
     compiler = Mock(spec=PropCompiler)
-    with pytest.raises(AssertionError, match="selected environment"):
+    with pytest.raises(ValueError, match="selected environment"):
         with TheoryCompilation(
             foreign if entry == "formula" else local,
             atoms=[local, foreign] if entry == "vocabulary" else None,
@@ -129,3 +129,37 @@ def test_reduced_compilation_preserves_and_extends_supplied_sparse_abstraction(e
     assert compiler.compile.call_args.args[1] is abstractor
     assert compiler.compile.call_args.kwargs["all_atoms"] == (p, generated)
     assert result.atoms == (p,)
+
+
+def test_reduced_projection_combines_requested_and_lemma_atoms_without_changing_session(env: Environment):
+    mgr = env.formula_manager
+    p, q, generated = (mgr.Symbol(name) for name in ("p", "q", "generated"))
+    compiler = Mock(spec=PropCompiler)
+    compiler.compile.return_value = Mock(spec=PropCompiledTarget)
+    stats = {}
+    with TheoryCompilation(mgr.And(p, q), atoms=[q, p], env=env) as compilation:
+        result = compilation.compile_treduced(compiler, [generated], stats, exists_atoms=[q])
+        compiler.compile.assert_called_once_with(
+            mgr.And(compilation.phi, generated),
+            result.abstr,
+            all_atoms=(q, p, generated),
+            exists_atoms=(q, generated),
+            forall_atoms=(),
+            computation_logger=stats,
+        )
+        assert result.atoms == (p,)
+        assert stats["n_projection_atoms"] == 1
+        assert compilation.atoms == (q, p)
+        unprojected = compilation.compile_treduced(compiler, [], stats)
+        assert unprojected.atoms == (q, p)
+        assert stats["n_projection_atoms"] == 2
+
+
+def test_reduced_projection_rejects_undeclared_atoms_before_backend_compilation(env: Environment):
+    mgr = env.formula_manager
+    p, q = mgr.Symbol("p"), mgr.Symbol("q")
+    compiler = Mock(spec=PropCompiler)
+    with TheoryCompilation(p, env=env) as compilation:
+        with pytest.raises(ValueError, match="must be a subset of the compilation atoms"):
+            compilation.compile_treduced(compiler, [], exists_atoms=[q])
+    compiler.compile.assert_not_called()

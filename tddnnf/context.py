@@ -90,16 +90,19 @@ class TheoryCompilation:
         lemmas: Iterable[FNode],
         computation_logger: dict[str, object] | None = None,
         *,
+        exists_atoms: Sequence[FNode] | None = None,
         abstractor: Abstractor | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
-        """Compile exists W. (phi and L), eliminating only lemma atoms outside atoms.
+        """Compile exists V. exists W. (phi and L), retaining declared atoms outside V.
 
         Here:
         - phi is the formula to be compiled. The set of atoms in phi must be a subset of the atoms of TheoryCompilation.
-        - L is the conjuction of the supplied lemmas, that must rule out the theory-inconsistent truth assignments propositionally satisfy phi
+        - L is the conjuction of the supplied lemmas, that must rule out the theory-inconsistent truth assignments that
+          propositionally satisfy phi
         - W is the subset of theory atoms appearing in L but not in atoms.
-        """  # noqa: E501
-        return self._compile(compiler, lemmas, False, computation_logger, abstractor)
+        - V is the set of atoms `exists_atoms`
+        """
+        return self._compile(compiler, lemmas, False, exists_atoms, computation_logger, abstractor)
 
     def compile_textended(
         self,
@@ -113,25 +116,32 @@ class TheoryCompilation:
 
         Here:
         - phi is the formula to be compiled. The set of atoms in phi must be a subset of the atoms of TheoryCompilation.
-        - L is the conjuction of the supplied lemmas, that must rule out the theory-inconsistent truth assignments propositionally satisfy (not phi)
+        - L is the conjuction of the supplied lemmas, that must rule out the theory-inconsistent truth assignments that
+          propositionally satisfy (not phi)
         - W is the subset of theory atoms appearing in L but not in atoms.
-        """  # noqa: E501
-        return self._compile(compiler, lemmas, True, computation_logger, abstractor)
+        """
+        return self._compile(compiler, lemmas, True, (), computation_logger, abstractor)
 
     def _compile(
         self,
         compiler: PropCompiler[T_Target],
         lemmas: Iterable[FNode],
         extended: bool,
+        exists_atoms: Sequence[FNode] | None,
         computation_logger: dict[str, object] | None = None,
         abstractor: Abstractor | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
         self._ensure_open()
         if isinstance(compiler, (str, type)) or not isinstance(compiler, PropCompiler):
             raise TypeError("Expected a configured compiler instance")
-        assert abstractor is None or owns_dags(self._env, abstractor.id_to_atom.values()), (
-            "Abstraction must belong to the selected environment"
-        )
+        if abstractor is not None and not owns_dags(self._env, abstractor.id_to_atom.values()):
+            raise ValueError("Abstraction must belong to the selected environment")
+        if exists_atoms and extended:
+            raise ValueError("Existential quantification for theory-extended formulas is currently unsupported")
+        exists_atoms_set = set(exists_atoms or ())
+        if not exists_atoms_set.issubset(self.atoms):
+            raise ValueError("The set of atoms to existentially quantify must be a subset of the compilation atoms")
+        retained_atoms = tuple(atom for atom in self.atoms if atom not in exists_atoms_set)
         normalized_lemmas = [self.normalize(lemma) for lemma in lemmas]
         stats = StatsCollector(computation_logger)
         with stats.track_time("build_time"):
@@ -143,8 +153,9 @@ class TheoryCompilation:
             )
             if abstractor is None:
                 abstractor = Abstractor()
-            quantified = tuple(sorted(combined.get_atoms() - set(self.atoms), key=FNode.node_id))
-            all_atoms = (*self.atoms, *quantified)
+            extra_atoms_in_lemmas = combined.get_atoms() - set(self.atoms)
+            quantified = tuple(sorted(exists_atoms_set | extra_atoms_in_lemmas, key=FNode.node_id))
+            all_atoms = (*self.atoms, *sorted(extra_atoms_in_lemmas, key=FNode.node_id))
             for atom in all_atoms:
                 abstractor.get_id(atom)
             artifact = compiler.compile(
@@ -156,8 +167,8 @@ class TheoryCompilation:
                 computation_logger=computation_logger,
             )
         stats.log("n_lemmas", len(normalized_lemmas))
-        stats.log("n_projection_atoms", len(self.atoms))
-        return TheoryCompiledTarget(artifact, abstractor, atoms=self.atoms, env=self._env)
+        stats.log("n_projection_atoms", len(retained_atoms))
+        return TheoryCompiledTarget(artifact, abstractor, atoms=retained_atoms, env=self._env)
 
     def _normalize_atom(self, atom: FNode) -> FNode | None:
         positive = atom.arg(0) if atom.is_not() else atom
