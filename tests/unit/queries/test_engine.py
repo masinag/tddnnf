@@ -5,14 +5,14 @@ from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.shortcuts import FALSE, TRUE, And, Not, Or, Symbol
 
-from tddnnf.compilers.cudd import BddCompiler
-from tddnnf.compilers.d4 import D4Compiler
-from tddnnf.compilers.pysdd import SddCompiler
+from tddnnf.compilation.cudd import BddCompiler
+from tddnnf.compilation.d4 import D4Compiler
+from tddnnf.compilation.pysdd import SddCompiler
+from tddnnf.compilation.targets import TheoryCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import QueryEngine
-from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tddnnf.queries.bdd_engine import BddEngine
 from tddnnf.queries.ddnnife_engine import DdnnifeEngine
+from tddnnf.queries.engine import QueryEngine
 from tddnnf.queries.sdd_engine import SddEngine
 from tests.helpers import satisfiable, theory_models
 from tests.unit.cases import ELIMINATION_CASES, PLAIN_CASES

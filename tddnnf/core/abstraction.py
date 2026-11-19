@@ -13,7 +13,7 @@ from tddnnf.core.pysmt_utils import is_atom
 
 
 class Abstractor:
-    """Append-only bidirectional map between SMT atoms and integer IDs."""
+    """Append-only bidirectional map between atoms and integer IDs."""
 
     def __init__(self, abstraction: Mapping[int, FNode] | None = None) -> None:
         atoms = dict(abstraction) if abstraction is not None else {}

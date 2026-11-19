@@ -7,27 +7,26 @@ from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.shortcuts import get_env
 
+from tddnnf.compilation.compiler import PropCompiler
+from tddnnf.compilation.targets import T_Target, TheoryCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import PropCompiler, T_Target
 from tddnnf.core.pysmt_utils import is_atom, owns_dags
 from tddnnf.core.stats_collector import StatsCollector
-from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tddnnf.normalization.normalizer import NormalizerWalker
 
 
 class TheoryCompilation:
-    """Normalize inputs and compile either theory construction through one pipeline.
+    """Entry point for SMT-level Knowledge Compilation.
 
-    Callers must provide Boolean FNodes for phi and lemmas, with all input DAGs
-    (including vocabulary entries) belonging to the selected environment.
-    Supplied-node ownership is asserted before normalization or compilation;
-    type hints and descendant ownership remain caller preconditions.
-    Formula and lemma inputs must be quantifier-free. atoms declares Boolean
-    symbols and theory atoms (such as x < 2), not underlying SMT symbols (x).
-    It must contain every normalized phi atom; extra query atoms and absent free
-    dimensions are supported. By default atoms follow normalized node-ID order.
-    Explicit entries are normalized, made positive, deduplicated in first-use
-    order, and discarded when they normalize to constants.
+    Given an SMT formula and a superset of its atoms, this class exposes high-level methods for compiling theory-reduced
+    and theory-extended equivalent formulas into some target compilation language.
+    The class is responsible for:
+    - correctly constructing the mapping between atoms and indices representing their Boolean abstraction. Theory-atoms
+      are normalized to a canonical form.
+    - properly combining the formula with a supplied set of theory-lemmas, so to build a theory-equivalent formula that
+      is either theory-reduced or theory-extended.
+    - invoking the supplied Boolean compiler on the Boolean abstraction of the theory-reduced or theory-extended formula
+    - constructing the `TheoryCompilationTarget` with the atom mapping and the compiled Boolean abstraction.
     """
 
     def __init__(
@@ -36,14 +35,12 @@ class TheoryCompilation:
         atoms: Sequence[FNode] | None = None,
         env: Environment | None = None,
     ) -> None:
-        """Create a session with the complete normalized atom vocabulary atoms.
+        """Create a compilation session.
 
-        Default to normalized phi atoms in node-ID order. Explicit entries are
-        normalized, made positive, deduplicated in first-occurrence order, and
-        discarded if they normalize to constants. Missing normalized phi atoms
-        raise ValueError; extra query atoms and absent dimensions are allowed.
-        Entries denote Boolean/theory atoms, not underlying SMT symbols.
-        Formula and lemma inputs must be quantifier-free.
+        Args:
+            phi: the formula to compile.
+            atoms: the superset of atoms to consider the formula over.
+            env: the PySMT environment.
         """
         self._env = env if env is not None else get_env()
         self._closed = False
@@ -69,7 +66,6 @@ class TheoryCompilation:
         self.close()
 
     def close(self) -> None:
-        """Release normalization resources; safe to call repeatedly."""
         self._closed = True
         if self._normalizer is not None:
             self._normalizer.close()
@@ -79,7 +75,14 @@ class TheoryCompilation:
             raise RuntimeError("Compilation session is closed")
 
     def normalize(self, formula: FNode) -> FNode:
-        """Normalize a Boolean FNode supplied in this session's environment."""
+        """Normalize an SMT formula using the session normalizer.
+
+        Args:
+            formula: the formula to normalize.
+
+        Returns:
+            the normalized formula.
+        """
         self._ensure_open()
         assert self._normalizer is not None
         return self._normalizer.normalize(formula)
@@ -93,14 +96,24 @@ class TheoryCompilation:
         exists_atoms: Sequence[FNode] | None = None,
         abstractor: Abstractor | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
-        """Compile exists V. exists W. (phi and L), retaining declared atoms outside V.
+        """Compile a theory-reduced formula theory-equivalent to self.phi in the `T_Target` compilation language.
 
-        Here:
-        - phi is the formula to be compiled. The set of atoms in phi must be a subset of the atoms of TheoryCompilation.
-        - L is the conjuction of the supplied lemmas, that must rule out the theory-inconsistent truth assignments that
-          propositionally satisfy phi
-        - W is the subset of theory atoms appearing in L but not in atoms.
-        - V is the set of atoms `exists_atoms`
+        Using `PropCompiler`, compile the Boolean abstraction of `exists V. exists W. (phi and L)`, where:
+        - `phi` is the formula to be compiled. `atoms(phi)` must be a subset of `self.atoms`.
+        - `L` is the conjunction of the supplied `lemmas`
+        - `W` is the subset of theory atoms appearing in L but not in atoms.
+        - `V` is the set of atoms `exists_atoms`
+
+        Args:
+            compiler: Boolean compiler to use.
+            lemmas: set of theory-lemmas that must rule out the theory-inconsistent truth assignments over `self.atoms`
+                that propositionally satisfy `self.phi`
+            computation_logger: a dictionary where to store compilation statistics.
+            exists_atoms: set of atoms to existentially quantify during compilation.
+            abstractor: mapping between atoms and indices
+
+        Returns:
+            a `TheoryCompiledTarget` containing the compiled Boolean abstraction and the atoms refinement mapping.
         """
         return self._compile(compiler, lemmas, False, exists_atoms, computation_logger, abstractor)
 
@@ -112,13 +125,22 @@ class TheoryCompilation:
         *,
         abstractor: Abstractor | None = None,
     ) -> TheoryCompiledTarget[T_Target]:
-        """Compile forall W. (phi or not L).
+        """Compile a theory-extended formula theory-equivalent to self.phi in the `T_Target` compilation language.
 
-        Here:
-        - phi is the formula to be compiled. The set of atoms in phi must be a subset of the atoms of TheoryCompilation.
-        - L is the conjuction of the supplied lemmas, that must rule out the theory-inconsistent truth assignments that
-          propositionally satisfy (not phi)
-        - W is the subset of theory atoms appearing in L but not in atoms.
+        Using `PropCompiler`, compile the Boolean abstraction of `forall W. (phi or not L)`, where:
+        - `phi` is the formula to be compiled. `atoms(phi)` must be a subset of `self.atoms`.
+        - `L` is the conjunction of the supplied `lemmas`.
+        - `W` is the subset of theory atoms appearing in L but not in atoms.
+
+        Args:
+            compiler: Boolean compiler to use.
+            lemmas: set of theory-lemmas that must rule out the theory-inconsistent truth assignments over `self.atoms`
+                that propositionally satisfy `(not self.phi)`
+            computation_logger: a dictionary where to store compilation statistics.
+            abstractor: mapping between atoms and indices
+
+        Returns:
+            a `TheoryCompiledTarget` containing the compiled Boolean abstraction and the atoms refinement mapping.
         """
         return self._compile(compiler, lemmas, True, (), computation_logger, abstractor)
 
@@ -171,6 +193,7 @@ class TheoryCompilation:
         return TheoryCompiledTarget(artifact, abstractor, atoms=retained_atoms, env=self._env)
 
     def _normalize_atom(self, atom: FNode) -> FNode | None:
+        """Normalize an atom to a canonical form."""
         positive = atom.arg(0) if atom.is_not() else atom
         if positive.is_bool_constant() or not is_atom(positive):
             raise ValueError("Vocabulary entries must be Boolean symbols or theory atoms, optionally negated")

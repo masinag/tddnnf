@@ -14,8 +14,9 @@ from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 from pysmt.walkers import DagWalker, handles
 
+from tddnnf.compilation.compiler import PropCompiler
+from tddnnf.compilation.targets import DagSize, PropCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 from tddnnf.core.pysmt_utils import compilation_vocabulary
 from tddnnf.core.stats_collector import StatsCollector
@@ -303,7 +304,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
 
     def compile(
         self,
-        formula: FNode,
+        phi: FNode,
         abstractor: Abstractor,
         *,
         all_atoms: Sequence[FNode],
@@ -311,7 +312,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
         forall_atoms: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
     ) -> D4CompiledTarget:
-        retained = compilation_vocabulary(formula, all_atoms, exists_atoms, forall_atoms)
+        retained = compilation_vocabulary(phi, all_atoms, exists_atoms, forall_atoms)
         assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"
         if forall_atoms:
             raise NotImplementedError("d4 does not support universal variable elimination")
@@ -319,11 +320,11 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
         with stats.track_time("compile_time"):
             atoms = list(all_atoms)
             if not atoms:
-                if formula.is_true():
+                if phi.is_true():
                     stats.log("n_atoms", 0)
                     stats.log("n_proj_vars", 0)
                     return D4CompiledTarget("t 1\n", 0)
-                if formula.is_false():
+                if phi.is_false():
                     stats.log("n_atoms", 0)
                     stats.log("n_proj_vars", 0)
                     return D4CompiledTarget("f 1\n", 0)
@@ -345,7 +346,7 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
                 out_path = tmp / "output.nnf"
 
                 with stats.track_time("write_circuit_time"):
-                    self._write_circuit(formula, abstractor, remapping, projected_ids, circuit_path)
+                    self._write_circuit(phi, abstractor, remapping, projected_ids, circuit_path)
                 with stats.track_time("run_d4_time"):
                     self._run_d4(circuit_path, out_path)
 

@@ -11,8 +11,9 @@ from pysmt.formula import FormulaManager
 from pysmt.typing import BOOL
 from pysmt.walkers import DagWalker, handles
 
+from tddnnf.compilation.compiler import PropCompiler
+from tddnnf.compilation.targets import DagSize, PropCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 from tddnnf.core.pysmt_utils import compilation_vocabulary
 from tddnnf.core.stats_collector import StatsCollector
@@ -175,7 +176,7 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
 
     def compile(
         self,
-        formula: FNode,
+        phi: FNode,
         abstractor: Abstractor,
         *,
         all_atoms: Sequence[FNode],
@@ -183,7 +184,7 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
         forall_atoms: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
     ) -> BddCompiledTarget:
-        retained = compilation_vocabulary(formula, all_atoms, exists_atoms, forall_atoms)
+        retained = compilation_vocabulary(phi, all_atoms, exists_atoms, forall_atoms)
         assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
@@ -192,7 +193,7 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
             for i in sorted(abstractor.get_id(atom) for atom in atoms):
                 mgr.declare(f"b{i}")
             walker = BddWalker(mgr, abstractor)
-            root = walker.translate(formula)
+            root = walker.translate(phi)
             with stats.track_time("forget_time"):
                 universal = [f"b{abstractor.get_id(atom)}" for atom in forall_atoms]
                 existential = [f"b{abstractor.get_id(atom)}" for atom in exists_atoms]

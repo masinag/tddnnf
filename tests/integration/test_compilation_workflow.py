@@ -12,12 +12,13 @@ from pysmt.typing import BOOL, INT, REAL, ArrayType, BVType
 from tlemma_enum.solvers.mathsat_total import MathSATTotalEnumerator
 
 from tddnnf import TheoryCompilation
-from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
-from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
-from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
-from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler, QueryEngine
-from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
-from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
+from tddnnf.compilation.compiler import PropCompiler
+from tddnnf.compilation.cudd import BddCompiledTarget, BddCompiler
+from tddnnf.compilation.d4 import D4CompiledTarget, D4Compiler
+from tddnnf.compilation.pysdd import SddCompiledTarget, SddCompiler
+from tddnnf.compilation.targets import PropCompiledTarget, TheoryCompiledTarget
+from tddnnf.queries import BddEngine, DdnnifeEngine, QuerySession, SddEngine
+from tddnnf.queries.engine import QueryEngine
 from tests.helpers import satisfiable, theory_models
 from tests.integration.bank_cases import BANK_CASES
 
@@ -74,7 +75,7 @@ def test_reduced_projection_retains_only_declared_unquantified_atoms(
     assert target.atoms == retained
     expected = theory_models(env, phi, retained)
     assert len(expected) == expected_count
-    with target.queries(engine_type) as session:
+    with QuerySession(target, engine_type) as session:
         assert session.count_truth_assignments() == expected_count
         assignments = list(session.enumerate_truth_assignments())
         assert all(tuple(assignment) == retained for assignment in assignments)
@@ -160,7 +161,7 @@ def test_reduced_workflow(
     loaded = TheoryCompiledTarget.load(directory, target_type, env=env)
     for container in (target, loaded):
         assert container.atoms == atoms
-        with container.queries(engine_type) as session:
+        with QuerySession(container, engine_type) as session:
             assert session.is_satisfiable() == bool(expected)
             assert session.count_truth_assignments() == model_count
             assignments = list(session.enumerate_truth_assignments())
@@ -212,7 +213,7 @@ def test_extended_workflow(
     loaded = TheoryCompiledTarget.load(directory, target_type, env=env)
     for container in (target, loaded):
         assert container.atoms == atoms
-        with container.queries(engine_type) as session:
+        with QuerySession(container, engine_type) as session:
             assert session.is_valid() == valid
             assert session.count_truth_assignments() == len(expected)
             assignments = list(session.enumerate_truth_assignments())
@@ -266,7 +267,7 @@ def test_reduced_extra_atom_workflow(
     loaded = TheoryCompiledTarget.load(directory, target_type, env=env)
     for container in (target, loaded):
         assert container.atoms == declared_atoms
-        with container.queries(engine_type) as session:
+        with QuerySession(container, engine_type) as session:
             assert session.is_satisfiable()
             assert session.count_truth_assignments() == len(expected)
             assignments = list(session.enumerate_truth_assignments())
@@ -308,7 +309,7 @@ def test_extended_extra_atom_workflow(
     loaded = TheoryCompiledTarget.load(directory, target_type, env=env)
     for container in (target, loaded):
         assert container.atoms == declared_atoms
-        with container.queries(engine_type) as session:
+        with QuerySession(container, engine_type) as session:
             assert session.is_valid() == valid
             assert session.count_truth_assignments() == len(expected)
             assignments = list(session.enumerate_truth_assignments())

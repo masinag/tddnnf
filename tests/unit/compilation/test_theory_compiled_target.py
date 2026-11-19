@@ -5,10 +5,9 @@ import pytest
 from pysmt.environment import Environment, get_env
 from pysmt.formula import FormulaManager
 
+from tddnnf.compilation.targets import DagSize, TheoryCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import DagSize
 from tddnnf.core.persistence import write_metadata
-from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
 from tests.helpers import owns_dag
 
 

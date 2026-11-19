@@ -5,8 +5,9 @@ from pysmt.environment import Environment
 from pysmt.typing import INT
 
 from tddnnf import TheoryCompilation
+from tddnnf.compilation.compiler import PropCompiler
+from tddnnf.compilation.targets import PropCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
 
 
 @pytest.mark.parametrize("entry", ["formula", "vocabulary", "lemma", "normalize", "abstraction"])

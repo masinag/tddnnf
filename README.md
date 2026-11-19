@@ -72,8 +72,8 @@ from pysmt.typing import REAL
 from tlemma_enum.solvers import MathSATTotalEnumerator
 
 from tddnnf import TheoryCompilation
-from tddnnf.compilers.d4 import D4Compiler
-from tddnnf.queries import DdnnifeEngine
+from tddnnf.compilation.d4 import D4Compiler
+from tddnnf.queries import DdnnifeEngine, QuerySession
 
 x = Symbol("x", REAL)
 y = Symbol("y", REAL)
@@ -100,7 +100,7 @@ with TheoryCompilation(phi) as compilation:
 print(f"Formula: {phi}")
 print()
 # -------- querying theory-reduced --------
-with tred_target.queries(DdnnifeEngine) as engine:
+with QuerySession(tred_target, DdnnifeEngine) as engine:
     assumptions = [~y_gt_5, ~x_gt_0]
     clause = x_gt_5 | x_plus_y_gt_5
     print(f"Is T-SAT? {engine.is_satisfiable()}")
@@ -110,7 +110,7 @@ with tred_target.queries(DdnnifeEngine) as engine:
     print(f"# T-SAT truth assignments under assumptions {assumptions}: {engine.count_truth_assignments(assumptions)}")
 
 # -------- querying theory-extended --------
-with text_target.queries(DdnnifeEngine) as engine:
+with QuerySession(text_target, DdnnifeEngine) as engine:
     cube = x_gt_5 & x_plus_y_gt_5
     print(f"Is T-valid? {engine.is_valid()}")
     print(f"{cube} is T-implicant? {engine.is_implicant(cube)}")
@@ -161,11 +161,11 @@ matching engine(s).
 For example, the above formula can be compiled into an SDD and queried via
 
 ```python
-from tddnnf.compilers import SddCompiler
-from tddnnf.queries import SddEngine
+from tddnnf.compilation import SddCompiler
+from tddnnf.queries import QuerySession, SddEngine
 
 target = compilation.compile_treduced(SddCompiler(), lemmas)
-with target.queries(SddEngine) as queries:
+with QuerySession(target, SddEngine) as queries:
     print(queries.count_truth_assignments())
 ```
 
@@ -262,7 +262,7 @@ loaded_lemmas = load_lemmas(lemmas_file)
 Similarly, one can save and load the compiled target.
 
 ```python
-from tddnnf.compilers.d4 import D4CompiledTarget
+from tddnnf.compilation.d4 import D4CompiledTarget
 
 target_dir = artifact_dir / "ddnnf"
 

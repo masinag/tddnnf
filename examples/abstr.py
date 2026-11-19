@@ -4,10 +4,10 @@ from pysmt.shortcuts import GT, Not, Or, Plus, Real, Symbol
 from pysmt.typing import REAL
 
 from tddnnf import TheoryCompilation
-from tddnnf.compilers.cudd import BddCompiler
-from tddnnf.compilers.d4 import D4Compiler
-from tddnnf.compilers.pysdd import SddCompiler
-from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
+from tddnnf.compilation.cudd import BddCompiler
+from tddnnf.compilation.d4 import D4Compiler
+from tddnnf.compilation.pysdd import SddCompiler
+from tddnnf.queries import BddEngine, DdnnifeEngine, QuerySession, SddEngine
 
 # ---- SMT ATOMS ----
 
@@ -38,5 +38,5 @@ with TheoryCompilation(phi, atoms=atoms) as compilation:
     ]:
         print(f"=== T-Reduced ({name}) ===")
         target = compilation.compile_treduced(compiler(), [])
-        with target.queries(engine_type) as engine:
+        with QuerySession(target, engine_type) as engine:
             print(f"Is sat under assumpions {assumptions}? (unsound) {engine.is_satisfiable(assumptions)}")

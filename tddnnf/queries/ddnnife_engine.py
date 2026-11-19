@@ -3,17 +3,14 @@ from __future__ import annotations
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import ddnnife
 from pysmt.fnode import FNode
 
-from tddnnf.compilers.d4 import D4CompiledTarget
-
-if TYPE_CHECKING:
-    from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
-from tddnnf.core.interfaces import QueryEngine
+from tddnnf.compilation.d4 import D4CompiledTarget
+from tddnnf.compilation.targets import TheoryCompiledTarget
 from tddnnf.core.pysmt_utils import clause_lits, cube_lits
+from tddnnf.queries.engine import QueryEngine
 
 
 class DdnnifeEngine(QueryEngine[D4CompiledTarget]):

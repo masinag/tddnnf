@@ -2,17 +2,64 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Generic
+from typing import Generic, Protocol, Self, TypeVar, runtime_checkable
 
 from pysmt.environment import Environment, get_env
 from pysmt.fnode import FNode
+from pysmt.formula import FormulaManager
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import DagSize, PropCompiledTarget, QueryEngine, T_Target
 from tddnnf.core.persistence import read_json, saving_to
 from tddnnf.core.pysmt_utils import owns_dags
-from tddnnf.queries.session import QuerySession
+
+
+@dataclass(frozen=True)
+class DagSize:
+    """DAG size as vertices and edges."""
+
+    vertices: int
+    edges: int
+
+
+@runtime_checkable
+class PropCompiledTarget(Protocol):
+    """A propositional formula compiled into some target language (d-DNNF, SDD, OBDD, ...)."""
+
+    def dag_size(self) -> DagSize:
+        """Return the size of the formula DAG."""
+        ...
+
+    def save(self, directory: Path) -> None:
+        """Persist the target to disk.
+
+        Args:
+            directory: where to store the target.
+        """
+        ...
+
+    @classmethod
+    def load(cls, directory: Path) -> Self:
+        """Load the target from disk.
+
+        Args:
+            directory: where the target is stored.
+        """
+        ...
+
+    def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
+        """Reconstruct the formula from the compiled DAG.
+
+        Args:
+            abstr: mapping from node index to SMT atom.
+            mgr: formula manager to create the FNodes.
+        """
+        ...
+
+
+T_Target = TypeVar("T_Target", bound=PropCompiledTarget)
+T_Target_co = TypeVar("T_Target_co", bound=PropCompiledTarget, covariant=True)
 
 
 class TheoryCompiledTarget(Generic[T_Target]):
@@ -47,10 +94,6 @@ class TheoryCompiledTarget(Generic[T_Target]):
     @property
     def env(self) -> Environment:
         return self._env
-
-    def queries(self, engine_type: type[QueryEngine[T_Target]]) -> QuerySession[T_Target]:
-        """Open an independent session using the explicitly selected engine class."""
-        return QuerySession(self, engine_type)
 
     def dag_size(self) -> DagSize:
         return self.target.dag_size()

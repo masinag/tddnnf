@@ -6,11 +6,12 @@ from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.shortcuts import FALSE, TRUE, And, Not, Or, Symbol
 
-from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
-from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
-from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
+from tddnnf.compilation.compiler import PropCompiler
+from tddnnf.compilation.cudd import BddCompiledTarget, BddCompiler
+from tddnnf.compilation.d4 import D4CompiledTarget, D4Compiler
+from tddnnf.compilation.pysdd import SddCompiledTarget, SddCompiler
+from tddnnf.compilation.targets import PropCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
 from tests.helpers import equivalent
 from tests.unit.cases import ELIMINATION_CASES, PLAIN_CASES
 

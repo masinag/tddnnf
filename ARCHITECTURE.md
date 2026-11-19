@@ -100,7 +100,7 @@ Normalization occurs at both boundaries:
 
 - `TheoryCompilation` normalizes the input formula, projection atoms, and
   lemmas before compilation.
-- `target.queries(Engine)` owns normalization and normalizes query literals,
+- `QuerySession(target, Engine)` owns normalization and normalizes query literals,
   clauses, and cubes before handing them to a backend query engine.
 
 Here, the _compiled formula_ is the Boolean abstraction of the
@@ -248,8 +248,8 @@ if-then-else expansion over its SMT atom.
 
 ## Queries
 
-`target.queries(BddEngine)`, `target.queries(SddEngine)`, and
-`target.queries(DdnnifeEngine)` open independent sessions over their matching
+`QuerySession(target, BddEngine)`, `QuerySession(target, SddEngine)`, and
+`QuerySession(target, DdnnifeEngine)` open independent sessions over their matching
 public backend target classes. Strings, engine instances, and incompatible pairings raise
 `TypeError`. Engines and `QuerySession` are exported from `tddnnf.queries`.
 
@@ -348,8 +348,10 @@ timings remain historical evidence and need fresh timed runs.
 
 ## Protocols and instrumentation
 
-`core/interfaces.py` defines structural protocols rather than a shared backend
-base class:
+The owning subsystems define structural protocols rather than a shared backend
+base class: `compilation/targets.py` contains `PropCompiledTarget`,
+`compilation/compiler.py` contains `PropCompiler`, and `queries/engine.py`
+contains `QueryEngine`.
 
 - `PropCompiledTarget` requires `dag_size()`, `save()`, `load()`, and
   `to_pysmt()`;
@@ -372,24 +374,32 @@ input circuit, and running the external compiler.
 
 ## Package layout
 
+`TheoryCompilation`, `TheoryCompiledTarget`, and `QuerySession` remain available
+from `tddnnf`. The dependency direction is `queries → compilation → core`: the
+compilation package does not import the query layer. Sessions are constructed
+directly with `QuerySession(target, Engine)`.
+The former module paths have been removed without compatibility aliases.
+
 ```text
 tddnnf/
-├── context.py                  # TheoryCompilation
+├── compilation/
+│   ├── theory_compilation.py # TheoryCompilation
+│   ├── compiler.py           # PropCompiler protocol
+│   ├── targets.py            # PropCompiledTarget, TheoryCompiledTarget, DagSize
+│   ├── d4.py                 # d4/d-DNNF compiler and target
+│   ├── pysdd.py              # PySDD compiler and target
+│   └── cudd.py               # CUDD OBDD compiler and target
 ├── core/
-│   ├── abstraction.py         # Abstractor mapping and serialization
-│   ├── theory_compiled_target.py          # TheoryCompiledTarget
-│   ├── interfaces.py          # Backend and query protocols, DagSize
-│   ├── pysmt_utils.py         # Atom, clause, cube, and assumption helpers
-│   └── stats_collector.py     # Optional timing and count instrumentation
+│   ├── abstraction.py        # Abstractor mapping and serialization
+│   ├── persistence.py        # Shared artifact metadata and filesystem helpers
+│   ├── pysmt_utils.py        # Atom, clause, cube, and assumption helpers
+│   └── stats_collector.py    # Optional timing and count instrumentation
 ├── normalization/
-│   └── normalizer.py          # MathSAT-backed NormalizerWalker
-├── compilers/
-│   ├── d4.py                  # d4/d-DNNF compiler and target
-│   ├── pysdd.py               # PySDD compiler and target
-│   └── cudd.py                # CUDD OBDD compiler and target
+│   └── normalizer.py         # MathSAT-backed NormalizerWalker
 └── queries/
-    ├── session.py             # Normalization, validation, lifecycle
-    ├── ddnnife_engine.py       # d-DNNF queries through ddnnife
+    ├── query_session.py      # QuerySession: normalization, validation, lifecycle
+    ├── engine.py             # QueryEngine protocol
+    ├── ddnnife_engine.py      # d-DNNF queries through ddnnife
     ├── sdd_engine.py          # SDD queries
     └── bdd_engine.py          # OBDD queries
 ```

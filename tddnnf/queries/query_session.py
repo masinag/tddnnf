@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Iterable, Sequence
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Generic, Self
+from typing import Generic, Self
 
 from pysmt.fnode import FNode
 
-from tddnnf.core.interfaces import QueryEngine, T_Target
+from tddnnf.compilation.targets import T_Target, TheoryCompiledTarget
 from tddnnf.core.pysmt_utils import is_literal
 from tddnnf.normalization.normalizer import NormalizerWalker
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-
-    from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
+from tddnnf.queries.engine import QueryEngine
 
 
 class QuerySession(Generic[T_Target]):

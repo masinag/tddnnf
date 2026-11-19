@@ -13,8 +13,9 @@ from pysmt.formula import FormulaManager
 from pysmt.typing import BOOL
 from pysmt.walkers import DagWalker, handles
 
+from tddnnf.compilation.compiler import PropCompiler
+from tddnnf.compilation.targets import DagSize, PropCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 from tddnnf.core.pysmt_utils import compilation_vocabulary
 from tddnnf.core.stats_collector import StatsCollector
@@ -215,7 +216,7 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
 
     def compile(
         self,
-        formula: FNode,
+        phi: FNode,
         abstractor: Abstractor,
         *,
         all_atoms: Sequence[FNode],
@@ -223,7 +224,7 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
         forall_atoms: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
     ) -> SddCompiledTarget:
-        retained = compilation_vocabulary(formula, all_atoms, exists_atoms, forall_atoms)
+        retained = compilation_vocabulary(phi, all_atoms, exists_atoms, forall_atoms)
         assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
@@ -238,7 +239,7 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
             else:
                 mgr.auto_gc_and_minimize_off()
             walker = SddWalker(mgr, abstractor, remapping)
-            root = walker.translate(formula)
+            root = walker.translate(phi)
             with stats.track_time("forget_time"):
                 quantified = forall_atoms or exists_atoms
                 if quantified:
