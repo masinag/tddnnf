@@ -21,7 +21,7 @@ from tddnnf.core.pysmt_utils import compilation_vocabulary
 from tddnnf.core.stats_collector import StatsCollector
 
 
-class SddCompiledTarget(PropCompiledTarget):
+class PySddCompiledTarget(PropCompiledTarget):
     """A propositionally compiled SDD target backed by PySDD.
 
     Omitted or empty remapping uses identity over the native variable range.
@@ -122,7 +122,7 @@ class SddCompiledTarget(PropCompiledTarget):
         return cls(root, manager, remapping)
 
 
-class SddWalker(DagWalker):
+class PySddWalker(DagWalker):
     """Walks an SMT formula, building an SDD via recursive apply.
 
     Atom nodes (Bool symbols, theory relations) are mapped to
@@ -189,7 +189,7 @@ class SddWalker(DagWalker):
         return result
 
 
-class SddCompiler(PropCompiler[SddCompiledTarget]):
+class PySddCompiler(PropCompiler[PySddCompiledTarget]):
     """PropCompiler that compiles an SMT formula into an SDD via PySDD.
 
     Accepts the original (non-abstracted) SMT formula. All atoms – both
@@ -223,7 +223,7 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
         exists_atoms: Sequence[FNode] = (),
         forall_atoms: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
-    ) -> SddCompiledTarget:
+    ) -> PySddCompiledTarget:
         retained = compilation_vocabulary(phi, all_atoms, exists_atoms, forall_atoms)
         assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"
         stats = StatsCollector(computation_logger)
@@ -238,7 +238,7 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
                 mgr.auto_gc_and_minimize_on()
             else:
                 mgr.auto_gc_and_minimize_off()
-            walker = SddWalker(mgr, abstractor, remapping)
+            walker = PySddWalker(mgr, abstractor, remapping)
             root = walker.translate(phi)
             with stats.track_time("forget_time"):
                 quantified = forall_atoms or exists_atoms
@@ -253,4 +253,4 @@ class SddCompiler(PropCompiler[SddCompiledTarget]):
                     )
             stats.log("n_atoms", len(atoms))
             stats.log("n_proj_vars", len(retained))
-            return SddCompiledTarget(root, mgr, remapping)
+            return PySddCompiledTarget(root, mgr, remapping)

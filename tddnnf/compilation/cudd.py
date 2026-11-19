@@ -19,7 +19,7 @@ from tddnnf.core.pysmt_utils import compilation_vocabulary
 from tddnnf.core.stats_collector import StatsCollector
 
 
-class BddCompiledTarget(PropCompiledTarget):
+class CuddCompiledTarget(PropCompiledTarget):
     """A propositionally compiled OBDD target backed by CUDD."""
 
     def __init__(self, root: Function, manager: BDD) -> None:
@@ -100,7 +100,7 @@ class BddCompiledTarget(PropCompiledTarget):
         return cls(root, manager)
 
 
-class BddWalker(DagWalker):
+class CuddWalker(DagWalker):
     """Walks an SMT formula, building a BDD via recursive apply.
 
     Atom nodes (Bool symbols, theory relations) are mapped to
@@ -166,7 +166,7 @@ class BddWalker(DagWalker):
         return result
 
 
-class BddCompiler(PropCompiler[BddCompiledTarget]):
+class CuddCompiler(PropCompiler[CuddCompiledTarget]):
     """PropCompiler that compiles an SMT formula into a BDD via CUDD.
 
     Accepts the original (non-abstracted) SMT formula. All atoms -- both
@@ -183,7 +183,7 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
         exists_atoms: Sequence[FNode] = (),
         forall_atoms: Sequence[FNode] = (),
         computation_logger: dict[str, object] | None = None,
-    ) -> BddCompiledTarget:
+    ) -> CuddCompiledTarget:
         retained = compilation_vocabulary(phi, all_atoms, exists_atoms, forall_atoms)
         assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"
         stats = StatsCollector(computation_logger)
@@ -192,7 +192,7 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
             mgr = BDD()
             for i in sorted(abstractor.get_id(atom) for atom in atoms):
                 mgr.declare(f"b{i}")
-            walker = BddWalker(mgr, abstractor)
+            walker = CuddWalker(mgr, abstractor)
             root = walker.translate(phi)
             with stats.track_time("forget_time"):
                 universal = [f"b{abstractor.get_id(atom)}" for atom in forall_atoms]
@@ -203,4 +203,4 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
                     root = root.exist(*existential)
             stats.log("n_atoms", len(atoms))
             stats.log("n_proj_vars", len(retained))
-            return BddCompiledTarget(root, mgr)
+            return CuddCompiledTarget(root, mgr)

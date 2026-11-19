@@ -4,18 +4,18 @@ from collections.abc import Generator
 
 from pysmt.fnode import FNode
 
-from tddnnf.compilation.cudd import BddCompiledTarget
+from tddnnf.compilation.cudd import CuddCompiledTarget
 from tddnnf.compilation.targets import TheoryCompiledTarget
 from tddnnf.core.pysmt_utils import clause_lits, cube_lits
 from tddnnf.queries.engine import QueryEngine
 
 
-class BddEngine(QueryEngine[BddCompiledTarget]):
+class CuddEngine(QueryEngine[CuddCompiledTarget]):
     """Polynomial-time queries over a BDD compiled target."""
 
-    def __init__(self, target: TheoryCompiledTarget[BddCompiledTarget]) -> None:
-        if not isinstance(target.target, BddCompiledTarget):
-            raise TypeError("BddEngine requires BddCompiledTarget")
+    def __init__(self, target: TheoryCompiledTarget[CuddCompiledTarget]) -> None:
+        if not isinstance(target.target, CuddCompiledTarget):
+            raise TypeError("CuddEngine requires CuddCompiledTarget")
         self._target = target.target
         self._abstr = target.abstr
         self._atoms: tuple[FNode, ...] = target.atoms

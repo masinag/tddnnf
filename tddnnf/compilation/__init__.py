@@ -1,5 +1,5 @@
-from tddnnf.compilation.cudd import BddCompiler
+from tddnnf.compilation.cudd import CuddCompiler
 from tddnnf.compilation.d4 import D4Compiler
-from tddnnf.compilation.pysdd import SddCompiler
+from tddnnf.compilation.pysdd import PySddCompiler
 
-__all__ = ["BddCompiler", "D4Compiler", "SddCompiler"]
+__all__ = ["CuddCompiler", "D4Compiler", "PySddCompiler"]

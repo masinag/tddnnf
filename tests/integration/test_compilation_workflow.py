@@ -13,11 +13,11 @@ from tlemma_enum.solvers.mathsat_total import MathSATTotalEnumerator
 
 from tddnnf import TheoryCompilation
 from tddnnf.compilation.compiler import PropCompiler
-from tddnnf.compilation.cudd import BddCompiledTarget, BddCompiler
+from tddnnf.compilation.cudd import CuddCompiledTarget, CuddCompiler
 from tddnnf.compilation.d4 import D4CompiledTarget, D4Compiler
-from tddnnf.compilation.pysdd import SddCompiledTarget, SddCompiler
+from tddnnf.compilation.pysdd import PySddCompiledTarget, PySddCompiler
 from tddnnf.compilation.targets import PropCompiledTarget, TheoryCompiledTarget
-from tddnnf.queries import BddEngine, DdnnifeEngine, QuerySession, SddEngine
+from tddnnf.queries import CuddEngine, DdnnifeEngine, PySddEngine, QuerySession
 from tddnnf.queries.engine import QueryEngine
 from tests.helpers import satisfiable, theory_models
 from tests.integration.bank_cases import BANK_CASES
@@ -25,8 +25,8 @@ from tests.integration.bank_cases import BANK_CASES
 pytestmark = pytest.mark.integration
 
 BACKENDS = [
-    pytest.param(BddCompiler, BddCompiledTarget, BddEngine, id="bdd"),
-    pytest.param(SddCompiler, SddCompiledTarget, SddEngine, id="sdd"),
+    pytest.param(CuddCompiler, CuddCompiledTarget, CuddEngine, id="cudd"),
+    pytest.param(PySddCompiler, PySddCompiledTarget, PySddEngine, id="pysdd"),
     pytest.param(D4Compiler, D4CompiledTarget, DdnnifeEngine, id="d4"),
 ]
 

@@ -5,27 +5,27 @@ from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.shortcuts import FALSE, TRUE, And, Not, Or, Symbol
 
-from tddnnf.compilation.cudd import BddCompiler
+from tddnnf.compilation.cudd import CuddCompiler
 from tddnnf.compilation.d4 import D4Compiler
-from tddnnf.compilation.pysdd import SddCompiler
+from tddnnf.compilation.pysdd import PySddCompiler
 from tddnnf.compilation.targets import TheoryCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.queries.bdd_engine import BddEngine
+from tddnnf.queries.cudd_engine import CuddEngine
 from tddnnf.queries.ddnnife_engine import DdnnifeEngine
 from tddnnf.queries.engine import QueryEngine
-from tddnnf.queries.sdd_engine import SddEngine
+from tddnnf.queries.pysdd_engine import PySddEngine
 from tests.helpers import satisfiable, theory_models
 from tests.unit.cases import ELIMINATION_CASES, PLAIN_CASES
 
 # ddnnife cannot load d4's constant circuits.
 DDNNIFE_PLAIN_CASES = [case for case in PLAIN_CASES if case.values[0] not in (TRUE, FALSE)]
 ENGINE_GROUPS = [
-    ("bdd", BddCompiler, BddEngine, PLAIN_CASES, None),
-    ("bdd", BddCompiler, BddEngine, ELIMINATION_CASES, "exists"),
-    ("bdd", BddCompiler, BddEngine, ELIMINATION_CASES, "forall"),
-    ("sdd", SddCompiler, SddEngine, PLAIN_CASES, None),
-    ("sdd", SddCompiler, SddEngine, ELIMINATION_CASES, "exists"),
-    ("sdd", SddCompiler, SddEngine, ELIMINATION_CASES, "forall"),
+    ("cudd", CuddCompiler, CuddEngine, PLAIN_CASES, None),
+    ("cudd", CuddCompiler, CuddEngine, ELIMINATION_CASES, "exists"),
+    ("cudd", CuddCompiler, CuddEngine, ELIMINATION_CASES, "forall"),
+    ("pysdd", PySddCompiler, PySddEngine, PLAIN_CASES, None),
+    ("pysdd", PySddCompiler, PySddEngine, ELIMINATION_CASES, "exists"),
+    ("pysdd", PySddCompiler, PySddEngine, ELIMINATION_CASES, "forall"),
     ("d4", D4Compiler, DdnnifeEngine, DDNNIFE_PLAIN_CASES, None),
     ("d4", D4Compiler, DdnnifeEngine, ELIMINATION_CASES, "exists"),
 ]

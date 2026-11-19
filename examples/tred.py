@@ -5,10 +5,10 @@ from pysmt.typing import REAL
 from tlemma_enum.solvers.mathsat_total import MathSATTotalEnumerator
 
 from tddnnf import TheoryCompilation
-from tddnnf.compilation.cudd import BddCompiler
+from tddnnf.compilation.cudd import CuddCompiler
 from tddnnf.compilation.d4 import D4Compiler
-from tddnnf.compilation.pysdd import SddCompiler
-from tddnnf.queries import BddEngine, DdnnifeEngine, QuerySession, SddEngine
+from tddnnf.compilation.pysdd import PySddCompiler
+from tddnnf.queries import CuddEngine, DdnnifeEngine, PySddEngine, QuerySession
 
 # ---- SMT ATOMS ----
 
@@ -45,8 +45,8 @@ with TheoryCompilation(phi, atoms=atoms) as compilation:
     # ---- BACKEND LOOP ----
 
     for name, compiler, engine_type in [
-        ("BDD", BddCompiler, BddEngine),
-        ("SDD", SddCompiler, SddEngine),
+        ("cudd", CuddCompiler, CuddEngine),
+        ("pysdd", PySddCompiler, PySddEngine),
         ("dDNNF", D4Compiler, DdnnifeEngine),
     ]:
         print(f"=== T-Reduced ({name}) ===")

@@ -167,7 +167,7 @@ constructor input lists.
 Its `to_pysmt()` method delegates DAG reconstruction to the backend target while
 supplying the stored abstraction and its bound environment’s formula manager.
 Public reconstruction is argument-free: `target.to_pysmt()`. `target.dag_size()`
-delegates metrics to the backend target. `BddCompiledTarget`, `SddCompiledTarget`,
+delegates metrics to the backend target. `CuddCompiledTarget`, `PySddCompiledTarget`,
 and `D4CompiledTarget` are public backend classes, exposed through the supported
 read-only `.target` property. Native roots and managers stay together, using the
 bindings’ reference ownership. d4 remapping is copied and exposed read-only.
@@ -222,14 +222,14 @@ reconstructs a PySMT formula.
 
 ### SDD: PySDD
 
-`SddCompiler` uses `SddWalker` to build an SDD through recursive Boolean apply.
-`SddCompiler(vtree_type="balanced", auto_gc_and_minimize=True)` explicitly
+`PySddCompiler` uses `PySddWalker` to build an SDD through recursive Boolean apply.
+`PySddCompiler(vtree_type="balanced", auto_gc_and_minimize=True)` explicitly
 constructs the requested native vtree. The Boolean option jointly enables or
 disables native automatic garbage collection and minimization; both are enabled
 by default. After translation it eliminates declared universal variables using
 `not exists U. not F`, or eliminates declared existential variables.
 
-`SddCompiledTarget` retains the `SddNode` root, `SddManager`, and a read-only
+`PySddCompiledTarget` retains the `SddNode` root, `SddManager`, and a read-only
 abstraction-to-native `remapping`. Compilation allocates dense native IDs in
 ascending abstraction-ID order for declared `all_atoms` only. Queries,
 forgetting, reconstruction, and persistence use this correspondence. Constants
@@ -239,16 +239,16 @@ conjunctions.
 
 ### OBDD: CUDD
 
-`BddCompiler` uses `BddWalker` to translate the Boolean skeleton into a CUDD BDD
+`CuddCompiler` uses `CuddWalker` to translate the Boolean skeleton into a CUDD BDD
 and eliminates either declared universal or declared existential variables.
 
-`BddCompiledTarget` retains the CUDD `Function` root and `BDD` manager. It
+`CuddCompiledTarget` retains the CUDD `Function` root and `BDD` manager. It
 reports reachable-node and edge counts and reconstructs each decision as an
 if-then-else expansion over its SMT atom.
 
 ## Queries
 
-`QuerySession(target, BddEngine)`, `QuerySession(target, SddEngine)`, and
+`QuerySession(target, CuddEngine)`, `QuerySession(target, PySddEngine)`, and
 `QuerySession(target, DdnnifeEngine)` open independent sessions over their matching
 public backend target classes. Strings, engine instances, and incompatible pairings raise
 `TypeError`. Engines and `QuerySession` are exported from `tddnnf.queries`.
@@ -400,8 +400,8 @@ tddnnf/
     ├── query_session.py      # QuerySession: normalization, validation, lifecycle
     ├── engine.py             # QueryEngine protocol
     ├── ddnnife_engine.py      # d-DNNF queries through ddnnife
-    ├── sdd_engine.py          # SDD queries
-    └── bdd_engine.py          # OBDD queries
+    ├── pysdd_engine.py       # SDD queries
+    └── cudd_engine.py        # OBDD queries
 ```
 
 Native allocation preserves shared abstraction IDs. OBDD compilation declares
