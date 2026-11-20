@@ -27,9 +27,9 @@ D4_BIN = Path(__file__).resolve().parent.parent / "bin" / "d4.bin"
 def _clean_nnf(nnf_text: str, var_count: int) -> str:
     """Remove nonprojected edge literals that d4 can leave despite the declared projection.
 
-    This ensures the compiled circuit respects its projection universe.
-    Projected variables occupy IDs 1..var_count; preserve nodes, edge endpoints,
-    and terminating zeros, including edges emptied by filtering.
+    This ensures the compiled circuit only contains the projected variables. Projected variables occupy IDs
+    1..var_count. No simplification is performed after removal.
+    This operation should be safe, as leftover literals are just an artifact of compilation.
     """
     cleaned_lines = []
     for line in nnf_text.splitlines():
@@ -81,10 +81,7 @@ class _D4Node:
 
 
 class D4CompiledTarget(PropCompiledTarget):
-    """A compiled d-DNNF target backed by a d4 NNF file.
-
-    Omitted or empty remapping uses identity over the native variable range.
-    """
+    """A compiled d-DNNF target backed by a d4 NNF file."""
 
     def __init__(self, nnf_text: str, var_count: int, remapping: Mapping[int, int] | None = None) -> None:
         self._nnf_text = nnf_text
@@ -149,7 +146,7 @@ class D4CompiledTarget(PropCompiledTarget):
 
 
 class BCS12Walker(DagWalker):
-    """Walks a pysmt formula, generating BC-S1.2 circuit gate definitions."""
+    """Generate the BC-S1.2 encoding of the Boolean abstraction of a PySMT formula."""
 
     def __init__(self, abstractor: Abstractor, remapping: Mapping[int, int]) -> None:
         DagWalker.__init__(self, invalidate_memoization=True)
@@ -255,14 +252,11 @@ class BCS12Walker(DagWalker):
 class D4Compiler(PropCompiler[D4CompiledTarget]):
     """PropCompiler that compiles an SMT formula into a d-DNNF via d4v2.
 
-    The formula is first translated to BC-S1.2 circuit format, then compiled
-    by the d4 binary. Edge literals are restricted to the dense projection IDs;
-    metadata retains formula and projection atoms, including forgotten atoms.
-    This relies on the supported d4 circuit parser assigning sorted P variables first.
+    The formula is first translated to BC-S1.2 circuit format, then compiled by the d4 binary.
     """
 
+    @staticmethod
     def _write_circuit(
-        self,
         formula: FNode,
         abstractor: Abstractor,
         remapping: Mapping[int, int],

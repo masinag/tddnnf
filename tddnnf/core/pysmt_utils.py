@@ -7,13 +7,21 @@ from pysmt.shortcuts import get_env
 from pysmt.typing import BOOL
 
 
-def owns_dags(env: Environment, formulas: Iterable[FNode]) -> bool:
-    """Check that the supplied formulas belong to the selected manager."""
-    return all(formula in env.formula_manager for formula in formulas)
+def owns_dags(env: Environment, terms: Iterable[FNode]) -> bool:
+    """Check that the supplied terms belong to the given environment.
+
+    Args:
+        env: the PySMT environment.
+        terms: a list of PySMT terms.
+
+    Returns:
+        bool: whether all terms belong to the given environment.
+    """
+    return all(formula in env.formula_manager for formula in terms)
 
 
 class SuspendTypeChecking:
-    """Context manager that disables pysmt type checking for formula construction."""
+    """Context manager that disables PySMT type checking for formula construction (for efficiency reasons)."""
 
     def __init__(self, env: Environment | None = None) -> None:
         self.env = env or get_env()
@@ -49,10 +57,9 @@ def is_cube(phi: FNode) -> bool:
     return is_literal(phi) or (phi.is_and() and all(is_cube(a) for a in phi.args()))
 
 
-def _query_lits(
+def _query_literals(
     literals: list[FNode], projection_atoms: Collection[FNode], *, disjunction: bool = False
 ) -> list[FNode] | None:
-    """Validate all flat literals before simplifying their Boolean semantics."""
     for lit in literals:
         if not isinstance(lit, FNode) or not is_literal(lit):
             raise ValueError("Expected a flat list of Boolean literals")
@@ -66,6 +73,7 @@ def _query_lits(
         atom = lit.arg(0) if lit.is_not() else lit
         is_neg = lit.is_not()
         if atom.is_bool_constant():
+            # a
             if (atom.is_true() ^ is_neg) == disjunction:
                 return None
             continue
@@ -78,20 +86,59 @@ def _query_lits(
     return unique
 
 
-def clause_lits(clause: list[FNode], projection_atoms: Collection[FNode]) -> list[FNode] | None:
-    """Return deduplicated, nonconstant clause literals, or None if tautological."""
-    return _query_lits(clause, projection_atoms, disjunction=True)
+def clause_literals(clause: list[FNode], projection_atoms: Collection[FNode]) -> list[FNode] | None:
+    """Check and simplify the given list of literals, interpreted as a clause.
+
+    Args:
+        clause: The clause literals.
+        projection_atoms: The atoms that can appear in the clause.
+
+    Returns:
+        list[FNode] | None: The simplified clause obtained by removing redundant literals,
+            or None if it's propositionally tautological.
+
+    Raises:
+        ValueError: If the clause is not formed by literals over the supplied projection atoms.
+    """
+    return _query_literals(clause, projection_atoms, disjunction=True)
 
 
-def cube_lits(cube: list[FNode], projection_atoms: Collection[FNode]) -> list[FNode] | None:
-    """Return deduplicated, nonconstant cube literals, or None if contradictory."""
-    return _query_lits(cube, projection_atoms)
+def cube_literals(cube: list[FNode], projection_atoms: Collection[FNode]) -> list[FNode] | None:
+    """Check and simplify the given list of literals, interpreted as a cube.
+
+    Args:
+        cube: The cube literals.
+        projection_atoms: The atoms that can appear in the cube.
+
+    Returns:
+        list[FNode] | None: The simplified cube obtained by removing redundant literals,
+            or None if it's propositionally contradictory.
+
+    Raises:
+        ValueError: If the cube is not formed by literals over the supplied projection atoms.
+    """
+    return _query_literals(cube, projection_atoms)
 
 
 def compilation_vocabulary(
     formula: FNode, all_atoms: Sequence[FNode], exists_atoms: Sequence[FNode], forall_atoms: Sequence[FNode]
 ) -> tuple[FNode, ...]:
-    """Validate a single quantifier kind and retain declaration order."""
+    """Validate atom declarations and return the unquantified compilation vocabulary.
+
+    Args:
+        formula: Formula whose atoms must be declared in all_atoms.
+        all_atoms: All declared atoms, including quantified ones.
+        exists_atoms: Atoms declared as existentially quantified.
+        forall_atoms: Atoms declared as universally quantified.
+
+    Returns:
+        Tuple of unquantified atoms, preserving their order in all_atoms.
+
+    Raises:
+        ValueError: If declarations contain invalid or duplicate atoms, if formula
+            atoms are undeclared, or if quantified atoms are not subsets of
+            all_atoms or both quantifier types are used.
+    """
     if exists_atoms and forall_atoms:
         raise ValueError("Cannot combine existential and universal declarations")
     for atoms in (all_atoms, exists_atoms, forall_atoms):

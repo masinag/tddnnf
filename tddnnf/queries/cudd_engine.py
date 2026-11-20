@@ -2,16 +2,17 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
+from dd.cudd import Function
 from pysmt.fnode import FNode
 
 from tddnnf.compilation.cudd import CuddCompiledTarget
 from tddnnf.compilation.targets import TheoryCompiledTarget
-from tddnnf.core.pysmt_utils import clause_lits, cube_lits
+from tddnnf.core.pysmt_utils import clause_literals, cube_literals
 from tddnnf.queries.engine import QueryEngine
 
 
 class CuddEngine(QueryEngine[CuddCompiledTarget]):
-    """Polynomial-time queries over a BDD compiled target."""
+    """Reason over a Cudd-compiled OBDD, using the Cudd manipulation and querying functionalities."""
 
     def __init__(self, target: TheoryCompiledTarget[CuddCompiledTarget]) -> None:
         if not isinstance(target.target, CuddCompiledTarget):
@@ -21,12 +22,10 @@ class CuddEngine(QueryEngine[CuddCompiledTarget]):
         self._atoms: tuple[FNode, ...] = target.atoms
         self._atom_set: set[FNode] = set(target.atoms)
 
-    def _restrict_chain(self, lits: list[FNode], negate: bool = False, root=None):
-        """Restrict by validated literals, flipping each sign when negate is True.
+    def _restrict_chain(self, lits: list[FNode], negate: bool = False, root=None) -> Function:
+        """Condition the OBDD on the given literals, flipping each sign when negate is True.
 
-        Callers must first use clause_lits or cube_lits with the exact target
-        atoms and handle None. Inputs must be constant-free, deduplicated literals
-        over those atoms, with no complementary pair.
+        The lits list cannot contain duplicates, constants, or contradictory literals.
         """
         assign: dict[str, bool] = {}
         for lit in lits:
@@ -41,7 +40,7 @@ class CuddEngine(QueryEngine[CuddCompiledTarget]):
         return mgr.let(assign, source)
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
-        unique = cube_lits(assumptions or [], self._atom_set)
+        unique = cube_literals(assumptions or [], self._atom_set)
         if unique is None:
             return False
         mgr = self._target.manager
@@ -51,7 +50,7 @@ class CuddEngine(QueryEngine[CuddCompiledTarget]):
         return len(self._target.manager.vars) - len(self._atoms)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        unique = cube_lits(assumptions or [], self._atom_set)
+        unique = cube_literals(assumptions or [], self._atom_set)
         if unique is None:
             return 0
         n = len(self._target.manager.vars)
@@ -64,14 +63,14 @@ class CuddEngine(QueryEngine[CuddCompiledTarget]):
         return self._target.root == self._target.manager.true
 
     def entails_clause(self, query_clause: list[FNode]) -> bool:
-        lits = clause_lits(query_clause, self._atom_set)
+        lits = clause_literals(query_clause, self._atom_set)
         if lits is None:
             return True
         mgr = self._target.manager
         return self._restrict_chain(lits, negate=True) == mgr.false
 
     def is_implicant(self, query_cube: list[FNode]) -> bool:
-        lits = cube_lits(query_cube, self._atom_set)
+        lits = cube_literals(query_cube, self._atom_set)
         if lits is None:
             return True
         mgr = self._target.manager

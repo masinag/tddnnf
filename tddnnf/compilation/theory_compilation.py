@@ -35,12 +35,12 @@ class TheoryCompilation:
         atoms: Sequence[FNode] | None = None,
         env: Environment | None = None,
     ) -> None:
-        """Create a compilation session.
+        """Create a compilation context.
 
         Args:
-            phi: the formula to compile.
-            atoms: the superset of atoms to consider the formula over.
-            env: the PySMT environment.
+            phi: The formula to compile.
+            atoms: The superset of atoms to consider the formula over.
+            env: The PySMT environment.
         """
         self._env = env if env is not None else get_env()
         self._closed = False
@@ -78,10 +78,10 @@ class TheoryCompilation:
         """Normalize an SMT formula using the session normalizer.
 
         Args:
-            formula: the formula to normalize.
+            formula: The formula to normalize.
 
         Returns:
-            the normalized formula.
+            FNode: The normalized formula.
         """
         self._ensure_open()
         assert self._normalizer is not None
@@ -106,14 +106,14 @@ class TheoryCompilation:
 
         Args:
             compiler: Boolean compiler to use.
-            lemmas: set of theory-lemmas that must rule out the theory-inconsistent truth assignments over `self.atoms`
-                that propositionally satisfy `self.phi`
-            computation_logger: a dictionary where to store compilation statistics.
-            exists_atoms: set of atoms to existentially quantify during compilation.
-            abstractor: mapping between atoms and indices
+            lemmas: Set of theory-lemmas that must rule out the theory-inconsistent truth assignments over `self.atoms`
+                that propositionally satisfy `self.phi`.
+            computation_logger: Dictionary where to store compilation statistics.
+            exists_atoms: Set of atoms to existentially quantify during compilation.
+            abstractor: Mapping between atoms and indices.
 
         Returns:
-            a `TheoryCompiledTarget` containing the compiled Boolean abstraction and the atoms refinement mapping.
+            TheoryCompiledTarget[T_Target]: The theory-reduced compiled SMT formula.
         """
         return self._compile(compiler, lemmas, False, exists_atoms, computation_logger, abstractor)
 
@@ -134,13 +134,13 @@ class TheoryCompilation:
 
         Args:
             compiler: Boolean compiler to use.
-            lemmas: set of theory-lemmas that must rule out the theory-inconsistent truth assignments over `self.atoms`
-                that propositionally satisfy `(not self.phi)`
-            computation_logger: a dictionary where to store compilation statistics.
-            abstractor: mapping between atoms and indices
+            lemmas: Set of theory-lemmas that must rule out the theory-inconsistent truth assignments over `self.atoms`
+                that propositionally satisfy `(not self.phi)`.
+            computation_logger: Dictionary where to store compilation statistics.
+            abstractor: Mapping between atoms and IDs.
 
         Returns:
-            a `TheoryCompiledTarget` containing the compiled Boolean abstraction and the atoms refinement mapping.
+            TheoryCompiledTarget[T_Target]: The theory-extended compiled SMT formula.
         """
         return self._compile(compiler, lemmas, True, (), computation_logger, abstractor)
 
@@ -193,7 +193,7 @@ class TheoryCompilation:
         return TheoryCompiledTarget(artifact, abstractor, atoms=retained_atoms, env=self._env)
 
     def _normalize_atom(self, atom: FNode) -> FNode | None:
-        """Normalize an atom to a canonical form."""
+        """Rewrite atom into a normal form."""
         positive = atom.arg(0) if atom.is_not() else atom
         if positive.is_bool_constant() or not is_atom(positive):
             raise ValueError("Vocabulary entries must be Boolean symbols or theory atoms, optionally negated")

@@ -35,7 +35,7 @@ class PropCompiledTarget(Protocol):
         """Persist the target to disk.
 
         Args:
-            directory: where to store the target.
+            directory: Where to store the target.
         """
         ...
 
@@ -44,7 +44,10 @@ class PropCompiledTarget(Protocol):
         """Load the target from disk.
 
         Args:
-            directory: where the target is stored.
+            directory: Where the target is stored.
+
+        Returns:
+            PropCompiledTarget: The loaded target.
         """
         ...
 
@@ -52,8 +55,11 @@ class PropCompiledTarget(Protocol):
         """Reconstruct the formula from the compiled DAG.
 
         Args:
-            abstr: mapping from node index to SMT atom.
-            mgr: formula manager to create the FNodes.
+            abstr: Mapping from node index to SMT atom.
+            mgr: Formula manager to create the FNodes.
+
+        Returns:
+            FNode: The target as a PySMT formula.
         """
         ...
 
@@ -63,7 +69,7 @@ T_Target_co = TypeVar("T_Target_co", bound=PropCompiledTarget, covariant=True)
 
 
 class TheoryCompiledTarget(Generic[T_Target]):
-    """A representation bound to its abstraction, vocabulary, and SMT environment."""
+    """An SMT-level NNF-compiled formula."""
 
     def __init__(
         self,
@@ -72,6 +78,14 @@ class TheoryCompiledTarget(Generic[T_Target]):
         atoms: Sequence[FNode],
         env: Environment | None = None,
     ) -> None:
+        """Construct the SMT target.
+
+        Args:
+            target: The compiled Boolean abstraction.
+            abstr: The mapping from nodes to IDs representing the abstractions.
+            atoms: The superset of atoms the target is built from.
+            env: The PySMT environment owning the atoms.
+        """
         self._target = target
         self._abstr = abstr
         self._atoms = tuple(atoms)
@@ -99,7 +113,11 @@ class TheoryCompiledTarget(Generic[T_Target]):
         return self.target.dag_size()
 
     def save(self, directory: Path) -> None:
-        """Serialize package-owned state into a versioned artifact."""
+        """Serialize the target on disk.
+
+        Args:
+            directory: Where to store the target.
+        """
 
         with saving_to(directory) as temporary_directory:
             self.target.save(temporary_directory)
@@ -117,12 +135,21 @@ class TheoryCompiledTarget(Generic[T_Target]):
 
     @classmethod
     def load[T_Loaded: PropCompiledTarget](
-        cls: type[TheoryCompiledTarget],
+        cls: type[TheoryCompiledTarget[T_Loaded]],
         directory: Path,
         target_type: type[T_Loaded],
         env: Environment | None = None,
     ) -> TheoryCompiledTarget[T_Loaded]:
-        """Load with the selected backend and bind atoms to env."""
+        """Load a target from disk.
+
+        Args:
+            directory: Where the target is stored.
+            target_type: Expected type of the propositional target being loaded.
+            env: The PySMT environment to build the atoms from.
+
+        Returns:
+            TheoryCompiledTarget[T_Loaded]: The loaded target.
+        """
         directory = Path(directory)
         env = env if env is not None else get_env()
         target = target_type.load(directory)

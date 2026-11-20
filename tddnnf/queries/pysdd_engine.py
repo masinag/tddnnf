@@ -2,16 +2,17 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
+from pysdd.sdd import SddNode
 from pysmt.fnode import FNode
 
 from tddnnf.compilation.pysdd import PySddCompiledTarget
 from tddnnf.compilation.targets import TheoryCompiledTarget
-from tddnnf.core.pysmt_utils import clause_lits, cube_lits
+from tddnnf.core.pysmt_utils import clause_literals, cube_literals
 from tddnnf.queries.engine import QueryEngine
 
 
 class PySddEngine(QueryEngine[PySddCompiledTarget]):
-    """Polynomial-time queries over an SDD compiled target."""
+    """Reason over a PySDD-compiled SDD, using the PySDD manipulation and querying functionalities."""
 
     def __init__(self, theory_target: TheoryCompiledTarget[PySddCompiledTarget]) -> None:
         if not isinstance(theory_target.target, PySddCompiledTarget):
@@ -23,12 +24,10 @@ class PySddEngine(QueryEngine[PySddCompiledTarget]):
         ids = {self._abstr.get_id(a) for a in self._atoms}
         assert ids <= self._target.remapping.keys(), "SDD mapping must cover the target atoms"
 
-    def _condition_chain(self, lits: list[FNode], negate: bool = False, root=None):
-        """Condition on validated literals, flipping each sign when negate is True.
+    def _condition_chain(self, lits: list[FNode], negate: bool = False, root: SddNode | None = None) -> SddNode:
+        """Condition the SDD on the given literals, flipping each sign when negate is True.
 
-        Callers must first use clause_lits or cube_lits with the exact target
-        atoms and handle None. Inputs must be constant-free, deduplicated literals
-        over those atoms, with no complementary pair.
+        The lits list cannot contain duplicates, constants, or contradictory literals.
         """
         temp = self._target.root if root is None else root
         for lit in lits:
@@ -41,7 +40,7 @@ class PySddEngine(QueryEngine[PySddCompiledTarget]):
         return temp
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
-        unique = cube_lits(assumptions or [], self._atom_set)
+        unique = cube_literals(assumptions or [], self._atom_set)
         if unique is None:
             return False
         return not bool(self._condition_chain(unique, negate=False).is_false())
@@ -50,7 +49,7 @@ class PySddEngine(QueryEngine[PySddCompiledTarget]):
         return self._target.manager.var_count() - len(self._atoms)
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        unique = cube_lits(assumptions or [], self._atom_set)
+        unique = cube_literals(assumptions or [], self._atom_set)
         if unique is None:
             return 0
         temp = self._condition_chain(unique, negate=False)
@@ -60,13 +59,13 @@ class PySddEngine(QueryEngine[PySddCompiledTarget]):
         return bool(self._target.root.is_true())
 
     def entails_clause(self, query_clause: list[FNode]) -> bool:
-        lits = clause_lits(query_clause, self._atom_set)
+        lits = clause_literals(query_clause, self._atom_set)
         if lits is None:
             return True
         return bool(self._condition_chain(lits, negate=True).is_false())
 
     def is_implicant(self, query_cube: list[FNode]) -> bool:
-        lits = cube_lits(query_cube, self._atom_set)
+        lits = cube_literals(query_cube, self._atom_set)
         if lits is None:
             return True
         return bool(self._condition_chain(lits).is_true())

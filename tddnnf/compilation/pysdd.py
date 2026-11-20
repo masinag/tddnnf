@@ -4,7 +4,7 @@ from array import array
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import Self
+from typing import Any, Self
 
 import pysmt.operators as op
 from pysdd.sdd import SddManager, SddNode, Vtree
@@ -22,10 +22,7 @@ from tddnnf.core.stats_collector import StatsCollector
 
 
 class PySddCompiledTarget(PropCompiledTarget):
-    """A propositionally compiled SDD target backed by PySDD.
-
-    Omitted or empty remapping uses identity over the native variable range.
-    """
+    """A propositionally compiled SDD target backed by PySDD."""
 
     def __init__(self, root: SddNode, manager: SddManager, remapping: Mapping[int, int] | None = None) -> None:
         self._remapping = MappingProxyType(
@@ -123,11 +120,10 @@ class PySddCompiledTarget(PropCompiledTarget):
 
 
 class PySddWalker(DagWalker):
-    """Walks an SMT formula, building an SDD via recursive apply.
+    """Walks an SMT formula, building an SDD via recursive `apply`.
 
-    Atom nodes (Bool symbols, theory relations) are mapped to
-    SDD literals through an :class:`Abstractor`. Non-atom sub-expressions
-    (theory operators, non-Bool symbols, numeric constants) are ignored.
+    Atoms are mapped to SDD variables through a `abstractor`, and Boolean-operator nodes are translated into the
+    corresponding SDD operations.
     """
 
     def __init__(self, manager: SddManager, abstractor: Abstractor, remapping: Mapping[int, int]) -> None:
@@ -136,7 +132,7 @@ class PySddWalker(DagWalker):
         self._abs = abstractor
         self._remapping = remapping
 
-    def walk_symbol(self, formula: FNode, args: tuple, **kwargs: object) -> SddNode | None:
+    def walk_symbol(self, formula: FNode, args: tuple[SddNode, ...], **kwargs: Any) -> SddNode | None:
         if not formula.is_symbol(BOOL):
             return None
         assert formula in self._abs, f"atom {formula} not pre-registered in abstractor"
@@ -144,43 +140,43 @@ class PySddWalker(DagWalker):
         return self._mgr.literal(self._remapping[idx])
 
     @handles(*op.CONSTANTS)
-    def walk_constant(self, formula: FNode, args: tuple, **kwargs: object) -> SddNode | None:
+    def walk_constant(self, formula: FNode, args: tuple[SddNode, ...], **kwargs: Any) -> SddNode | None:
         if not formula.is_bool_constant():
             return None
         return self._mgr.true() if formula.is_true() else self._mgr.false()
 
     @handles(*op.THEORY_OPERATORS)
-    def walk_theory_op(self, formula: FNode, args: tuple, **kwargs: object) -> SddNode | None:
+    def walk_theory_op(self, formula: FNode, args: tuple[SddNode, ...], **kwargs: Any) -> SddNode | None:
         return None
 
     @handles(*op.RELATIONS)
-    def walk_theory_atom(self, formula: FNode, args: tuple, **kwargs: object) -> SddNode:
+    def walk_theory_atom(self, formula: FNode, args: tuple[SddNode, ...], **kwargs: Any) -> SddNode:
         assert formula in self._abs, f"atom {formula} not pre-registered in abstractor"
         idx = self._abs.get_id(formula)
         return self._mgr.literal(self._remapping[idx])
 
-    def walk_not(self, formula: FNode, args: tuple, **kwargs: object) -> SddNode:
+    def walk_not(self, formula: FNode, args: tuple[SddNode, ...], **kwargs: Any) -> SddNode:
         return ~args[0]
 
-    def walk_and(self, formula: FNode, args: tuple, **kwargs: object) -> SddNode:
+    def walk_and(self, formula: FNode, args: tuple[SddNode, ...], **kwargs: Any) -> SddNode:
         result = args[0]
         for arg in args[1:]:
             result = result & arg
         return result
 
-    def walk_or(self, formula: FNode, args: tuple, **kwargs: object) -> SddNode:
+    def walk_or(self, formula: FNode, args: tuple[SddNode, ...], **kwargs: Any) -> SddNode:
         result = args[0]
         for arg in args[1:]:
             result = result | arg
         return result
 
-    def walk_implies(self, formula: FNode, args: tuple, **kwargs: object) -> SddNode:
+    def walk_implies(self, formula: FNode, args: tuple[SddNode, ...], **kwargs: Any) -> SddNode:
         return ~args[0] | args[1]
 
-    def walk_iff(self, formula: FNode, args: tuple, **kwargs: object) -> SddNode:
+    def walk_iff(self, formula: FNode, args: tuple[SddNode, ...], **kwargs: Any) -> SddNode:
         return (args[0] & args[1]) | (~args[0] & ~args[1])
 
-    def walk_ite(self, formula: FNode, args: tuple, **kwargs: object) -> SddNode:
+    def walk_ite(self, formula: FNode, args: tuple[SddNode, ...], **kwargs: Any) -> SddNode:
         return (args[0] & args[1]) | (~args[0] & args[2])
 
     def translate(self, formula: FNode) -> SddNode:
@@ -190,21 +186,15 @@ class PySddWalker(DagWalker):
 
 
 class PySddCompiler(PropCompiler[PySddCompiledTarget]):
-    """PropCompiler that compiles an SMT formula into an SDD via PySDD.
-
-    Accepts the original (non-abstracted) SMT formula. All atoms – both
-    Bool symbols and theory atoms – are mapped to propositional variables
-    through the provided :class:`Abstractor`.
-    """
+    """PropCompiler that compiles an SMT formula into an SDD via PySDD"""
 
     def __init__(self, vtree_type: str = "balanced", auto_gc_and_minimize: bool = True) -> None:
         """Configure the native vtree and joint automatic GC/minimization setting.
 
         Args:
             vtree_type: One of "right", "left", "vertical", "balanced", "random".
-            auto_gc_and_minimize: Boolean enabling both native automatic garbage
-                collection and minimization (default True). Types are trusted
-                as annotated.
+            auto_gc_and_minimize: Boolean enabling both native automatic garbage collection and minimization
+                (default True).
 
         Raises:
             ValueError: If the vtree name is unsupported by the native library.
@@ -222,7 +212,7 @@ class PySddCompiler(PropCompiler[PySddCompiledTarget]):
         all_atoms: Sequence[FNode],
         exists_atoms: Sequence[FNode] = (),
         forall_atoms: Sequence[FNode] = (),
-        computation_logger: dict[str, object] | None = None,
+        computation_logger: dict[str, Any] | None = None,
     ) -> PySddCompiledTarget:
         retained = compilation_vocabulary(phi, all_atoms, exists_atoms, forall_atoms)
         assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"

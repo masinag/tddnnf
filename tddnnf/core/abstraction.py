@@ -13,9 +13,21 @@ from tddnnf.core.pysmt_utils import is_atom
 
 
 class Abstractor:
-    """Append-only bidirectional map between atoms and integer IDs."""
+    """Bidirectional map between atoms and integer IDs.
+
+    If a dictionary is given, then known atoms are mapped according to the given mapping.
+    Unknown atoms are assigned new IDs.
+    """
 
     def __init__(self, abstraction: Mapping[int, FNode] | None = None) -> None:
+        """Initialize the abstractor with the given mapping.
+
+        Args:
+            abstraction: Mapping from integer IDs to atoms.
+
+        Raises:
+            ValueError: If the abstraction contains Boolean constants (true or false).
+        """
         atoms = dict(abstraction) if abstraction is not None else {}
         if any(atom.is_bool_constant() for atom in atoms.values()):
             raise ValueError("Boolean constants cannot be abstracted")
@@ -42,6 +54,19 @@ class Abstractor:
         return smt_atom in self._atom_to_id
 
     def get_id(self, smt_atom: FNode) -> int:
+        """Return the integer ID assigned to smt_atom.
+
+        If the atom is not known, it is assigned a new ID and registered in the mapping.
+
+        Args:
+            smt_atom: The smt_atom.
+
+        Returns:
+            int: The integer ID assigned to smt_atom.
+
+        Raises:
+            ValueError: If the atom is a Boolean constant (true or false).
+        """
         if smt_atom.is_bool_constant():
             raise ValueError("Boolean constants cannot be abstracted")
         assert is_atom(smt_atom), f"expected atom, got {smt_atom}"
@@ -52,11 +77,24 @@ class Abstractor:
         return self._atom_to_id[smt_atom]
 
     def get_atom(self, idx: int) -> FNode:
+        """Return the atom with the given ID.
+
+        Args:
+            idx: The atom ID.
+
+        Returns:
+            FNode: The atom with the given ID.
+
+        Raises:
+            ValueError: If the ID is not positive.
+            KeyError: If the positive ID is not in the mapping.
+        """
         if idx <= 0:
             raise ValueError(f"expected positive idx, got {idx}")
         return self._id_to_atom[idx]
 
     def to_dict(self) -> dict[str, int]:
+        """Return a serializable representation of the abstractor."""
         result: dict[str, int] = {}
         for atom, idx in self._atom_to_id.items():
             script = smtlibscript_from_formula(atom)
@@ -67,6 +105,7 @@ class Abstractor:
 
     @classmethod
     def from_dict(cls, data: dict[str, int], env: Environment | None = None) -> Abstractor:
+        """Deserialize the abstractor from a dictionary."""
         env = env or get_env()
         mgr = env.formula_manager
         id_to_atom: dict[int, FNode] = {}

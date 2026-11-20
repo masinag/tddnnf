@@ -12,19 +12,23 @@ from tddnnf.core.pysmt_utils import SuspendTypeChecking, owns_dags
 
 
 class NormalizerWalker(DagWalker):
-    """Normalize theory atoms through MathSAT, using DagWalker's memoization.
+    """Rewrite formulas by rewriting theory atoms to a normal form, while maintaining the Boolean structure.
 
-    Callers must supply Boolean FNodes whose entire DAG belongs to the selected
-    environment.
+    The rewriting is deterministic when using the same `NormalizerWalker` instance. Normalization exploits the MathSAT
+    SMT solver.
     """
 
     def __init__(self, env: Environment | None = None) -> None:
+        """Initialize the NormalizerWalker instance.
+
+        Args:
+            env: The PySMT environment that owns the terms to be normalized.
+        """
         self._closed = False
         self._solver: MathSAT5Solver | None = None
-        self._env = env if env is not None else get_env()
-        DagWalker.__init__(self, self._env)
+        DagWalker.__init__(self, env if env is not None else get_env())
         try:
-            self._solver = cast(MathSAT5Solver, self._env.factory.Solver("msat"))
+            self._solver = cast(MathSAT5Solver, self.env.factory.Solver("msat"))
             self._converter = cast(MSatConverter, self._solver.converter)
         except BaseException:
             self.close()
@@ -42,7 +46,6 @@ class NormalizerWalker(DagWalker):
         self.close()
 
     def close(self) -> None:
-        """Release the solver exactly once, including after partial initialization."""
         if not self._closed:
             self._closed = True
             if self._solver is not None:
@@ -76,4 +79,5 @@ class NormalizerWalker(DagWalker):
             return super().walk(formula, **kwargs)
 
     def normalize(self, formula: FNode) -> FNode:
+        """Return a new formula where the SMT-atoms are rewritten to a normal form."""
         return self.walk(formula)
