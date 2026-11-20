@@ -6,9 +6,9 @@ from typing import Any
 
 
 class StatsCollector:
-    """Context manager for timing code blocks, storing results in a shared dict.
+    """Context manager for logging and timing code blocks, storing results in a shared dict.
 
-    All methods are safe no-ops when *computation_logger* is ``None``.
+    All methods are safe no-ops when `computation_logger` is `None`.
     """
 
     def __init__(self, computation_logger: dict[str, object] | None = None) -> None:

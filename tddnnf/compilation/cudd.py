@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 import pysmt.operators as op
 from dd.cudd import BDD, Function
@@ -11,14 +9,15 @@ from pysmt.formula import FormulaManager
 from pysmt.typing import BOOL
 from pysmt.walkers import DagWalker, handles
 
+from tddnnf.compilation.compiler import PropCompiler
+from tddnnf.compilation.targets import DagSize, PropCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import DagSize, PropCompiledTarget, PropCompiler
 from tddnnf.core.persistence import read_metadata, saving_to, write_metadata
 from tddnnf.core.pysmt_utils import compilation_vocabulary
 from tddnnf.core.stats_collector import StatsCollector
 
 
-class BddCompiledTarget(PropCompiledTarget):
+class CuddCompiledTarget(PropCompiledTarget):
     """A propositionally compiled OBDD target backed by CUDD."""
 
     def __init__(self, root: Function, manager: BDD) -> None:
@@ -99,12 +98,11 @@ class BddCompiledTarget(PropCompiledTarget):
         return cls(root, manager)
 
 
-class BddWalker(DagWalker):
-    """Walks an SMT formula, building a BDD via recursive apply.
+class CuddWalker(DagWalker):
+    """Walks an SMT formula, building an OBDD via recursive `apply`.
 
-    Atom nodes (Bool symbols, theory relations) are mapped to
-    BDD variables through an :class:`Abstractor`. Non-atom sub-expressions
-    (theory operators, non-Bool symbols, numeric constants) are ignored.
+    Atoms are mapped to OBDD variables through a `abstractor`, and Boolean-operator nodes are translated into the
+    corresponding OBDD operations.
     """
 
     def __init__(self, manager: BDD, abstractor: Abstractor) -> None:
@@ -112,7 +110,7 @@ class BddWalker(DagWalker):
         self._mgr = manager
         self._abs = abstractor
 
-    def walk_symbol(self, formula: FNode, args: tuple, **kwargs: object) -> Function | None:
+    def walk_symbol(self, formula: FNode, args: tuple[Function, ...], **kwargs: Any) -> Function | None:
         if not formula.is_symbol(BOOL):
             return None
         assert formula in self._abs, f"atom {formula} not pre-registered in abstractor"
@@ -120,43 +118,43 @@ class BddWalker(DagWalker):
         return self._mgr.var(f"b{idx}")
 
     @handles(*op.CONSTANTS)
-    def walk_constant(self, formula: FNode, args: tuple, **kwargs: object) -> Function | None:
+    def walk_constant(self, formula: FNode, args: tuple[Function, ...], **kwargs: Any) -> Function | None:
         if not formula.is_bool_constant():
             return None
         return self._mgr.true if formula.is_true() else self._mgr.false
 
     @handles(*op.THEORY_OPERATORS)
-    def walk_theory_op(self, formula: FNode, args: tuple, **kwargs: object) -> None:
+    def walk_theory_op(self, formula: FNode, args: tuple, **kwargs: Any) -> None:
         return None
 
     @handles(*op.RELATIONS)
-    def walk_theory_atom(self, formula: FNode, args: tuple, **kwargs: object) -> Function:
+    def walk_theory_atom(self, formula: FNode, args: tuple, **kwargs: Any) -> Function:
         assert formula in self._abs, f"atom {formula} not pre-registered in abstractor"
         idx = self._abs.get_id(formula)
         return self._mgr.var(f"b{idx}")
 
-    def walk_not(self, formula: FNode, args: tuple, **kwargs: object) -> Function:
+    def walk_not(self, formula: FNode, args: tuple[Function, ...], **kwargs: Any) -> Function:
         return ~args[0]
 
-    def walk_and(self, formula: FNode, args: tuple, **kwargs: object) -> Function:
+    def walk_and(self, formula: FNode, args: tuple[Function, ...], **kwargs: Any) -> Function:
         result = args[0]
         for arg in args[1:]:
             result = result & arg
         return result
 
-    def walk_or(self, formula: FNode, args: tuple, **kwargs: object) -> Function:
+    def walk_or(self, formula: FNode, args: tuple[Function, ...], **kwargs: Any) -> Function:
         result = args[0]
         for arg in args[1:]:
             result = result | arg
         return result
 
-    def walk_implies(self, formula: FNode, args: tuple, **kwargs: object) -> Function:
+    def walk_implies(self, formula: FNode, args: tuple[Function, ...], **kwargs: Any) -> Function:
         return ~args[0] | args[1]
 
-    def walk_iff(self, formula: FNode, args: tuple, **kwargs: object) -> Function:
+    def walk_iff(self, formula: FNode, args: tuple[Function, ...], **kwargs: Any) -> Function:
         return (args[0] & args[1]) | (~args[0] & ~args[1])
 
-    def walk_ite(self, formula: FNode, args: tuple, **kwargs: object) -> Function:
+    def walk_ite(self, formula: FNode, args: tuple[Function, ...], **kwargs: Any) -> Function:
         return (args[0] & args[1]) | (~args[0] & args[2])
 
     def translate(self, formula: FNode) -> Function:
@@ -165,25 +163,20 @@ class BddWalker(DagWalker):
         return result
 
 
-class BddCompiler(PropCompiler[BddCompiledTarget]):
-    """PropCompiler that compiles an SMT formula into a BDD via CUDD.
-
-    Accepts the original (non-abstracted) SMT formula. All atoms -- both
-    Bool symbols and theory atoms -- are mapped to propositional variables
-    through the provided :class:`Abstractor`.
-    """
+class CuddCompiler(PropCompiler[CuddCompiledTarget]):
+    """Compile the abstraction of an SMT formula into an OBDD via CUDD."""
 
     def compile(
         self,
-        formula: FNode,
+        phi: FNode,
         abstractor: Abstractor,
         *,
         all_atoms: Sequence[FNode],
         exists_atoms: Sequence[FNode] = (),
         forall_atoms: Sequence[FNode] = (),
-        computation_logger: dict[str, object] | None = None,
-    ) -> BddCompiledTarget:
-        retained = compilation_vocabulary(formula, all_atoms, exists_atoms, forall_atoms)
+        computation_logger: dict[str, Any] | None = None,
+    ) -> CuddCompiledTarget:
+        retained = compilation_vocabulary(phi, all_atoms, exists_atoms, forall_atoms)
         assert all(atom in abstractor for atom in all_atoms), "Abstraction must be prepared before compilation"
         stats = StatsCollector(computation_logger)
         with stats.track_time("compile_time"):
@@ -191,8 +184,8 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
             mgr = BDD()
             for i in sorted(abstractor.get_id(atom) for atom in atoms):
                 mgr.declare(f"b{i}")
-            walker = BddWalker(mgr, abstractor)
-            root = walker.translate(formula)
+            walker = CuddWalker(mgr, abstractor)
+            root = walker.translate(phi)
             with stats.track_time("forget_time"):
                 universal = [f"b{abstractor.get_id(atom)}" for atom in forall_atoms]
                 existential = [f"b{abstractor.get_id(atom)}" for atom in exists_atoms]
@@ -202,4 +195,4 @@ class BddCompiler(PropCompiler[BddCompiledTarget]):
                     root = root.exist(*existential)
             stats.log("n_atoms", len(atoms))
             stats.log("n_proj_vars", len(retained))
-            return BddCompiledTarget(root, mgr)
+            return CuddCompiledTarget(root, mgr)

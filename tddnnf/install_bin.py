@@ -64,8 +64,8 @@ def install_d4(install_dir: Path) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Install d4v2 binary compiler")
-    parser.add_argument("--d4", action="store_true", help="Install the d4 dDNNF compiler")
+    parser = argparse.ArgumentParser(description="Install extra dependencies")
+    parser.add_argument("--d4", action="store_true", help="Install the d4 d-DNNF compiler")
     args = parser.parse_args()
 
     if args.d4:

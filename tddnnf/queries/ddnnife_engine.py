@@ -3,21 +3,18 @@ from __future__ import annotations
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import ddnnife
 from pysmt.fnode import FNode
 
-from tddnnf.compilers.d4 import D4CompiledTarget
-
-if TYPE_CHECKING:
-    from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
-from tddnnf.core.interfaces import QueryEngine
-from tddnnf.core.pysmt_utils import clause_lits, cube_lits
+from tddnnf.compilation.d4 import D4CompiledTarget
+from tddnnf.compilation.targets import TheoryCompiledTarget
+from tddnnf.core.pysmt_utils import clause_literals, cube_literals
+from tddnnf.queries.engine import QueryEngine
 
 
 class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
-    """Polynomial-time queries over a d-DNNF compiled target via ddnnife."""
+    """Reason over a D4-compiled d-DNNF, using the ddnnife query engine."""
 
     def __init__(self, theory_target: TheoryCompiledTarget[D4CompiledTarget]) -> None:
         self._tmpdir = None
@@ -60,11 +57,10 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
             tmpdir.cleanup()
 
     def _lits_to_ddnnf(self, lits: list[FNode], negate: bool = False) -> list[int]:
-        """Convert validated literals, flipping each sign when negate is True.
+        """Convert the given list of literals to a list of signed IDs to condition the d-DNNF on, flipping each sign
+         when negate is True.
 
-        Callers must first use clause_lits or cube_lits with the exact target
-        atoms and handle None. Inputs must be constant-free, deduplicated literals
-        over those atoms, with no complementary pair.
+        The lits list cannot contain duplicates, constants, or contradictory literals.
         """
         result: list[int] = []
         for lit in lits:
@@ -75,14 +71,14 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         return result
 
     def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
-        unique = cube_lits(assumptions or [], self._atom_set)
+        unique = cube_literals(assumptions or [], self._atom_set)
         if unique is None:
             return False
         assert self._mut is not None
         return self._mut.is_sat(self._lits_to_ddnnf(unique))
 
     def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        unique = cube_lits(assumptions or [], self._atom_set)
+        unique = cube_literals(assumptions or [], self._atom_set)
         if unique is None:
             return 0
         assert self._mut is not None
@@ -92,14 +88,14 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         return self.count_truth_assignments() == (1 << len(self._atoms))
 
     def entails_clause(self, query_clause: list[FNode]) -> bool:
-        lits = clause_lits(query_clause, self._atom_set)
+        lits = clause_literals(query_clause, self._atom_set)
         if lits is None:
             return True
         assert self._mut is not None
         return not self._mut.is_sat(self._lits_to_ddnnf(lits, negate=True))
 
     def is_implicant(self, query_cube: list[FNode]) -> bool:
-        lits = cube_lits(query_cube, self._atom_set)
+        lits = cube_literals(query_cube, self._atom_set)
         if lits is None:
             return True
         assert self._mut is not None

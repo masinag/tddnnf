@@ -8,9 +8,9 @@ from pysmt.typing import BOOL, INT, REAL
 
 from tddnnf.core.pysmt_utils import (
     SuspendTypeChecking,
-    clause_lits,
+    clause_literals,
     compilation_vocabulary,
-    cube_lits,
+    cube_literals,
     get_theory_atoms,
     is_atom,
     is_clause,
@@ -67,7 +67,7 @@ def test_get_theory_atoms_preserves_order_constants_and_input(env: Environment) 
     assert get_theory_atoms([]) == []
 
 
-@pytest.mark.parametrize("normalize", [clause_lits, cube_lits])
+@pytest.mark.parametrize("normalize", [clause_literals, cube_literals])
 def test_query_literals_deduplicate_without_mutating_inputs(env: Environment, normalize: Callable) -> None:
     mgr = env.formula_manager
     p = mgr.Symbol("p", BOOL)
@@ -92,15 +92,15 @@ def test_query_literal_constants(env: Environment) -> None:
         (mgr.Not(mgr.TRUE()), [p], None),
         (mgr.Not(mgr.FALSE()), None, [p]),
     ):
-        assert clause_lits([constant, p], [p]) == clause
-        assert cube_lits([constant, p], [p]) == cube
-    assert clause_lits([mgr.FALSE()], []) == []
-    assert cube_lits([mgr.TRUE()], []) == []
-    assert clause_lits([mgr.TRUE()], []) is None
-    assert cube_lits([mgr.FALSE()], []) is None
+        assert clause_literals([constant, p], [p]) == clause
+        assert cube_literals([constant, p], [p]) == cube
+    assert clause_literals([mgr.FALSE()], []) == []
+    assert cube_literals([mgr.TRUE()], []) == []
+    assert clause_literals([mgr.TRUE()], []) is None
+    assert cube_literals([mgr.FALSE()], []) is None
 
 
-@pytest.mark.parametrize("normalize", [clause_lits, cube_lits])
+@pytest.mark.parametrize("normalize", [clause_literals, cube_literals])
 def test_query_literals_reject_invalid_inputs(env: Environment, normalize: Callable) -> None:
     mgr = env.formula_manager
     p, q = mgr.Symbol("p", BOOL), mgr.Symbol("q", BOOL)
@@ -113,10 +113,10 @@ def test_query_literals_validate_after_decisive_inputs(env: Environment) -> None
     mgr = env.formula_manager
     p, q = mgr.Symbol("p", BOOL), mgr.Symbol("q", BOOL)
     for normalize, literals in (
-        (clause_lits, [mgr.TRUE(), q]),
-        (cube_lits, [mgr.FALSE(), q]),
-        (clause_lits, [p, mgr.Not(p), q]),
-        (cube_lits, [p, mgr.Not(p), q]),
+        (clause_literals, [mgr.TRUE(), q]),
+        (cube_literals, [mgr.FALSE(), q]),
+        (clause_literals, [p, mgr.Not(p), q]),
+        (cube_literals, [p, mgr.Not(p), q]),
     ):
         original = literals.copy()
         projection = [p]

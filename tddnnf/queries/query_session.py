@@ -1,23 +1,27 @@
 from __future__ import annotations
 
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Iterable, Sequence
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Generic, Self
+from typing import Generic, Self
 
 from pysmt.fnode import FNode
 
-from tddnnf.core.interfaces import QueryEngine, T_Target
+from tddnnf.compilation.targets import T_Target, TheoryCompiledTarget
 from tddnnf.core.pysmt_utils import is_literal
 from tddnnf.normalization.normalizer import NormalizerWalker
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-
-    from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
+from tddnnf.queries.engine import QueryEngine
 
 
 class QuerySession(Generic[T_Target]):
-    """Normalize, validate, and delegate queries in the target's environment."""
+    """Entry point for SMT queries on a theory-reduced or theory-extended `TheoryCompiledTarget`.
+
+    The class forwards the requested queries to the given propositional query engine, which is called over the
+    propositional target underlying the theory target.
+    The correctness of these queries at the SMT level is only guaranteed if the supplied theory target is either
+    theory-reduced or theory-extended (see `TheoryCompilation` class), and the requested query can be reduced to its
+    propositional counterpart for the theory target class (see README.md and the paper explaining the theoretical
+    framework).
+    """
 
     def __init__(self, theory_target: TheoryCompiledTarget[T_Target], engine_type: type[QueryEngine[T_Target]]):
         self._closed = False
@@ -52,7 +56,6 @@ class QuerySession(Generic[T_Target]):
             raise RuntimeError("Query session is closed")
 
     def close(self) -> None:
-        """Release active iterators and native resources, once."""
         if self._closed:
             return
         self._closed = True

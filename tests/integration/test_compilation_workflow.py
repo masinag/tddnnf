@@ -12,22 +12,76 @@ from pysmt.typing import BOOL, INT, REAL, ArrayType, BVType
 from tlemma_enum.solvers.mathsat_total import MathSATTotalEnumerator
 
 from tddnnf import TheoryCompilation
-from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
-from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
-from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
-from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler, QueryEngine
-from tddnnf.core.theory_compiled_target import TheoryCompiledTarget
-from tddnnf.queries import BddEngine, DdnnifeEngine, SddEngine
+from tddnnf.compilation.compiler import PropCompiler
+from tddnnf.compilation.cudd import CuddCompiledTarget, CuddCompiler
+from tddnnf.compilation.d4 import D4CompiledTarget, D4Compiler
+from tddnnf.compilation.pysdd import PySddCompiledTarget, PySddCompiler
+from tddnnf.compilation.targets import PropCompiledTarget, TheoryCompiledTarget
+from tddnnf.queries import CuddEngine, DdnnifeEngine, PySddEngine, QuerySession
+from tddnnf.queries.engine import QueryEngine
 from tests.helpers import satisfiable, theory_models
 from tests.integration.bank_cases import BANK_CASES
 
 pytestmark = pytest.mark.integration
 
 BACKENDS = [
-    pytest.param(BddCompiler, BddCompiledTarget, BddEngine, id="bdd"),
-    pytest.param(SddCompiler, SddCompiledTarget, SddEngine, id="sdd"),
+    pytest.param(CuddCompiler, CuddCompiledTarget, CuddEngine, id="cudd"),
+    pytest.param(PySddCompiler, PySddCompiledTarget, PySddEngine, id="pysdd"),
     pytest.param(D4Compiler, D4CompiledTarget, DdnnifeEngine, id="d4"),
 ]
+
+
+@pytest.mark.parametrize("compiler_type, target_type, engine_type", BACKENDS)
+@pytest.mark.parametrize("include_unused", [False, True], ids=["formula-atoms", "unused-retained-atom"])
+@pytest.mark.parametrize(
+    "eliminated_names, retained_names, expected_count",
+    [
+        pytest.param((), ("A", "B", "p", "q"), 5, id="eliminate-none"),
+        pytest.param(("A",), ("B", "p", "q"), 4, id="eliminate-A"),
+        pytest.param(("B",), ("A", "p", "q"), 4, id="eliminate-B"),
+        pytest.param(("A", "B"), ("p", "q"), 3, id="eliminate-A-B"),
+        pytest.param(("p", "q"), ("A", "B"), 3, id="eliminate-p-q"),
+    ],
+)
+def test_reduced_projection_retains_only_declared_unquantified_atoms(
+    env, compiler_type, target_type, engine_type, include_unused, eliminated_names, retained_names, expected_count
+):
+    mgr = env.formula_manager
+    x, y = (mgr.Symbol(name, REAL) for name in ("x", "y"))
+    a, b = (mgr.Symbol(name) for name in ("A", "B"))
+    p, q = mgr.LE(x, mgr.Real(0)), mgr.Equals(x, mgr.Real(1))
+    r, s = mgr.LE(x, mgr.Real(1)), mgr.GE(x, mgr.Real(1))
+    u = mgr.LE(y, mgr.Real(0))
+    atoms = {"A": a, "B": b, "p": p, "q": q}
+    declared = (a, b, p, q)
+    retained = tuple(atoms[name] for name in retained_names)
+    if include_unused:
+        declared = (u, *declared)
+        retained = (u, *retained)
+        expected_count *= 2
+    phi = mgr.And(mgr.Implies(a, p), mgr.Implies(b, q))
+    lemmas = [
+        mgr.Or(mgr.Not(p), mgr.Not(s)),
+        mgr.Or(mgr.Not(p), r),
+        mgr.Or(mgr.Not(q), r),
+        mgr.Or(mgr.Not(q), s),
+        mgr.Or(q, mgr.Not(r), mgr.Not(s)),
+    ]
+    with TheoryCompilation(phi, atoms=declared, env=env) as compilation:
+        target = compilation.compile_treduced(
+            compiler_type(), lemmas, exists_atoms=[atoms[name] for name in eliminated_names]
+        )
+
+    assert target.atoms == retained
+    expected = theory_models(env, phi, retained)
+    assert len(expected) == expected_count
+    with QuerySession(target, engine_type) as session:
+        assert session.count_truth_assignments() == expected_count
+        assignments = list(session.enumerate_truth_assignments())
+        assert all(tuple(assignment) == retained for assignment in assignments)
+        models = [tuple(assignment[atom] for atom in retained) for assignment in assignments]
+        assert len(models) == len(set(models))
+        assert set(models) == expected
 
 
 def workflow_cases(extended: bool) -> list:
@@ -107,7 +161,7 @@ def test_reduced_workflow(
     loaded = TheoryCompiledTarget.load(directory, target_type, env=env)
     for container in (target, loaded):
         assert container.atoms == atoms
-        with container.queries(engine_type) as session:
+        with QuerySession(container, engine_type) as session:
             assert session.is_satisfiable() == bool(expected)
             assert session.count_truth_assignments() == model_count
             assignments = list(session.enumerate_truth_assignments())
@@ -159,7 +213,7 @@ def test_extended_workflow(
     loaded = TheoryCompiledTarget.load(directory, target_type, env=env)
     for container in (target, loaded):
         assert container.atoms == atoms
-        with container.queries(engine_type) as session:
+        with QuerySession(container, engine_type) as session:
             assert session.is_valid() == valid
             assert session.count_truth_assignments() == len(expected)
             assignments = list(session.enumerate_truth_assignments())
@@ -213,7 +267,7 @@ def test_reduced_extra_atom_workflow(
     loaded = TheoryCompiledTarget.load(directory, target_type, env=env)
     for container in (target, loaded):
         assert container.atoms == declared_atoms
-        with container.queries(engine_type) as session:
+        with QuerySession(container, engine_type) as session:
             assert session.is_satisfiable()
             assert session.count_truth_assignments() == len(expected)
             assignments = list(session.enumerate_truth_assignments())
@@ -255,7 +309,7 @@ def test_extended_extra_atom_workflow(
     loaded = TheoryCompiledTarget.load(directory, target_type, env=env)
     for container in (target, loaded):
         assert container.atoms == declared_atoms
-        with container.queries(engine_type) as session:
+        with QuerySession(container, engine_type) as session:
             assert session.is_valid() == valid
             assert session.count_truth_assignments() == len(expected)
             assignments = list(session.enumerate_truth_assignments())

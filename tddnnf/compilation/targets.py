@@ -2,21 +2,74 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Generic
+from typing import Generic, Protocol, Self, TypeVar, runtime_checkable
 
 from pysmt.environment import Environment, get_env
 from pysmt.fnode import FNode
+from pysmt.formula import FormulaManager
 
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import DagSize, PropCompiledTarget, QueryEngine, T_Target
 from tddnnf.core.persistence import read_json, saving_to
 from tddnnf.core.pysmt_utils import owns_dags
-from tddnnf.queries.session import QuerySession
+
+
+@dataclass(frozen=True)
+class DagSize:
+    """DAG size as vertices and edges."""
+
+    vertices: int
+    edges: int
+
+
+@runtime_checkable
+class PropCompiledTarget(Protocol):
+    """A propositional formula compiled into some target language (d-DNNF, SDD, OBDD, ...)."""
+
+    def dag_size(self) -> DagSize:
+        """Return the size of the formula DAG."""
+        ...
+
+    def save(self, directory: Path) -> None:
+        """Persist the target to disk.
+
+        Args:
+            directory: Where to store the target.
+        """
+        ...
+
+    @classmethod
+    def load(cls, directory: Path) -> Self:
+        """Load the target from disk.
+
+        Args:
+            directory: Where the target is stored.
+
+        Returns:
+            PropCompiledTarget: The loaded target.
+        """
+        ...
+
+    def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
+        """Reconstruct the formula from the compiled DAG.
+
+        Args:
+            abstr: Mapping from node index to SMT atom.
+            mgr: Formula manager to create the FNodes.
+
+        Returns:
+            FNode: The target as a PySMT formula.
+        """
+        ...
+
+
+T_Target = TypeVar("T_Target", bound=PropCompiledTarget)
+T_Target_co = TypeVar("T_Target_co", bound=PropCompiledTarget, covariant=True)
 
 
 class TheoryCompiledTarget(Generic[T_Target]):
-    """A representation bound to its abstraction, vocabulary, and SMT environment."""
+    """An SMT-level NNF-compiled formula."""
 
     def __init__(
         self,
@@ -25,6 +78,14 @@ class TheoryCompiledTarget(Generic[T_Target]):
         atoms: Sequence[FNode],
         env: Environment | None = None,
     ) -> None:
+        """Construct the SMT target.
+
+        Args:
+            target: The compiled Boolean abstraction.
+            abstr: The mapping from nodes to IDs representing the abstractions.
+            atoms: The superset of atoms the target is built from.
+            env: The PySMT environment owning the atoms.
+        """
         self._target = target
         self._abstr = abstr
         self._atoms = tuple(atoms)
@@ -48,15 +109,15 @@ class TheoryCompiledTarget(Generic[T_Target]):
     def env(self) -> Environment:
         return self._env
 
-    def queries(self, engine_type: type[QueryEngine[T_Target]]) -> QuerySession[T_Target]:
-        """Open an independent session using the explicitly selected engine class."""
-        return QuerySession(self, engine_type)
-
     def dag_size(self) -> DagSize:
         return self.target.dag_size()
 
     def save(self, directory: Path) -> None:
-        """Serialize package-owned state into a versioned artifact."""
+        """Serialize the target on disk.
+
+        Args:
+            directory: Where to store the target.
+        """
 
         with saving_to(directory) as temporary_directory:
             self.target.save(temporary_directory)
@@ -74,12 +135,21 @@ class TheoryCompiledTarget(Generic[T_Target]):
 
     @classmethod
     def load[T_Loaded: PropCompiledTarget](
-        cls: type[TheoryCompiledTarget],
+        cls: type[TheoryCompiledTarget[T_Loaded]],
         directory: Path,
         target_type: type[T_Loaded],
         env: Environment | None = None,
     ) -> TheoryCompiledTarget[T_Loaded]:
-        """Load with the selected backend and bind atoms to env."""
+        """Load a target from disk.
+
+        Args:
+            directory: Where the target is stored.
+            target_type: Expected type of the propositional target being loaded.
+            env: The PySMT environment to build the atoms from.
+
+        Returns:
+            TheoryCompiledTarget[T_Loaded]: The loaded target.
+        """
         directory = Path(directory)
         env = env if env is not None else get_env()
         target = target_type.load(directory)

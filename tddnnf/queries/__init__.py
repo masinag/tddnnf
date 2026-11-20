@@ -1,6 +1,6 @@
-from tddnnf.queries.bdd_engine import BddEngine
+from tddnnf.queries.cudd_engine import CuddEngine
 from tddnnf.queries.ddnnife_engine import DdnnifeEngine
-from tddnnf.queries.sdd_engine import SddEngine
-from tddnnf.queries.session import QuerySession
+from tddnnf.queries.pysdd_engine import PySddEngine
+from tddnnf.queries.query_session import QuerySession
 
-__all__ = ["BddEngine", "DdnnifeEngine", "SddEngine", "QuerySession"]
+__all__ = ["CuddEngine", "DdnnifeEngine", "PySddEngine", "QuerySession"]

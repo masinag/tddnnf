@@ -6,18 +6,19 @@ from pysmt.environment import Environment
 from pysmt.fnode import FNode
 from pysmt.shortcuts import FALSE, TRUE, And, Not, Or, Symbol
 
-from tddnnf.compilers.cudd import BddCompiledTarget, BddCompiler
-from tddnnf.compilers.d4 import D4CompiledTarget, D4Compiler
-from tddnnf.compilers.pysdd import SddCompiledTarget, SddCompiler
+from tddnnf.compilation.compiler import PropCompiler
+from tddnnf.compilation.cudd import CuddCompiledTarget, CuddCompiler
+from tddnnf.compilation.d4 import D4CompiledTarget, D4Compiler
+from tddnnf.compilation.pysdd import PySddCompiledTarget, PySddCompiler
+from tddnnf.compilation.targets import PropCompiledTarget
 from tddnnf.core.abstraction import Abstractor
-from tddnnf.core.interfaces import PropCompiledTarget, PropCompiler
 from tests.helpers import equivalent
 from tests.unit.cases import ELIMINATION_CASES, PLAIN_CASES
 
 FormulaFactoryType = Callable[[], FNode]
 
 
-@pytest.mark.parametrize("compiler_type", [BddCompiler, SddCompiler, D4Compiler], ids=["bdd", "sdd", "d4"])
+@pytest.mark.parametrize("compiler_type", [CuddCompiler, PySddCompiler, D4Compiler], ids=["cudd", "pysdd", "d4"])
 @pytest.mark.parametrize("formula_factory", PLAIN_CASES)
 def test_plain_compilation_preserves_meaning(
     env: Environment, compiler_type: type[PropCompiler], formula_factory: FormulaFactoryType
@@ -33,7 +34,7 @@ def test_plain_compilation_preserves_meaning(
     assert equivalent(env, target.to_pysmt(abstractor, env.formula_manager), formula)
 
 
-@pytest.mark.parametrize("compiler_type", [BddCompiler, SddCompiler, D4Compiler], ids=["bdd", "sdd", "d4"])
+@pytest.mark.parametrize("compiler_type", [CuddCompiler, PySddCompiler, D4Compiler], ids=["cudd", "pysdd", "d4"])
 @pytest.mark.parametrize("formula_factory, variable_names", ELIMINATION_CASES)
 def test_existential_elimination(
     env: Environment, compiler_type: type[PropCompiler], formula_factory: FormulaFactoryType, variable_names: list[str]
@@ -52,7 +53,7 @@ def test_existential_elimination(
     assert equivalent(env, reconstructed, env.formula_manager.Exists(variables, formula))
 
 
-@pytest.mark.parametrize("compiler_type", [BddCompiler, SddCompiler], ids=["bdd", "sdd"])
+@pytest.mark.parametrize("compiler_type", [CuddCompiler, PySddCompiler], ids=["cudd", "pysdd"])
 @pytest.mark.parametrize("formula_factory, variable_names", ELIMINATION_CASES)
 def test_universal_elimination(
     env: Environment, compiler_type: type[PropCompiler], formula_factory: FormulaFactoryType, variable_names: list[str]
@@ -83,8 +84,8 @@ def test_d4_rejects_universal_elimination(env: Environment):
 
 @pytest.mark.parametrize(
     "compiler_type, target_type",
-    [(BddCompiler, BddCompiledTarget), (SddCompiler, SddCompiledTarget), (D4Compiler, D4CompiledTarget)],
-    ids=["bdd", "sdd", "d4"],
+    [(CuddCompiler, CuddCompiledTarget), (PySddCompiler, PySddCompiledTarget), (D4Compiler, D4CompiledTarget)],
+    ids=["cudd", "pysdd", "d4"],
 )
 @pytest.mark.parametrize(
     "formula_factory",
