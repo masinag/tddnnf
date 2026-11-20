@@ -207,14 +207,36 @@ reduced compilation, universally for extended compilation.
 
 ### d-DNNF: d4
 
-`D4Compiler` translates a PySMT Boolean skeleton to BC-S1.2 circuit syntax with
-`BCS12Walker`, invokes the bundled d4 executable, and stores the emitted NNF in
-`D4CompiledTarget`. Compilation creates a dense mapping before translation,
-assigning retained atoms first and quantified atoms afterward. The walker
-and circuit declarations use those native IDs; the target retains the complete
-declared mapping, including on constant return paths. Constant results are
-represented directly as `t 1` or `f 1`. Universal declarations raise
-`NotImplementedError` before invoking d4.
+`D4Compiler(input_mode="circuit", options=())` invokes the bundled d4 executable
+and stores the emitted NNF in `D4CompiledTarget`. The default circuit mode uses
+`BCS12Walker` to write BC-S1.2 syntax. CNF mode uses `CNFConverter()` and writes
+integer clauses as DIMACS. Each conversion enters a fresh PySMT environment,
+normalizes the formula and declared atoms into it, and substitutes fresh Boolean
+proxies there. A context-managed Z3 solver in that environment applies `simplify`
+followed by `tseitin-cnf`. Theory atoms never reach Z3’s theory simplifier.
+Z3 AST identity maps surviving proxies back to original IDs; auxiliary IDs follow
+every declared original ID. The source environment’s symbols, formula, supplied
+ID mapping, and `Abstractor` remain unchanged. The previously active environment
+is restored on success and failure, including when the source environment is
+inactive. Conversion returns integers only, including no clauses for true
+and one empty clause for false. The d4 writer encodes that empty clause as
+contradictory units because the bundled binary ignores empty DIMACS clauses.
+
+Compilation creates a dense mapping before translation, assigning retained
+atoms first and quantified atoms afterward. Only retained original IDs appear
+in the projection; generated Tseitin labels are existentially eliminated and
+never enter target remapping or public vocabulary. The target retains the complete
+declared original mapping, including on constant return paths. Constant results
+are represented directly as `t 1` or `f 1`. Universal declarations raise
+`NotImplementedError` before invoking d4. Preparation timings are recorded under
+`write_circuit_time` or `write_cnf_time`, and binary execution under `run_d4_time`.
+
+Options are snapshotted as a tuple and passed unchanged without a shell. Callers
+must avoid overriding wrapper-owned input/output flags or translation flags
+that alter projection (`--translate pcnf` replaces it with circuit inputs).
+Circuit mode adds `--remove-gates 1` unless either override spelling is present;
+CNF mode adds no gate-removal option. No automatic tuning or option merging is
+performed.
 
 `D4CompiledTarget` exposes the NNF text, projected variable count, and ID
 remapping. It uses `ddnnife` for DAG statistics, while its own NNF parser

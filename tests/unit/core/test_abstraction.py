@@ -62,7 +62,7 @@ def test_constructor_copies_input_and_mapping_views_are_live_and_read_only(env: 
     with pytest.raises(TypeError):
         del id_to_atom[2]  # pyright: ignore[reportIndexIssue]
     with pytest.raises(TypeError):
-        del atom_to_id[p]
+        del atom_to_id[p]  # pyright: ignore[reportIndexIssue]
     assert abstractor.get_id(q) == 3
     assert id_to_atom == {2: p, 3: q}
     assert atom_to_id == {p: 2, q: 3}

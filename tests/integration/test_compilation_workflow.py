@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from fractions import Fraction
+from functools import partial
 from itertools import combinations, product
 from pathlib import Path
 from typing import Iterator
@@ -24,14 +25,28 @@ from tests.integration.bank_cases import BANK_CASES
 
 pytestmark = pytest.mark.integration
 
+D4_BACKENDS = [
+    pytest.param(D4Compiler, D4CompiledTarget, DdnnifeEngine, id="d4-circuit"),
+    pytest.param(
+        partial(
+            D4Compiler,
+            input_mode="cnf",
+            options=["--preproc", "compile-equiv", "--occurrence-manager", "dynamicPureSimp"],
+        ),
+        D4CompiledTarget,
+        DdnnifeEngine,
+        id="d4-cnf",
+    ),
+]
+
 BACKENDS = [
     pytest.param(CuddCompiler, CuddCompiledTarget, CuddEngine, id="cudd"),
     pytest.param(PySddCompiler, PySddCompiledTarget, PySddEngine, id="pysdd"),
-    pytest.param(D4Compiler, D4CompiledTarget, DdnnifeEngine, id="d4"),
+    *D4_BACKENDS,
 ]
 
 
-@pytest.mark.parametrize("compiler_type, target_type, engine_type", BACKENDS)
+@pytest.mark.parametrize("compiler_factory, target_type, engine_type", BACKENDS)
 @pytest.mark.parametrize("include_unused", [False, True], ids=["formula-atoms", "unused-retained-atom"])
 @pytest.mark.parametrize(
     "eliminated_names, retained_names, expected_count",
@@ -44,7 +59,7 @@ BACKENDS = [
     ],
 )
 def test_reduced_projection_retains_only_declared_unquantified_atoms(
-    env, compiler_type, target_type, engine_type, include_unused, eliminated_names, retained_names, expected_count
+    env, compiler_factory, target_type, engine_type, include_unused, eliminated_names, retained_names, expected_count
 ):
     mgr = env.formula_manager
     x, y = (mgr.Symbol(name, REAL) for name in ("x", "y"))
@@ -69,7 +84,7 @@ def test_reduced_projection_retains_only_declared_unquantified_atoms(
     ]
     with TheoryCompilation(phi, atoms=declared, env=env) as compilation:
         target = compilation.compile_treduced(
-            compiler_type(), lemmas, exists_atoms=[atoms[name] for name in eliminated_names]
+            compiler_factory(), lemmas, exists_atoms=[atoms[name] for name in eliminated_names]
         )
 
     assert target.atoms == retained
@@ -89,9 +104,9 @@ def workflow_cases(extended: bool) -> list:
     for case in BANK_CASES:
         formula_factory, model_count = case.values
         for backend in BACKENDS:
-            compiler_type, target_type, engine_type = backend.values
+            compiler_factory, target_type, engine_type = backend.values
             marks = []
-            if compiler_type is D4Compiler and (
+            if target_type is D4CompiledTarget and (
                 (extended and case.id == "BV unsat") or (not extended and model_count == 0)
             ):
                 marks = [pytest.mark.skip(reason="ddnnife cannot load the resulting constant d4 circuit")]
@@ -99,7 +114,7 @@ def workflow_cases(extended: bool) -> list:
                 pytest.param(
                     formula_factory,
                     model_count,
-                    compiler_type,
+                    compiler_factory,
                     target_type,
                     engine_type,
                     id=f"{case.id}-{backend.id}",
@@ -132,7 +147,7 @@ def literal_queries(mgr: FormulaManager, atoms: tuple[FNode, ...]) -> Iterator[l
 
 
 @pytest.mark.parametrize(
-    "formula_factory, model_count, compiler_type, target_type, engine_type", workflow_cases(extended=False)
+    "formula_factory, model_count, compiler_factory, target_type, engine_type", workflow_cases(extended=False)
 )
 def test_reduced_workflow(
     env: Environment,
@@ -140,7 +155,7 @@ def test_reduced_workflow(
     tmp_path: Path,
     formula_factory: Callable[[dict[str, FNode]], FNode],
     model_count: int,
-    compiler_type: type[PropCompiler],
+    compiler_factory: Callable[[], PropCompiler],
     target_type: type[PropCompiledTarget],
     engine_type: type[QueryEngine],
 ):
@@ -154,7 +169,7 @@ def test_reduced_workflow(
         entailments = [not satisfiable(env, mgr.And(phi, mgr.Not(clause))) for clause in clauses]
         enumerator = MathSATTotalEnumerator()
         enumerator.check_all_sat(compilation.phi, atoms=list(atoms))
-        target = compilation.compile_treduced(compiler_type(), enumerator.get_theory_lemmas())
+        target = compilation.compile_treduced(compiler_factory(), enumerator.get_theory_lemmas())
 
     directory = tmp_path / "target"
     target.save(directory)
@@ -176,7 +191,7 @@ def test_reduced_workflow(
 
 
 @pytest.mark.parametrize(
-    "formula_factory, model_count, compiler_type, target_type, engine_type", workflow_cases(extended=True)
+    "formula_factory, model_count, compiler_factory, target_type, engine_type", workflow_cases(extended=True)
 )
 def test_extended_workflow(
     env: Environment,
@@ -184,7 +199,7 @@ def test_extended_workflow(
     tmp_path: Path,
     formula_factory: Callable[[dict[str, FNode]], FNode],
     model_count: int,
-    compiler_type: type[PropCompiler],
+    compiler_factory: Callable[[], PropCompiler],
     target_type: type[PropCompiledTarget],
     engine_type: type[QueryEngine],
 ):
@@ -202,11 +217,11 @@ def test_extended_workflow(
         lemmas = enumerator.get_theory_lemmas()
         lemmas_atoms = set().union(*(compilation.normalize(lemma).get_atoms() for lemma in lemmas))
         generated = lemmas_atoms - set(atoms)
-        if compiler_type is D4Compiler and generated:
+        if target_type is D4CompiledTarget and generated:
             with pytest.raises(NotImplementedError, match="universal.*elimination"):
-                compilation.compile_textended(compiler_type(), lemmas)
+                compilation.compile_textended(compiler_factory(), lemmas)
             return
-        target = compilation.compile_textended(compiler_type(), lemmas)
+        target = compilation.compile_textended(compiler_factory(), lemmas)
 
     directory = tmp_path / "target"
     target.save(directory)
@@ -241,12 +256,12 @@ def extra_atom_case(env, symbols, request):
     return phi, (extra, *formula_atoms)
 
 
-@pytest.mark.parametrize("compiler_type, target_type, engine_type", BACKENDS)
+@pytest.mark.parametrize("compiler_factory, target_type, engine_type", BACKENDS)
 def test_reduced_extra_atom_workflow(
     env: Environment,
     tmp_path: Path,
     extra_atom_case: tuple[FNode, tuple[FNode, ...]],
-    compiler_type: type[PropCompiler],
+    compiler_factory: Callable[[], PropCompiler],
     target_type: type[PropCompiledTarget],
     engine_type: type[QueryEngine],
 ):
@@ -260,7 +275,7 @@ def test_reduced_extra_atom_workflow(
         entailments = [not satisfiable(env, mgr.And(phi, mgr.Not(clause))) for clause in clauses]
         enumerator = MathSATTotalEnumerator()
         enumerator.check_all_sat(compilation.phi, atoms=list(atoms))
-        target = compilation.compile_treduced(compiler_type(), enumerator.get_theory_lemmas())
+        target = compilation.compile_treduced(compiler_factory(), enumerator.get_theory_lemmas())
 
     directory = tmp_path / "target"
     target.save(directory)
@@ -281,12 +296,12 @@ def test_reduced_extra_atom_workflow(
                 assert session.entails_clause(clause) == entailed, clause
 
 
-@pytest.mark.parametrize("compiler_type, target_type, engine_type", BACKENDS)
+@pytest.mark.parametrize("compiler_factory, target_type, engine_type", BACKENDS)
 def test_extended_extra_atom_workflow(
     env: Environment,
     tmp_path: Path,
     extra_atom_case: tuple[FNode, tuple[FNode, ...]],
-    compiler_type: type[PropCompiler],
+    compiler_factory: Callable[[], PropCompiler],
     target_type: type[PropCompiledTarget],
     engine_type: type[QueryEngine],
 ):
@@ -302,7 +317,7 @@ def test_extended_extra_atom_workflow(
         implicants = [not satisfiable(env, mgr.And(cube, negated)) for cube in cubes]
         enumerator = MathSATTotalEnumerator()
         enumerator.check_all_sat(mgr.Not(compilation.phi), atoms=list(atoms))
-        target = compilation.compile_textended(compiler_type(), enumerator.get_theory_lemmas())
+        target = compilation.compile_textended(compiler_factory(), enumerator.get_theory_lemmas())
 
     directory = tmp_path / "target"
     target.save(directory)
