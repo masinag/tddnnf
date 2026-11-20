@@ -1,3 +1,4 @@
+from functools import partial
 from pathlib import Path
 from typing import Callable
 
@@ -16,12 +17,14 @@ from tests.helpers import equivalent
 from tests.unit.cases import ELIMINATION_CASES, PLAIN_CASES
 
 FormulaFactoryType = Callable[[], FNode]
+COMPILERS = [CuddCompiler, PySddCompiler, D4Compiler, partial(D4Compiler, input_mode="cnf")]
+COMPILER_IDS = ["cudd", "pysdd", "d4", "d4-cnf"]
 
 
-@pytest.mark.parametrize("compiler_type", [CuddCompiler, PySddCompiler, D4Compiler], ids=["cudd", "pysdd", "d4"])
+@pytest.mark.parametrize("compiler_type", COMPILERS, ids=COMPILER_IDS)
 @pytest.mark.parametrize("formula_factory", PLAIN_CASES)
 def test_plain_compilation_preserves_meaning(
-    env: Environment, compiler_type: type[PropCompiler], formula_factory: FormulaFactoryType
+    env: Environment, compiler_type: Callable[[], PropCompiler], formula_factory: FormulaFactoryType
 ):
     formula = formula_factory()
     atoms = sorted(formula.get_atoms(), key=lambda atom: atom.symbol_name())
@@ -34,10 +37,21 @@ def test_plain_compilation_preserves_meaning(
     assert equivalent(env, target.to_pysmt(abstractor, env.formula_manager), formula)
 
 
-@pytest.mark.parametrize("compiler_type", [CuddCompiler, PySddCompiler, D4Compiler], ids=["cudd", "pysdd", "d4"])
-@pytest.mark.parametrize("formula_factory, variable_names", ELIMINATION_CASES)
+@pytest.mark.parametrize("compiler_type", COMPILERS, ids=COMPILER_IDS)
+@pytest.mark.parametrize(
+    "formula_factory, variable_names",
+    [
+        *ELIMINATION_CASES,
+        pytest.param(lambda: Symbol("p"), ("p",), id="atom"),
+        pytest.param(lambda: And(Symbol("p"), Not(Symbol("p"))), ("p",), id="contradiction"),
+        pytest.param(lambda: Or(Symbol("p"), Not(Symbol("p"))), ("p",), id="tautology"),
+    ],
+)
 def test_existential_elimination(
-    env: Environment, compiler_type: type[PropCompiler], formula_factory: FormulaFactoryType, variable_names: list[str]
+    env: Environment,
+    compiler_type: Callable[[], PropCompiler],
+    formula_factory: FormulaFactoryType,
+    variable_names: list[str],
 ):
     formula = formula_factory()
     atoms = sorted(formula.get_atoms(), key=lambda atom: atom.symbol_name())
@@ -53,10 +67,46 @@ def test_existential_elimination(
     assert equivalent(env, reconstructed, env.formula_manager.Exists(variables, formula))
 
 
+@pytest.mark.parametrize("compiler_type", COMPILERS, ids=COMPILER_IDS)
+@pytest.mark.parametrize(
+    "formula_factory, atom_names",
+    [
+        pytest.param(TRUE, ["p"], id="true-with-declared-atom"),
+        pytest.param(FALSE, ["p"], id="false-with-declared-atom"),
+        pytest.param(lambda: Symbol("p"), ["p", "q"], id="unused-declared-atom"),
+        pytest.param(
+            lambda: Or(*(And(Symbol(f"p{i}"), Symbol(f"p{i + 1}")) for i in range(0, 10, 2))),
+            [f"p{i}" for i in range(11)],
+            id="auxiliaries-with-unused-declared-atom",
+        ),
+    ],
+)
+def test_compilation_preserves_meaning_and_declared_abstraction(
+    env: Environment,
+    compiler_type: Callable[[], PropCompiler],
+    formula_factory: FormulaFactoryType,
+    atom_names: list[str],
+):
+    formula = formula_factory()
+    atoms = [Symbol(name) for name in atom_names]
+    abstraction = {7 * index: atom for index, atom in enumerate(atoms, 1)}
+    abstractor = Abstractor(abstraction)
+
+    target = compiler_type().compile(formula, abstractor, all_atoms=atoms)
+    reconstructed = target.to_pysmt(abstractor, env.formula_manager)
+
+    assert equivalent(env, reconstructed, formula)
+    assert dict(abstractor.id_to_atom) == abstraction
+    assert dict(abstractor.atom_to_id) == {atom: idx for idx, atom in abstraction.items()}
+
+
 @pytest.mark.parametrize("compiler_type", [CuddCompiler, PySddCompiler], ids=["cudd", "pysdd"])
 @pytest.mark.parametrize("formula_factory, variable_names", ELIMINATION_CASES)
 def test_universal_elimination(
-    env: Environment, compiler_type: type[PropCompiler], formula_factory: FormulaFactoryType, variable_names: list[str]
+    env: Environment,
+    compiler_type: Callable[[], PropCompiler],
+    formula_factory: FormulaFactoryType,
+    variable_names: list[str],
 ):
     formula = formula_factory()
     atoms = sorted(formula.get_atoms(), key=lambda atom: atom.symbol_name())
@@ -72,20 +122,15 @@ def test_universal_elimination(
     assert equivalent(env, reconstructed, env.formula_manager.ForAll(variables, formula))
 
 
-def test_d4_rejects_universal_elimination(env: Environment):
-    p, q = (Symbol(name) for name in ("p", "q"))
-    abstractor = Abstractor()
-    for atom in (p, q):
-        abstractor.get_id(atom)
-
-    with pytest.raises(NotImplementedError):
-        D4Compiler().compile(And(p, q), abstractor, all_atoms=[p, q], forall_atoms=[q])
-
-
 @pytest.mark.parametrize(
     "compiler_type, target_type",
-    [(CuddCompiler, CuddCompiledTarget), (PySddCompiler, PySddCompiledTarget), (D4Compiler, D4CompiledTarget)],
-    ids=["cudd", "pysdd", "d4"],
+    [
+        (CuddCompiler, CuddCompiledTarget),
+        (PySddCompiler, PySddCompiledTarget),
+        (D4Compiler, D4CompiledTarget),
+        (partial(D4Compiler, input_mode="cnf"), D4CompiledTarget),
+    ],
+    ids=COMPILER_IDS,
 )
 @pytest.mark.parametrize(
     "formula_factory",
@@ -98,7 +143,7 @@ def test_d4_rejects_universal_elimination(env: Environment):
 def test_native_round_trip_preserves_meaning(
     env: Environment,
     tmp_path: Path,
-    compiler_type: type[PropCompiler],
+    compiler_type: Callable[[], PropCompiler],
     target_type: PropCompiledTarget,
     formula_factory: FormulaFactoryType,
 ):

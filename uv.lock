@@ -490,6 +490,7 @@ dependencies = [
     { name = "pysdd" },
     { name = "pysmt" },
     { name = "tlemma-enum" },
+    { name = "z3-solver" },
 ]
 
 [package.optional-dependencies]
@@ -498,7 +499,6 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "ruff" },
-    { name = "z3-solver" },
 ]
 
 [package.metadata]
@@ -514,7 +514,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1" },
     { name = "tlemma-enum", git = "https://github.com/ecivini/tlemmas-enumeration.git?rev=develop" },
-    { name = "z3-solver", marker = "extra == 'dev'", specifier = ">=5.4.1.0" },
+    { name = "z3-solver", specifier = ">=5.4.1.0" },
 ]
 provides-extras = ["dev"]
 

@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Self
+from typing import Literal, Self
 
 import ddnnife
 import pysmt.operators as op
@@ -14,6 +14,7 @@ from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
 from pysmt.walkers import DagWalker, handles
 
+from tddnnf.compilation.cnf import CNFConverter
 from tddnnf.compilation.compiler import PropCompiler
 from tddnnf.compilation.targets import DagSize, PropCompiledTarget
 from tddnnf.core.abstraction import Abstractor
@@ -250,10 +251,41 @@ class BCS12Walker(DagWalker):
 
 
 class D4Compiler(PropCompiler[D4CompiledTarget]):
-    """PropCompiler that compiles an SMT formula into a d-DNNF via d4v2.
+    """PropCompiler that compiles an SMT formula into a d-DNNF via d4v2."""
 
-    The formula is first translated to BC-S1.2 circuit format, then compiled by the d4 binary.
-    """
+    def __init__(self, *, input_mode: Literal["circuit", "cnf"] = "circuit", options: Sequence[str] = ()) -> None:
+        """Initialize the interface to the compiler.
+
+        Args:
+            input_mode: The input format fed to the compiler. d4v2 accepts either classic CNF input, or a non-CNF input
+                in the BC-S1.2 circuit format.
+            options: list of command line options to pass to the compiler.
+        """
+        if input_mode not in ("circuit", "cnf"):
+            raise ValueError(f"Unsupported d4 input mode: {input_mode}")
+        self.input_mode = input_mode
+        self.options = tuple(options)
+
+    @staticmethod
+    def _write_cnf(
+        formula: FNode,
+        abstractor: Abstractor,
+        remapping: Mapping[int, int],
+        projected_ids: set[int],
+        path: Path,
+    ) -> None:
+        atom_ids = {abstractor.get_atom(abstractor_id): d4_id for abstractor_id, d4_id in remapping.items()}
+        clauses, variable_count = CNFConverter().convert(formula, atom_ids)
+        if clauses == [[]]:
+            # This d4 fork ignores empty clauses; contradictory units preserve false.
+            clauses = [[1], [-1]]
+            variable_count = max(variable_count, 1)
+        with path.open("w") as f:
+            ids = sorted(remapping[abstractor_id] for abstractor_id in projected_ids)
+            f.write("c p show " + " ".join(map(str, [*ids, 0])) + "\n")
+            f.write(f"p cnf {variable_count} {len(clauses)}\n")
+            for clause in clauses:
+                f.write(" ".join(map(str, [*clause, 0])) + "\n")
 
     @staticmethod
     def _write_circuit(
@@ -268,8 +300,8 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
 
         with open(path, "w") as f:
             f.write("c BC-S1.2\n")
-            for native in remapping.values():
-                f.write(f"I v{native}\n")
+            for d4_id in remapping.values():
+                f.write(f"I v{d4_id}\n")
             ids = sorted(remapping[aid] for aid in projected_ids)
             if ids:
                 f.write("P " + " ".join(f"v{i}" for i in ids) + "\n")
@@ -279,19 +311,22 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
                 f.write(line + "\n")
             f.write(f"T {root_gate}\n")
 
-    @staticmethod
-    def _run_d4(circuit_path: Path, out_path: Path) -> None:
+    def _run_d4(self, circuit_path: Path, out_path: Path) -> None:
         cmd = [
             str(D4_BIN),
             "-i",
             str(circuit_path),
             "--input-type",
-            "circuit",
-            "--remove-gates",
-            "1",
+            self.input_mode,
             "--dump-file",
             str(out_path),
         ]
+        if self.input_mode == "circuit" and not any(
+            token == "--remove-gates" or token.startswith("--remove-gates=") for token in self.options
+        ):
+            # with circuit mode, by default enable the gate-removal option
+            cmd.extend(["--remove-gates", "1"])
+        cmd.extend(self.options)
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if result.returncode != 0:
             raise RuntimeError(f"d4 compilation failed (exit {result.returncode}):\n{result.stderr.decode()}")
@@ -332,15 +367,16 @@ class D4Compiler(PropCompiler[D4CompiledTarget]):
             projected_ids = {abstractor.get_id(a) for a in proj_set}
             # d4 assigns projected variables first; match that order before translation.
             ordered_ids = sorted(projected_ids) + [aid for aid in all_atom_ids if aid not in projected_ids]
-            remapping = {aid: native for native, aid in enumerate(ordered_ids, 1)}
+            remapping = {abstractor_id: d4_id for d4_id, abstractor_id in enumerate(ordered_ids, 1)}
 
             with tempfile.TemporaryDirectory(prefix="d4_compile_") as tmpdir:
                 tmp = Path(tmpdir)
-                circuit_path = tmp / "circuit.bc"
+                circuit_path = tmp / ("circuit.bc" if self.input_mode == "circuit" else "circuit.cnf")
                 out_path = tmp / "output.nnf"
 
-                with stats.track_time("write_circuit_time"):
-                    self._write_circuit(phi, abstractor, remapping, projected_ids, circuit_path)
+                writer = self._write_circuit if self.input_mode == "circuit" else self._write_cnf
+                with stats.track_time(f"write_{self.input_mode}_time"):
+                    writer(phi, abstractor, remapping, projected_ids, circuit_path)
                 with stats.track_time("run_d4_time"):
                     self._run_d4(circuit_path, out_path)
 

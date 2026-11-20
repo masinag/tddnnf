@@ -1,10 +1,15 @@
 """Formula builders and expected model counts for integration tests."""
 
 import pytest
-from pysmt.shortcuts import Array, Int, Real, ToReal
+from pysmt.shortcuts import And, Array, Int, Or, Real, Symbol, ToReal
 from pysmt.typing import INT
 
 BANK_CASES = [
+    pytest.param(
+        lambda s: Or(*(And(Symbol(f"cnf_p{i}"), Symbol(f"cnf_q{i}")) for i in range(5))),
+        4**5 - 3**5,
+        id="Bool auxiliary variables",
+    ),
     pytest.param(lambda s: (s["A"] | s["B"]) & (~s["A"] | ~s["B"]), 2, id="Bool only"),
     pytest.param(lambda s: s["x"].Equals(s["y"]) & s["x"].Equals(s["z"]) & ~s["y"].Equals(s["z"]), 0, id="Eq unsat"),
     pytest.param(lambda s: (s["x"] <= 0) & (s["x"] >= 1), 0, id="LRA unsat"),
