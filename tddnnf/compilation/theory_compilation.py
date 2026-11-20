@@ -48,11 +48,11 @@ class TheoryCompilation:
         try:
             self._normalizer = NormalizerWalker(self._env)
             self.phi = self.normalize(phi)
-            atoms = sorted(self.phi.get_atoms(), key=FNode.node_id) if atoms is None else atoms
+            atoms = sorted(self._get_atoms(self.phi), key=FNode.node_id) if atoms is None else atoms
             self.atoms = tuple(
                 dict.fromkeys(normalized for atom in atoms if (normalized := self._normalize_atom(atom)) is not None)
             )
-            if not self.phi.get_atoms() <= set(self.atoms):
+            if not self._get_atoms(self.phi) <= set(self.atoms):
                 raise ValueError("Normalized formula atoms must belong to atoms")
         except BaseException:
             self.close()
@@ -73,6 +73,9 @@ class TheoryCompilation:
     def _ensure_open(self) -> None:
         if self._closed:
             raise RuntimeError("Compilation session is closed")
+
+    def _get_atoms(self, formula: FNode) -> frozenset[FNode]:
+        return self._env.ao.get_atoms(formula)
 
     def normalize(self, formula: FNode) -> FNode:
         """Normalize an SMT formula using the session normalizer.
@@ -175,7 +178,7 @@ class TheoryCompilation:
             )
             if abstractor is None:
                 abstractor = Abstractor()
-            extra_atoms_in_lemmas = combined.get_atoms() - set(self.atoms)
+            extra_atoms_in_lemmas = self._get_atoms(combined) - set(self.atoms)
             quantified = tuple(sorted(exists_atoms_set | extra_atoms_in_lemmas, key=FNode.node_id))
             all_atoms = (*self.atoms, *sorted(extra_atoms_in_lemmas, key=FNode.node_id))
             for atom in all_atoms:

@@ -3,6 +3,7 @@ from typing import Any
 
 from pysmt.environment import Environment
 from pysmt.fnode import FNode
+from pysmt.oracles import AtomsOracle
 from pysmt.shortcuts import get_env
 from pysmt.typing import BOOL
 
@@ -147,7 +148,9 @@ def compilation_vocabulary(
         if len(set(atoms)) != len(atoms):
             raise ValueError("Atom declarations must not contain duplicates")
     declared, existential, universal = set(all_atoms), set(exists_atoms), set(forall_atoms)
-    if not formula.get_atoms() <= declared:
+    # since we do not know the formula environment, we instantiate a local `AtomsOracle` so to avoid "polluting"
+    # the cache of the `AtomsOracle` of the current active environment.
+    if not AtomsOracle().get_atoms(formula) <= declared:
         raise ValueError("Formula atoms must belong to all_atoms")
     quantified = existential | universal
     if not quantified <= declared or existential & universal:
