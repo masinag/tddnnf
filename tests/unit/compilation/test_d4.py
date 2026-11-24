@@ -7,7 +7,8 @@ import pytest
 from pysmt.environment import Environment
 from pysmt.shortcuts import And, Symbol
 
-from tddnnf.compilation.d4 import D4Compiler
+from tddnnf.compilation.d4 import D4CompiledTarget, D4Compiler
+from tddnnf.compilation.targets import DagSize
 from tddnnf.core.abstraction import Abstractor
 
 ModeType = Literal["circuit", "cnf"]
@@ -59,3 +60,35 @@ def test_d4_failure_propagation_and_temporary_cleanup(env: Environment, mode: Mo
         with pytest.raises(RuntimeError, match=r"exit 7.*\n.*native failure"):
             D4Compiler(input_mode=mode).compile(p, abstractor, all_atoms=[p])
     assert paths and not paths[0].parent.exists()
+
+
+def test_d4_target_walks_reachable_nodes(env: Environment):
+    target = D4CompiledTarget(
+        "c shared child\n\n1 2 1 -2 0\no 1 0\n1 2 -1 2 0\nt 2\na 3 0\n3 4 0\nf 4 0\n",
+        2,
+        remapping={7: 2, 9: 1},
+    )
+    mgr = env.formula_manager
+    p, q = mgr.Symbol("p"), mgr.Symbol("q")
+
+    assert target.dag_size() == DagSize(2, 2)
+    assert target.to_pysmt(Abstractor({7: q, 9: p}), mgr) == mgr.Or(
+        mgr.And(mgr.TRUE(), p, mgr.Not(q)), mgr.And(mgr.TRUE(), mgr.Not(p), q)
+    )
+
+
+@pytest.mark.parametrize(
+    ("nnf", "message"),
+    [
+        ("o 1 0\na 2 0\n1 2 0\n2 1 0\n", "Cycle in d4 circuit"),
+        ("o 1 0\n1 2 0\n", "Missing declaration for d4 node 2"),
+        ("o 1 0\n1 2 -1\n", "2: malformed serialized d4 record"),
+    ],
+)
+def test_d4_target_rejects_invalid_circuits(env: Environment, nnf: str, message: str):
+    target = D4CompiledTarget(nnf, 1)
+
+    with pytest.raises(ValueError, match=message):
+        target.dag_size()
+    with pytest.raises(ValueError, match=message):
+        target.to_pysmt(Abstractor(), env.formula_manager)

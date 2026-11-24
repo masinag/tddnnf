@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Literal, Self
 
-import ddnnife
 import pysmt.operators as op
 from pysmt.fnode import FNode
 from pysmt.formula import FormulaManager
@@ -45,40 +44,25 @@ def _clean_nnf(nnf_text: str, var_count: int) -> str:
 @dataclass
 class _D4Node:
     node_type: str
-    edges: list[tuple[int, list[int]]] = field(default_factory=list)
-    memo: FNode | None = None
+    edges: list[tuple[int, list[int]]]
 
     def to_pysmt(
         self,
-        graph: dict[int, _D4Node],
+        formulas: Mapping[int, FNode],
         abstr: Abstractor,
         mgr: FormulaManager,
-        inv_remap: dict[int, int],
+        inv_remap: Mapping[int, int],
     ) -> FNode:
-        if self.memo is not None:
-            return self.memo
-        if self.node_type == "t":
-            self.memo = mgr.TRUE()
-        elif self.node_type == "f":
-            self.memo = mgr.FALSE()
-        elif self.node_type in ("o", "a"):
-            children: list[FNode] = []
-            for tgt, lits in self.edges:
-                child = graph[tgt].to_pysmt(graph, abstr, mgr, inv_remap)
-                if lits:
-                    lit_assignments = [
-                        abstr.get_atom(inv_remap[abs(lit)]) if lit > 0 else mgr.Not(abstr.get_atom(inv_remap[abs(lit)]))
-                        for lit in lits
-                    ]
-                    children.append(mgr.And(child, *lit_assignments))
-                else:
-                    children.append(child)
-            if self.node_type == "o":
-                self.memo = mgr.Or(children) if children else mgr.FALSE()
-            else:
-                self.memo = mgr.And(children) if children else mgr.TRUE()
-        assert self.memo is not None
-        return self.memo
+        children = []
+        for target, literals in self.edges:
+            child = formulas[target]
+            if literals:
+                atoms = [abstr.get_atom(inv_remap[abs(lit)]) for lit in literals]
+                child = mgr.And(child, *(atom if lit > 0 else mgr.Not(atom) for lit, atom in zip(literals, atoms)))
+            children.append(child)
+        if self.node_type in ("t", "f"):
+            return mgr.Bool(self.node_type == "t")
+        return mgr.Or(children) if self.node_type == "o" else mgr.And(children)
 
 
 class D4CompiledTarget(PropCompiledTarget):
@@ -102,34 +86,65 @@ class D4CompiledTarget(PropCompiledTarget):
         return self._remapping
 
     def dag_size(self) -> DagSize:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "circuit.nnf"
-            path.write_text(self._nnf_text)
-            ddnnf = ddnnife.Ddnnf.from_file(str(path), self._var_count)
-        stats = ddnnf.statistics()
-        return DagSize(vertices=stats.nodes.total, edges=stats.child_connections.total)
+        vertices = edges = 0
+        for _, node in self._walk_nodes():
+            vertices += 1
+            edges += len(node.edges)
+        return DagSize(vertices, edges)
 
     def to_pysmt(self, abstr: Abstractor, mgr: FormulaManager) -> FNode:
         inv_remap = {v: k for k, v in self._remapping.items()}
+        formulas: dict[int, FNode] = {}
+        for node_id, node in self._walk_nodes():
+            formulas[node_id] = node.to_pysmt(formulas, abstr, mgr, inv_remap)
+        return formulas[1]
+
+    def _walk_nodes(self) -> Iterator[tuple[int, _D4Node]]:
         graph: dict[int, _D4Node] = {}
-
-        for line in self._nnf_text.strip().splitlines():
-            line = line.strip()
-            if not line:
-                continue
+        edges: dict[int, list[tuple[int, list[int]]]] = {}
+        for line_number, line in enumerate(self._nnf_text.splitlines(), 1):
             parts = line.split()
-            if parts[0] in ("t", "f"):
-                graph[int(parts[1])] = _D4Node(parts[0])
-            elif parts[0] in ("o", "a"):
-                graph[int(parts[1])] = _D4Node(parts[0])
-            elif parts[-1] == "0":
-                parts = parts[:-1]
-                src = int(parts[0])
-                tgt = int(parts[1])
-                lits = [int(x) for x in parts[2:]]
-                graph[src].edges.append((tgt, lits))
+            if not parts or parts[0].startswith("c"):
+                continue
+            try:
+                if parts[0] in {"a", "o", "t", "f"}:
+                    if len(parts) not in (2, 3) or (len(parts) == 3 and parts[2] != "0"):
+                        raise ValueError
+                    node_id = int(parts[1])
+                    if node_id <= 0:
+                        raise ValueError
+                    graph[node_id] = _D4Node(parts[0], edges.setdefault(node_id, []))
+                else:
+                    values = [int(part) for part in parts]
+                    if len(values) < 3 or values[0] <= 0 or values[1] <= 0 or values[-1] != 0:
+                        raise ValueError
+                    if 0 in values[2:-1]:
+                        raise ValueError
+                    edges.setdefault(values[0], []).append((values[1], values[2:-1]))
+            except ValueError as exc:
+                raise ValueError(f"{line_number}: malformed serialized d4 record") from exc
 
-        return graph[1].to_pysmt(graph, abstr, mgr, inv_remap)
+        #  Walk reachable nodes in postorder
+        visited: set[int] = set()
+        visiting: set[int] = set()
+        stack = [(1, False)]
+        while stack:
+            node_id, expanded = stack.pop()
+            if node_id in visited:
+                continue
+            node = graph.get(node_id)
+            if node is None:
+                raise ValueError(f"Missing declaration for d4 node {node_id}")
+            if expanded:
+                visiting.remove(node_id)
+                visited.add(node_id)
+                yield node_id, node
+            else:
+                if node_id in visiting:
+                    raise ValueError("Cycle in d4 circuit")
+                visiting.add(node_id)
+                stack.append((node_id, True))
+                stack.extend((child, False) for child, _ in node.edges)
 
     def save(self, directory: Path) -> None:
         data = {"var_count": self.var_count, "remapping": {str(k): v for k, v in self.remapping.items()}}
