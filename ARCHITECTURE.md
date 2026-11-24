@@ -239,8 +239,9 @@ CNF mode adds no gate-removal option. No automatic tuning or option merging is
 performed.
 
 `D4CompiledTarget` exposes the NNF text, projected variable count, and ID
-remapping. It uses `ddnnife` for DAG statistics, while its own NNF parser
-reconstructs a PySMT formula.
+remapping. DAG sizing and PySMT reconstruction share an iterative postorder walk
+from node `1`. Sizing counts each reachable node once and counts every outgoing
+edge from those nodes, including multiple edges to a shared child.
 
 ### SDD: PySDD
 

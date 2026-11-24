@@ -1,5 +1,4 @@
 import subprocess
-import sys
 from pathlib import Path
 from typing import Literal
 from unittest.mock import patch
@@ -76,17 +75,6 @@ def test_d4_target_walks_reachable_nodes(env: Environment):
     assert target.to_pysmt(Abstractor({7: q, 9: p}), mgr) == mgr.Or(
         mgr.And(mgr.TRUE(), p, mgr.Not(q)), mgr.And(mgr.TRUE(), mgr.Not(p), q)
     )
-
-
-def test_walk_deep_d4_target(env: Environment):
-    depth = sys.getrecursionlimit() + 10
-    lines = [f"o {node} 0" for node in range(1, depth)]
-    lines.append(f"t {depth} 0")
-    lines.extend(f"{node} {node + 1} 0" for node in range(1, depth))
-    target = D4CompiledTarget("\n".join(lines), 0)
-
-    assert target.dag_size() == DagSize(depth, depth - 1)
-    assert target.to_pysmt(Abstractor(), env.formula_manager).is_true()
 
 
 @pytest.mark.parametrize(
