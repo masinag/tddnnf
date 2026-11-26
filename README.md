@@ -141,22 +141,23 @@ See the [`examples/`](examples/) directory for more examples.
 
 ### Compilation backends
 
-| Representation | Compiler                                                                                                                            |                        Requirements |
-| :------------- | :---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------: |
-| d-DNNF         | `D4Compiler` interface for [d4](https://github.com/crillab/d4v2)                                                                    | `python -m tddnnf.install_bin --d4` |
+| Representation | Compiler                                                                                                                             |                        Requirements |
+| :------------- | :----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------: |
+| d-DNNF         | `D4Compiler` interface for [d4](https://github.com/crillab/d4v2)                                                                     | `python -m tddnnf.install_bin --d4` |
 | OBDD           | `CuddCompiler` interface for [CUDD](https://web.archive.org/web/20180127051756/http://vlsi.colorado.edu/~fabio/CUDD/html/index.html) |                installed by default |
-| SDD            | `PySddCompiler` interface for [PySDD](https://github.com/ML-KULeuven/PySDD)                                                           |                installed by default |
+| SDD            | `PySddCompiler` interface for [PySDD](https://github.com/ML-KULeuven/PySDD)                                                          |                installed by default |
 
 Each compiler produces a different representation and must be paired with its
 matching engine(s).
 
 ### Query backends
 
-| Representation | Compiler                                                                                                                          |          Requiremets |
-| :------------- | :-------------------------------------------------------------------------------------------------------------------------------- | -------------------: |
-| d-DNNF         | `DdnnifeEngine` interface for [ddnnife](https://github.com/practical-kc/ddnnife)                                                  | installed by default |
+| Representation | Compiler                                                                                                                           |          Requiremets |
+| :------------- | :--------------------------------------------------------------------------------------------------------------------------------- | -------------------: |
+| d-DNNF         | `DdnnifeEngine` interface for [ddnnife](https://github.com/practical-kc/ddnnife)                                                   | installed by default |
+| d-DNNF         | `DecDnnfRsEngine` interface for [decdnnf_rs_py](https://github.com/crillab/decdnnf_rs_py)                                          | installed by default |
 | OBDD           | `CuddEngine` interface for [CUDD](https://web.archive.org/web/20180127051756/http://vlsi.colorado.edu/~fabio/CUDD/html/index.html) | installed by default |
-| SDD            | `PySddEngine` interface for [PySDD](https://github.com/ML-KULeuven/PySDD)                                                           | installed by default |
+| SDD            | `PySddEngine` interface for [PySDD](https://github.com/ML-KULeuven/PySDD)                                                          | installed by default |
 
 For example, the above formula can be compiled into an SDD and queried via
 
