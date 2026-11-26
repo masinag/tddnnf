@@ -140,6 +140,12 @@ wheels = [
 ]
 
 [[package]]
+name = "decdnnf-rs-py"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/a5/79138cb6ad66e62c436215d2c59d469f4a1bed5b2379f7dee6d933249ae3/decdnnf_rs_py-0.1.0.tar.gz", hash = "sha256:bc9eb276fdcc5c9c68f2033c734d7adfc95b8c05a1fe8bf9b60019d898d6836d", size = 25868, upload-time = "2026-05-22T10:35:32.637Z" }
+
+[[package]]
 name = "distlib"
 version = "0.4.4"
 source = { registry = "https://pypi.org/simple" }
@@ -486,6 +492,7 @@ dependencies = [
     { name = "cmake" },
     { name = "dd" },
     { name = "ddnnife" },
+    { name = "decdnnf-rs-py" },
     { name = "ninja" },
     { name = "pysdd" },
     { name = "pysmt" },
@@ -507,6 +514,7 @@ requires-dist = [
     { name = "cmake", specifier = "<4" },
     { name = "dd", specifier = ">=0.6.0" },
     { name = "ddnnife", specifier = ">=0.1.0" },
+    { name = "decdnnf-rs-py", specifier = ">=0.1.0" },
     { name = "ninja", specifier = ">=1.13.2" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "pysdd", specifier = ">=1.0.6" },

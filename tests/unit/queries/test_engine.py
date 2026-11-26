@@ -12,6 +12,7 @@ from tddnnf.compilation.targets import TheoryCompiledTarget
 from tddnnf.core.abstraction import Abstractor
 from tddnnf.queries.cudd_engine import CuddEngine
 from tddnnf.queries.ddnnife_engine import DdnnifeEngine
+from tddnnf.queries.decdnnf_rs_engine import DecDnnfRsEngine
 from tddnnf.queries.engine import QueryEngine
 from tddnnf.queries.pysdd_engine import PySddEngine
 from tests.helpers import satisfiable, theory_models
@@ -26,8 +27,10 @@ ENGINE_GROUPS = [
     ("pysdd", PySddCompiler, PySddEngine, PLAIN_CASES, None),
     ("pysdd", PySddCompiler, PySddEngine, ELIMINATION_CASES, "exists"),
     ("pysdd", PySddCompiler, PySddEngine, ELIMINATION_CASES, "forall"),
-    ("d4", D4Compiler, DdnnifeEngine, DDNNIFE_PLAIN_CASES, None),
-    ("d4", D4Compiler, DdnnifeEngine, ELIMINATION_CASES, "exists"),
+    ("ddnnife", D4Compiler, DdnnifeEngine, DDNNIFE_PLAIN_CASES, None),
+    ("ddnnife", D4Compiler, DdnnifeEngine, ELIMINATION_CASES, "exists"),
+    ("decdnnf", D4Compiler, DecDnnfRsEngine, DDNNIFE_PLAIN_CASES, None),
+    ("decdnnf", D4Compiler, DecDnnfRsEngine, ELIMINATION_CASES, "exists"),
 ]
 LITERAL_QUERY_KINDS = ("empty", "positive", "negative", "contradictory", "all-positive", "all-negative", "mixed")
 ENGINE_CASES = []
