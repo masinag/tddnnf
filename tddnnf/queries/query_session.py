@@ -7,8 +7,8 @@ from typing import Generic, Self
 from pysmt.fnode import FNode
 
 from tddnnf.compilation.targets import T_Target, TheoryCompiledTarget
+from tddnnf.core.normalizer import NormalizerWalker
 from tddnnf.core.pysmt_utils import is_literal
-from tddnnf.normalization.normalizer import NormalizerWalker
 from tddnnf.queries.engine import QueryEngine
 
 

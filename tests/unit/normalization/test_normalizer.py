@@ -2,7 +2,7 @@ import pytest
 from pysmt.environment import Environment, get_env
 from pysmt.typing import INT, REAL
 
-from tddnnf.normalization.normalizer import NormalizerWalker
+from tddnnf.core.normalizer import NormalizerWalker
 from tests.helpers import equivalent, owns_dag
 
 

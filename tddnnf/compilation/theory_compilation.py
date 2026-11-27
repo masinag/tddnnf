@@ -10,9 +10,9 @@ from pysmt.shortcuts import get_env
 from tddnnf.compilation.compiler import PropCompiler
 from tddnnf.compilation.targets import T_Target, TheoryCompiledTarget
 from tddnnf.core.abstraction import Abstractor
+from tddnnf.core.normalizer import NormalizerWalker
 from tddnnf.core.pysmt_utils import is_atom, owns_dags
 from tddnnf.core.stats_collector import StatsCollector
-from tddnnf.normalization.normalizer import NormalizerWalker
 
 
 class TheoryCompilation:
