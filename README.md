@@ -152,12 +152,12 @@ matching engine(s).
 
 ### Query backends
 
-| Representation | Compiler                                                                                                                           |          Requiremets |
-| :------------- | :--------------------------------------------------------------------------------------------------------------------------------- | -------------------: |
-| d-DNNF         | `DdnnifeEngine` interface for [ddnnife](https://github.com/practical-kc/ddnnife)                                                   | installed by default |
-| d-DNNF         | `DecDnnfRsEngine` interface for [decdnnf_rs_py](https://github.com/crillab/decdnnf_rs_py)                                          | installed by default |
-| OBDD           | `CuddEngine` interface for [CUDD](https://web.archive.org/web/20180127051756/http://vlsi.colorado.edu/~fabio/CUDD/html/index.html) | installed by default |
-| SDD            | `PySddEngine` interface for [PySDD](https://github.com/ML-KULeuven/PySDD)                                                          | installed by default |
+| Representation | Compiler                                                                                                                           |                    Requirements |
+| :------------- | :--------------------------------------------------------------------------------------------------------------------------------- | ------------------------------: |
+| d-DNNF         | `DdnnifeEngine` interface for [ddnnife](https://github.com/practical-kc/ddnnife)                                                   |            installed by default |
+| d-DNNF         | `DecDnnfRsEngine` interface for [decdnnf_rs_py](https://github.com/crillab/decdnnf_rs_py)                                          | `pip install 'tddnnf[decdnnf]'` |
+| OBDD           | `CuddEngine` interface for [CUDD](https://web.archive.org/web/20180127051756/http://vlsi.colorado.edu/~fabio/CUDD/html/index.html) |            installed by default |
+| SDD            | `PySddEngine` interface for [PySDD](https://github.com/ML-KULeuven/PySDD)                                                          |            installed by default |
 
 For example, the above formula can be compiled into an SDD and queried via
 

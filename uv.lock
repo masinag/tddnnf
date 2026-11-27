@@ -492,7 +492,6 @@ dependencies = [
     { name = "cmake" },
     { name = "dd" },
     { name = "ddnnife" },
-    { name = "decdnnf-rs-py" },
     { name = "ninja" },
     { name = "pysdd" },
     { name = "pysmt" },
@@ -501,8 +500,12 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+decdnnf = [
+    { name = "decdnnf-rs-py" },
+]
 dev = [
     { name = "basedpyright" },
+    { name = "decdnnf-rs-py" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "ruff" },
@@ -514,7 +517,8 @@ requires-dist = [
     { name = "cmake", specifier = "<4" },
     { name = "dd", specifier = ">=0.6.0" },
     { name = "ddnnife", specifier = ">=0.1.0" },
-    { name = "decdnnf-rs-py", specifier = ">=0.1.0" },
+    { name = "decdnnf-rs-py", marker = "extra == 'decdnnf'", specifier = ">=0.1.0" },
+    { name = "decdnnf-rs-py", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "ninja", specifier = ">=1.13.2" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "pysdd", specifier = ">=1.0.6" },
@@ -524,7 +528,7 @@ requires-dist = [
     { name = "tlemma-enum", git = "https://github.com/ecivini/tlemmas-enumeration.git?rev=develop" },
     { name = "z3-solver", specifier = ">=5.4.1.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["decdnnf", "dev"]
 
 [[package]]
 name = "tlemma-enum"
