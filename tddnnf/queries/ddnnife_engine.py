@@ -1,44 +1,26 @@
 from __future__ import annotations
 
 import tempfile
-from collections.abc import Generator
 from pathlib import Path
 
 import ddnnife
-from pysmt.fnode import FNode
 
 from tddnnf.compilation.d4 import D4CompiledTarget
 from tddnnf.compilation.targets import TheoryCompiledTarget
-from tddnnf.core.pysmt_utils import clause_literals, cube_literals
-from tddnnf.queries.engine import QueryEngine
+from tddnnf.queries.ddnnf_engine import GenericDdnnfEngine
 
 
-class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
+class DdnnifeEngine(GenericDdnnfEngine):
     """Reason over a D4-compiled d-DNNF, using the ddnnife query engine."""
 
     def __init__(self, theory_target: TheoryCompiledTarget[D4CompiledTarget]) -> None:
-        self._tmpdir = None
-        if not isinstance(theory_target.target, D4CompiledTarget):
-            raise TypeError("DdnnifeEngine requires D4CompiledTarget")
-        self._abstr = theory_target.abstr
-        self._atoms: tuple[FNode, ...] = theory_target.atoms
-        self._atom_set: set[FNode] = set(theory_target.atoms)
-        self._var_count = theory_target.target.var_count
-        self._remapping = theory_target.target.remapping
-
-        self._tmpdir = None
+        super().__init__(theory_target)
         self._mut = None
         self._ddnnf = None
-        nnf_text = theory_target.target.nnf_text
-        if nnf_text not in ("t 1\n", "f 1\n"):
-            # Every target atom is mapped, even when absent from the DAG.
-            ids = {self._abstr.get_id(a) for a in self._atoms}
-            assert ids <= self._remapping.keys(), "D4 mapping must cover the target atoms"
         self._tmpdir = tempfile.TemporaryDirectory(prefix="ddnnife_engine_")
         try:
             nnf_path = Path(self._tmpdir.name) / "circuit.nnf"
-            nnf_path.write_text(nnf_text)
-            # ddnnife errors for unsupported constant circuits intentionally propagate.
+            nnf_path.write_text(theory_target.target.nnf_text)
             self._ddnnf = ddnnife.Ddnnf.from_file(str(nnf_path), features=self._var_count)
             self._mut = self._ddnnf.as_mut()
         except BaseException:
@@ -56,58 +38,15 @@ class DdnnifeEngine(QueryEngine[D4CompiledTarget]):
         if tmpdir is not None:
             tmpdir.cleanup()
 
-    def _lits_to_ddnnf(self, lits: list[FNode], negate: bool = False) -> list[int]:
-        """Convert the given list of literals to a list of signed IDs to condition the d-DNNF on, flipping each sign
-         when negate is True.
-
-        The lits list cannot contain duplicates, constants, or contradictory literals.
-        """
-        result: list[int] = []
-        for lit in lits:
-            atom = lit.arg(0) if lit.is_not() else lit
-            var_id = self._abstr.get_id(atom)
-            nnf_id = self._remapping[var_id]
-            result.append(-nnf_id if lit.is_not() ^ negate else nnf_id)
-        return result
-
-    def is_satisfiable(self, assumptions: list[FNode] | None = None) -> bool:
-        unique = cube_literals(assumptions or [], self._atom_set)
-        if unique is None:
-            return False
+    def _is_satisfiable(self, assumptions: list[int]) -> bool:
         assert self._mut is not None
-        return self._mut.is_sat(self._lits_to_ddnnf(unique))
+        return self._mut.is_sat(assumptions)
 
-    def count_truth_assignments(self, assumptions: list[FNode] | None = None) -> int:
-        unique = cube_literals(assumptions or [], self._atom_set)
-        if unique is None:
-            return 0
+    def _count_truth_assignments(self, assumptions: list[int]) -> int:
         assert self._mut is not None
-        return int(self._mut.count(self._lits_to_ddnnf(unique)))
+        return int(self._mut.count(assumptions))
 
-    def is_valid(self) -> bool:
-        return self.count_truth_assignments() == (1 << len(self._atoms))
-
-    def entails_clause(self, query_clause: list[FNode]) -> bool:
-        lits = clause_literals(query_clause, self._atom_set)
-        if lits is None:
-            return True
-        assert self._mut is not None
-        return not self._mut.is_sat(self._lits_to_ddnnf(lits, negate=True))
-
-    def is_implicant(self, query_cube: list[FNode]) -> bool:
-        lits = cube_literals(query_cube, self._atom_set)
-        if lits is None:
-            return True
-        assert self._mut is not None
-        ddnnf_lits = self._lits_to_ddnnf(lits)
-        count = int(self._mut.count(ddnnf_lits))
-        remaining = len(self._atoms) - len(lits)
-        return count == (1 << remaining)
-
-    def enumerate_truth_assignments(self) -> Generator[dict[FNode, bool], None, None]:
+    def _enumerate_truth_assignments(self) -> list[list[int]]:
         assert self._mut is not None
         total = int(self._mut.count([]))
-        raw = self._mut.enumerate([], total)
-        for model_lits in raw:
-            assignment = {abs(lit): lit > 0 for lit in model_lits}
-            yield {a: assignment[self._remapping[self._abstr.get_id(a)]] for a in self._atoms}
+        return self._mut.enumerate([], total)

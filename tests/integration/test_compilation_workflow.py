@@ -18,7 +18,7 @@ from tddnnf.compilation.cudd import CuddCompiledTarget, CuddCompiler
 from tddnnf.compilation.d4 import D4CompiledTarget, D4Compiler
 from tddnnf.compilation.pysdd import PySddCompiledTarget, PySddCompiler
 from tddnnf.compilation.targets import PropCompiledTarget, TheoryCompiledTarget
-from tddnnf.queries import CuddEngine, DdnnifeEngine, PySddEngine, QuerySession
+from tddnnf.queries import CuddEngine, DdnnifeEngine, DecDnnfRsEngine, PySddEngine, QuerySession
 from tddnnf.queries.engine import QueryEngine
 from tests.helpers import satisfiable, theory_models
 from tests.integration.bank_cases import BANK_CASES
@@ -26,7 +26,7 @@ from tests.integration.bank_cases import BANK_CASES
 pytestmark = pytest.mark.integration
 
 D4_BACKENDS = [
-    pytest.param(D4Compiler, D4CompiledTarget, DdnnifeEngine, id="d4-circuit"),
+    pytest.param(D4Compiler, D4CompiledTarget, DdnnifeEngine, id="d4-circuit-ddnnife"),
     pytest.param(
         partial(
             D4Compiler,
@@ -35,8 +35,9 @@ D4_BACKENDS = [
         ),
         D4CompiledTarget,
         DdnnifeEngine,
-        id="d4-cnf",
+        id="d4-cnf-ddnnife",
     ),
+    pytest.param(D4Compiler, D4CompiledTarget, DecDnnfRsEngine, id="d4-circuit-decdnnf"),
 ]
 
 BACKENDS = [

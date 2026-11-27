@@ -18,11 +18,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+decdnnf = ["decdnnf-rs-py>=0.1.0"]
 dev = [
     "pytest>=7",
     "ruff>=0.1",
     "basedpyright",
     "pre-commit>=3.0",
+    "decdnnf-rs-py>=0.1.0",
 ]
 
 [tool.hatch.build.targets.wheel]
