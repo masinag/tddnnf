@@ -293,4 +293,11 @@ compiler with:
 python -m tddnnf.install_bin --d4
 ```
 
+The `DecDnnfRsEngine` backend is GPLv3-licensed and is therefore available only
+through the optional `decdnnf` extra:
+
+```bash
+pip install "tddnnf[decdnnf] @ git+https://github.com/masinag/tddnnf.git"
+```
+
 Other compilers and queries are installed by default as python dependencies.
