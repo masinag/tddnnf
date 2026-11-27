@@ -24,11 +24,10 @@ class GenericDdnnfEngine(QueryEngine[D4CompiledTarget]):
         self._atom_set: set[FNode] = set(theory_target.atoms)
         self._var_count = theory_target.target.var_count
         self._remapping = theory_target.target.remapping
-        nnf_text = theory_target.target.nnf_text
-        if nnf_text not in ("t 1\n", "f 1\n"):
-            # Every target atom is mapped, even when absent from the DAG.
-            ids = {self._abstr.get_id(a) for a in self._atoms}
-            assert ids <= self._remapping.keys(), "D4 mapping must cover the target atoms"
+        # Constant D4 circuits are intentionally unsupported: the concrete loaders reject them.
+        # Every atom of a non-constant target is mapped, even when absent from the DAG.
+        ids = {self._abstr.get_id(a) for a in self._atoms}
+        assert ids <= self._remapping.keys(), "D4 mapping must cover the target atoms"
 
     def _get_lits(self, lits: list[FNode], negate: bool = False) -> list[int]:
         """Convert the given list of literals to a list of signed IDs to condition the d-DNNF on, flipping each sign
