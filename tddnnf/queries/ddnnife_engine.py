@@ -15,17 +15,12 @@ class DdnnifeEngine(GenericDdnnfEngine):
 
     def __init__(self, theory_target: TheoryCompiledTarget[D4CompiledTarget]) -> None:
         super().__init__(theory_target)
-        self._tmpdir = None
-        if not isinstance(theory_target.target, D4CompiledTarget):
-            raise TypeError("DdnnifeEngine requires D4CompiledTarget")
-
         self._mut = None
         self._ddnnf = None
         self._tmpdir = tempfile.TemporaryDirectory(prefix="ddnnife_engine_")
         try:
             nnf_path = Path(self._tmpdir.name) / "circuit.nnf"
             nnf_path.write_text(theory_target.target.nnf_text)
-            # ddnnife errors for unsupported constant circuits intentionally propagate.
             self._ddnnf = ddnnife.Ddnnf.from_file(str(nnf_path), features=self._var_count)
             self._mut = self._ddnnf.as_mut()
         except BaseException:

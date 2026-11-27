@@ -15,6 +15,10 @@ class GenericDdnnfEngine(QueryEngine[D4CompiledTarget]):
     """
 
     def __init__(self, theory_target: TheoryCompiledTarget[D4CompiledTarget]) -> None:
+        if not isinstance(theory_target.target, D4CompiledTarget):
+            raise TypeError(
+                f"theory_target.target must be an instance of D4CompiledTarget, {type(theory_target.target)} found"
+            )
         self._abstr = theory_target.abstr
         self._atoms: tuple[FNode, ...] = theory_target.atoms
         self._atom_set: set[FNode] = set(theory_target.atoms)

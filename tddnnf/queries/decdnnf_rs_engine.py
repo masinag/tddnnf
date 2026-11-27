@@ -15,22 +15,16 @@ class DecDnnfRsEngine(GenericDdnnfEngine):
 
     def __init__(self, theory_target: TheoryCompiledTarget[D4CompiledTarget]) -> None:
         super().__init__(theory_target)
-        self._tmpdir = None
-        if not isinstance(theory_target.target, D4CompiledTarget):
-            raise TypeError("DdnnifeEngine requires D4CompiledTarget")
-
         self._ddnnf = None
-        nnf_text = theory_target.target.nnf_text
-        self._tmpdir = tempfile.TemporaryDirectory(prefix="ddnnife_engine_")
+        self._tmpdir = tempfile.TemporaryDirectory(prefix="decdnnf_rs_engine_")
         try:
             nnf_path = Path(self._tmpdir.name) / "circuit.nnf"
-            nnf_path.write_text(nnf_text)
-            # ddnnife errors for unsupported constant circuits intentionally propagate.
+            nnf_path.write_text(theory_target.target.nnf_text)
             self._ddnnf = decdnnf_rs_py.PyDecisionDNNF(str(nnf_path))
             self._ddnnf.update_n_vars(self._var_count)  # pyright: ignore[reportAttributeAccessIssue]
-        except BaseException as ex:
+        except BaseException:
             self.close()
-            raise ValueError(f"Bad input {nnf_text}") from ex
+            raise
 
     def __del__(self) -> None:
         self.close()
