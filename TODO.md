@@ -43,14 +43,6 @@ managers. Check SDD vtrees and OBDD orders after alignment. Add focused
 compatibility and immutability tests; defer any cross-environment extension
 separately.
 
-## Additional reasoners
-
-Evaluate an independent d-DNNF reasoner such as `DecDnnfRsReasoner` against the
-persisted NNF codec, all six unary queries, and projection bookkeeping. Document
-its native precision and enumeration behavior. Users select the instance
-explicitly; it does not silently replace another reasoner. Add a dependency only
-with its implemented adapter, retaining the default-installation policy.
-
 ## d4 Python compilation
 
 Replace the CLI only when the Python binding supports **projected circuit
